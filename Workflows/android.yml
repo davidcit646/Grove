@@ -1,0 +1,39 @@
+name: Build Grove APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract Grove source
+        run: |
+          unzip Grove-Launcher-0.1.5-source.zip
+          chmod +x grove-launcher/gradlew
+
+      - name: Build Grove
+        working-directory: grove-launcher
+        run: ./gradlew assembleDebug testDebugUnitTest lintDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Grove-Launcher-APK
+          path: grove-launcher/app/build/outputs/apk/debug/*.apk
