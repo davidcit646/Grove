@@ -1,5 +1,18 @@
 # Device acceptance checklist
 
+## First-run setup (0.1.27)
+
+- Clear app data, launch Grove, and verify the seven-step setup appears over Home with visible Back, Next, and Skip controls.
+- Change both swipe switches, practice an upward and downward swipe, then hide each home control independently. Verify the choices persist after Finish and restart.
+- Search for an installed app outside the first page of results, select pins, finish, and verify only the chosen apps appear on Home. Replay setup and check that the current choices are preselected.
+- Skip contacts and file access and verify Grove still opens apps and search. Replay setup, grant contacts, deny it on another run, and confirm both paths return to setup.
+- Open all-files settings, return without granting, then grant and return; verify the displayed state matches Android's actual setting.
+- Finish setup and accept or decline Android's Home chooser. Confirm the previous launcher remains available and upgrades of an existing Grove install do not force setup.
+- Test TalkBack, large text, rotation, keyboard navigation, and the Android Back action on every page.
+- Turn Contact search and File search off separately in Launcher settings. Verify each source and its permission prompt vanish from Search, active scans stop, and cached results clear while Android still shows the permission as granted.
+- Re-enable each source after permission was granted, verifying results return without another system prompt. Revoke permission in Android settings and confirm Grove asks again only if the source remains enabled.
+- Import old version-6 settings and verify both search sources retain their previous enabled behavior. Export version-7 settings, disable both, reimport, and verify the disabled state survives.
+
 Before calling this version stable, test on physical Android 12 and a current Android device:
 
 - Select Grove as default Home, press Home from another app, reboot, and return home.

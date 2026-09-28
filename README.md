@@ -1,6 +1,12 @@
 # Grove Launcher
 
-An Android 12+ home launcher by GraNet IT Solutions. Current version: 0.1.26 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.27 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+
+## 0.1.27 changes
+
+- Fresh installs get a guided full-screen setup for home gestures and controls, a swipe practice area, an installed-app pin picker, and independent Contact search and whole-device File search switches. Each permission request has a separate disclosure and can be declined.
+- Launcher settings has a Search section. Disabled sources disappear from search, stop indexing, and clear in-memory results without revoking Android permissions.
+- Setup offers Android's default Home-app chooser after the user finishes. It can be replayed from Grove settings; existing installations keep their layout and settings.
 
 ## 0.1.25 changes (Nova: Rust migration, uncompiled — needs build + test)
 
@@ -39,7 +45,7 @@ Also see [CONTACT-REVIEW.md](CONTACT-REVIEW.md) for the perf + security pass on 
 
 ## Build
 
-Install JDK 17, Android SDK 35, NDK 27.3.13750724, and Rust with the Android arm64, ARMv7, and x86-64 targets. Then run:
+Install JDK 17, Android SDK 36, NDK 27.3.13750724, and Rust with the Android arm64, ARMv7, and x86-64 targets. Then run:
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug
@@ -52,7 +58,7 @@ Gradle builds the Rust core before packaging the APK. Choose Grove in Android's 
 
 - Home screen with clock, pinned apps, Android widgets, gestures, and optional navigation buttons. Hold a pinned app to move it or open its actions.
 - Customizable app drawer with app folders, bulk selection, pinning, and Android's uninstall confirmation.
-- Dedicated search with ranked app and file matches, followed by Google and Play Store actions. Long press a result for its context actions.
+- Dedicated search with ranked app, contact, and optional file matches, followed by Google and Play Store actions. Long press a result for its context actions.
 - Optional shared storage indexing. Android's all files access is requested only when file search is enabled; private app data and system partitions remain inaccessible. The index is bounded and never reads file contents.
 - Procedural wallpapers and ten Wikimedia Commons color selections. Selected Commons files are downloaded on demand and cached privately; credits and license links are in [NOTICE](NOTICE).
 - Settings with recoverable JSON configuration import/export under Advanced. Widget IDs remain local and are excluded from exports.
@@ -63,7 +69,7 @@ There is no account or telemetry. Internet access is used for the chosen Commons
 
 Android views, storage permissions, widgets, intents, and wallpaper APIs remain in Kotlin. Rust handles batched search scoring, MIME categories, and bounded configuration preflight through JNI. Kotlin ranking remains a fallback if the native library is unavailable, and Kotlin validates the final configuration. See [ARCHITECTURE.md](ARCHITECTURE.md) and [TESTING.md](TESTING.md).
 
-File sharing uses read only, per intent content URI grants. The provider is not exported. Configuration input and wallpaper downloads have size limits; wallpaper redirects stay on the expected HTTPS hosts. Android's broad storage access remains necessary for device wide file search and may require Play policy review for distribution.
+File sharing uses read only, per intent content URI grants. The provider is not exported. Configuration input and wallpaper downloads have size limits; wallpaper redirects stay on the expected HTTPS hosts. Android's broad storage access remains necessary for device wide file search and requires Play policy review and approval before distribution; see [PLAY-READINESS.md](PLAY-READINESS.md) and [PRIVACY.md](PRIVACY.md).
 
 The APK under `app/build` is a development build, not a release signed distribution. Release signing and Play distribution are separate work.
 

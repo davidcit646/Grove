@@ -26,6 +26,9 @@ data class HomeScreenSettings(
 
 data class AppFolder(val name: String, val apps: List<String>)
 
+/** Search sources can be disabled without revoking Android permissions. */
+data class SearchSettings(val contacts: Boolean = false, val files: Boolean = false)
+
 /** Persistent user settings. Widget IDs are device-local and deliberately excluded from exports. */
 data class Config(
     val favorites: List<String> = emptyList(),
@@ -33,14 +36,16 @@ data class Config(
     val gestures: GestureSettings = GestureSettings(),
     val homeScreen: HomeScreenSettings = HomeScreenSettings(),
     val folders: List<AppFolder> = emptyList(),
+    val search: SearchSettings = SearchSettings(),
 ) {
     fun json(): String = JSONObject()
-        .put("version", 6)
+        .put("version", 7)
         .put("wallpaper", wallpaper)
         .put("favorites", JSONArray(favorites))
         .put("folders", JSONArray().apply { folders.forEach { folder ->
             put(JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps)))
         } })
+        .put("search", JSONObject().put("contacts", search.contacts).put("files", search.files))
         .put(
             "gestures",
             JSONObject()
@@ -66,7 +71,7 @@ data class Config(
         fun parse(text: String): Config {
             val root = JSONObject(text)
             val version = root.getInt("version")
-            require(version in 1..6) { "Unsupported configuration version" }
+            require(version in 1..7) { "Unsupported configuration version" }
 
             val wallpaper = root.getInt("wallpaper")
             require(wallpaper in 0..(2 + WallpaperArt.commons.size)) { "Wallpaper selection is invalid" }
@@ -108,6 +113,13 @@ data class Config(
                 pinnedAppsAtBottom = flag(homeJson, "pinnedAppsAtBottom", true),
             )
 
+            // Old exported configurations retain the search behavior they had before switches.
+            val searchJson = section("search")
+            val search = SearchSettings(
+                contacts = flag(searchJson, "contacts", version < 7),
+                files = flag(searchJson, "files", version < 7),
+            )
+
             val folders = if (root.has("folders")) {
                 val array = root.getJSONArray("folders")
                 require(array.length() <= 100) { "Too many folders" }
@@ -125,7 +137,7 @@ data class Config(
                     require(list.flatMap { it.apps }.distinct().size == list.sumOf { it.apps.size }) { "App in multiple folders" }
                 }
             } else emptyList()
-            return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders)
+            return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders, search)
         }
     }
 }

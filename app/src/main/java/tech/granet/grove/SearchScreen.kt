@@ -35,8 +35,8 @@ internal class SearchScreen(private val context: Context) {
     }
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>, contacts: List<ContactRow>, files: List<FileRow>,
-               contactAccess: Boolean, requestContactAccess: () -> Unit,
-               fileAccess: Boolean, indexing: Boolean, requestFileAccess: () -> Unit,
+               contactEnabled: Boolean, contactAccess: Boolean, requestContactAccess: () -> Unit,
+               fileEnabled: Boolean, fileAccess: Boolean, indexing: Boolean, requestFileAccess: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
         target.removeAllViews()
@@ -46,20 +46,20 @@ internal class SearchScreen(private val context: Context) {
             target.addView(row(app.label, R.drawable.ic_grid, bitmap = app.icon, iconKey = app.key,
                 action = app.open, longPress = app.menu))
         }
-        if (contacts.isNotEmpty() || !contactAccess)
+        if (contactEnabled && (contacts.isNotEmpty() || !contactAccess))
             target.addView(heading("CONTACTS", R.drawable.ic_contact))
-        contacts.forEach { contact ->
+        contacts.takeIf { contactEnabled }.orEmpty().forEach { contact ->
             target.addView(row(contact.name, R.drawable.ic_contact, action = contact.open, longPress = contact.open))
         }
-        if (!contactAccess) target.addView(row("Enable contact search", R.drawable.ic_contact,
+        if (contactEnabled && !contactAccess) target.addView(row("Allow contact search", R.drawable.ic_contact,
             "Allow Grove to search your contacts", action = requestContactAccess))
-        if (files.isNotEmpty() || !fileAccess || indexing)
+        if (fileEnabled && (files.isNotEmpty() || !fileAccess || indexing))
             target.addView(heading("FILES", R.drawable.ic_folder))
-        files.forEach { entry ->
+        files.takeIf { fileEnabled }.orEmpty().forEach { entry ->
             target.addView(row(entry.file.name, R.drawable.ic_document, entry.file.category,
                 action = entry.open, longPress = entry.menu))
         }
-        if (!fileAccess) target.addView(row("Enable device file search", R.drawable.ic_folder,
+        if (fileEnabled && !fileAccess) target.addView(row("Allow device file search", R.drawable.ic_folder,
             "Allow access to shared storage", action = requestFileAccess))
         else if (indexing && files.isEmpty()) target.addView(context.label("Searching files…", 14f))
         target.addView(heading("GOOGLE", R.drawable.ic_public))

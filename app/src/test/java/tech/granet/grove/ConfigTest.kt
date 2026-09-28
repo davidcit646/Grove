@@ -23,6 +23,7 @@ class ConfigTest {
                 pinnedAppsAtBottom = false,
                 useWallpaperButtonColors = true,
             ),
+            search = SearchSettings(contacts = true, files = false),
         )
         assertEquals(c, Config.parse(c.json()))
     }
@@ -32,7 +33,8 @@ class ConfigTest {
         assertEquals(GestureSettings(), migrated.gestures)
         assertEquals(HomeScreenSettings(), migrated.homeScreen)
         assertTrue(migrated.homeScreen.showPinnedAppsHint)
-        assertTrue(migrated.json().contains("\"version\": 6"))
+        assertTrue(migrated.json().contains("\"version\": 7"))
+        assertEquals(SearchSettings(contacts = true, files = true), migrated.search)
         assertFalse(migrated.homeScreen.useWallpaperButtonColors)
     }
 
@@ -59,7 +61,17 @@ class ConfigTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun unknownVersionRejected() { Config.parse("""{"version":7,"wallpaper":0,"favorites":[]}""") }
+    fun unknownVersionRejected() { Config.parse("""{"version":8,"wallpaper":0,"favorites":[]}""") }
+
+    @Test fun disabledSearchSourcesSurviveExport() {
+        val config = Config(search = SearchSettings(contacts = false, files = false))
+        assertEquals(config.search, Config.parse(config.json()).search)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun invalidSearchSwitchRejected() {
+        Config.parse("""{"version":7,"wallpaper":0,"favorites":[],"search":{"files":"true"}}""")
+    }
 
     @Test fun foldersSurviveExportAndImport() {
         val config = Config(folders = listOf(AppFolder("Work", listOf("example.app/.Main"))))

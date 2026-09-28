@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     }
     private val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) refreshContacts() else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+        firstRunSetup?.refreshPermissions()
     }
     private val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
     // Every installed app icon is decoded during app discovery and retained for the
@@ -91,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         launchNextUninstall()
     }
     private var config = Config()
+    private var firstRunSetup: FirstRunSetup? = null
     private var apps = emptyList<App>()
     private var widgetIds = mutableListOf<Int>()
     private var pendingWidget = -1
@@ -98,6 +100,8 @@ class MainActivity : AppCompatActivity() {
     private var searchMode = false
     private var files = emptyList<IndexedFile>()
     private var indexingFiles = false
+    @Volatile private var fileIndexGeneration = 0
+    @Volatile private var contactGeneration = 0
     private var searchResults: LinearLayout? = null
     private lateinit var surface: FrameLayout
     private lateinit var root: LinearLayout
@@ -165,15 +169,19 @@ class MainActivity : AppCompatActivity() {
     }
     private val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     private val changes = object : LauncherApps.Callback() {
-        override fun onPackageAdded(p: String, u: UserHandle) { loadApps(p); if (hasContactAccess()) refreshContacts() }
-        override fun onPackageRemoved(p: String, u: UserHandle) { loadApps(); if (hasContactAccess()) refreshContacts() }
-        override fun onPackageChanged(p: String, u: UserHandle) { loadApps(p); if (hasContactAccess()) refreshContacts() }
+        override fun onPackageAdded(p: String, u: UserHandle) { loadApps(p); if (config.search.contacts && hasContactAccess()) refreshContacts() }
+        override fun onPackageRemoved(p: String, u: UserHandle) { loadApps(); if (config.search.contacts && hasContactAccess()) refreshContacts() }
+        override fun onPackageChanged(p: String, u: UserHandle) { loadApps(p); if (config.search.contacts && hasContactAccess()) refreshContacts() }
         override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = loadApps()
         override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = loadApps()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!prefs.getBoolean("setup_complete", false) && !prefs.getBoolean("setup_pending", false)) {
+            // Existing users keep their layout and can replay setup from the menu.
+            prefs.edit().putBoolean(if (prefs.contains("initialized")) "setup_complete" else "setup_pending", true).apply()
+        }
         config = configStore.load()
         widgetIds = prefs.getStringSet("widgets", emptySet())!!.mapNotNull { it.toIntOrNull() }.sorted().toMutableList()
         pendingWidget = savedInstanceState?.getInt("pending", -1) ?: prefs.getInt("pending", -1)
@@ -208,7 +216,8 @@ class MainActivity : AppCompatActivity() {
         }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (drawer && selectingApps) { clearAppSelection(); refreshDrawer() }
+                if (firstRunSetup != null) firstRunSetup?.back()
+                else if (drawer && selectingApps) { clearAppSelection(); refreshDrawer() }
                 else if (drawer || searchMode) animateDrawerClosed()
                 // Back at Home has no navigation destination. Recreating the
                 // view here would unexpectedly jump a scrolled layout to top.
@@ -227,8 +236,9 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onResume() {
         super.onResume()
-        if (Environment.isExternalStorageManager() && files.isEmpty() && !indexingFiles) indexFiles()
-        if (!hasContactAccess() || SystemClock.elapsedRealtime() - lastContactRefresh > 15 * 60_000L) refreshContacts()
+        firstRunSetup?.refreshPermissions()
+        if (config.search.files && Environment.isExternalStorageManager() && files.isEmpty() && !indexingFiles) indexFiles()
+        if (config.search.contacts && (!hasContactAccess() || SystemClock.elapsedRealtime() - lastContactRefresh > 15 * 60_000L)) refreshContacts()
     }
     override fun onStop() {
         releasePinHold(); longPressHandler.removeCallbacks(longPressRunnable)
@@ -266,6 +276,7 @@ class MainActivity : AppCompatActivity() {
         super.dispatchTouchEvent(cancel); cancel.recycle()
     }
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (firstRunSetup != null) return super.dispatchTouchEvent(event)
         if (heldPin != null || activePinDrag != null) {
             gestureTracking = false
             return super.dispatchTouchEvent(event)
@@ -481,12 +492,15 @@ class MainActivity : AppCompatActivity() {
                     iconCache.clear()
                     loadedApps.forEach { iconCache[it.key] = reusable[it.key] ?: fallbackIcon }
                     if (!prefs.contains("initialized")) {
-                        if (config.favorites.isEmpty()) config = config.copy(favorites = apps.take(8).map { it.key })
+                        if (!prefs.getBoolean("setup_pending", false) && config.favorites.isEmpty())
+                            config = config.copy(favorites = apps.take(8).map { it.key })
                         prefs.edit().putBoolean("initialized", true).apply(); save()
                     }
                     if (drawer) renderApps(searchField?.text?.toString().orEmpty())
                     else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                     else if (activePinDrag == null && heldPin == null) showHome()
+                    if (prefs.getBoolean("setup_pending", false) && firstRunSetup == null &&
+                        configStore.brokenCustomConfig == null) root.post { if (!isDestroyed) startFirstRunSetup() }
                 }
                 val batch = HashMap<String, Bitmap>(16)
                 loadedApps.forEach { app ->
@@ -540,8 +554,10 @@ class MainActivity : AppCompatActivity() {
     }
     private fun save() = configStore.save(config)
     private fun activateConfig(next: Config) {
+        val previousSearch = config.search
         config = next
         configStore.activate(config)
+        if (previousSearch != next.search) applySearchSettings(previousSearch)
     }
     private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
         this.text = text
@@ -628,11 +644,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun indexFiles() {
-        if (!Environment.isExternalStorageManager() || indexingFiles) return
+        if (!config.search.files || !Environment.isExternalStorageManager() || indexingFiles) return
+        val generation = ++fileIndexGeneration
         indexingFiles = true
         worker.execute {
-            val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory()) }
+            if (generation != fileIndexGeneration) return@execute
+            val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory(),
+                shouldContinue = { generation == fileIndexGeneration }) }
             runOnUiThread(Runnable {
+                if (generation != fileIndexGeneration || isDestroyed) return@Runnable
                 indexingFiles = false
                 result.onSuccess { files = it }.onFailure { message("Could not index shared storage") }
                 if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
@@ -643,7 +663,7 @@ class MainActivity : AppCompatActivity() {
     private fun hasContactAccess() = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
     private fun refreshContacts() {
-        if (!hasContactAccess()) {
+        if (!config.search.contacts || !hasContactAccess()) {
             contacts = emptyList()
             if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
             return
@@ -654,10 +674,12 @@ class MainActivity : AppCompatActivity() {
         }
         lastContactRefresh = SystemClock.elapsedRealtime()
         if (contactWorker.isShutdown) return
+        val generation = ++contactGeneration
         contactWorker.execute {
-            val result = runCatching { ContactIndex.load(contentResolver) }
+            if (generation != contactGeneration) return@execute
+            val result = runCatching { ContactIndex.load(contentResolver) { generation == contactGeneration } }
             runOnUiThread {
-                if (isDestroyed || !hasContactAccess()) return@runOnUiThread
+                if (isDestroyed || generation != contactGeneration || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
                 result.onSuccess {
                     contacts = it
                     if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
@@ -681,11 +703,53 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestContactAccess() { requestContacts.launch(Manifest.permission.READ_CONTACTS) }
 
+    private fun explainContactAccess() {
+        if (hasContactAccess()) { refreshContacts(); return }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Contact search access")
+            .setMessage("Grove reads contact names and phone numbers from Android's Contacts Provider to show search results and contact actions. Results stay in memory on this device; Grove does not upload or save a contact copy. If you choose Call or Text, Android passes that number to the app you select. You can skip this and turn Contact search off at any time. The Android permission remains granted until you revoke it in system settings.")
+            .setNegativeButton("Not now", null)
+            .setPositiveButton("Continue to Android") { _, _ -> requestContactAccess() }
+            .show()
+    }
+
     private fun requestFileAccess() {
         runCatching {
             startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                 Uri.parse("package:$packageName")))
         }.onFailure { message("Open Android settings to allow shared storage search") }
+    }
+
+    private fun explainFileAccess() {
+        if (Environment.isExternalStorageManager()) { indexFiles(); return }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Shared-storage file search access")
+            .setMessage("Android's All files access grants Grove broad read and write access to shared storage, including files beyond photos and videos. It does not grant access to other apps' private data or system partitions. Grove uses it to read file names and paths for on-device search; it does not read file contents, modify files, or upload the index. Opening a result shares that one file with the app you select. This is optional. Turning File search off clears Grove's in-memory index, but Android keeps the permission until you revoke it in system settings.")
+            .setNegativeButton("Not now", null)
+            .setPositiveButton("Open Android settings") { _, _ -> requestFileAccess() }
+            .show()
+    }
+
+    private fun applySearchSettings(previous: SearchSettings) {
+        if (!config.search.contacts) {
+            contactGeneration++
+            contacts = emptyList()
+            searchHandler.removeCallbacks(delayedContactRefresh)
+            if (contactObserverRegistered) {
+                contentResolver.unregisterContentObserver(contactObserver)
+                contactObserverRegistered = false
+            }
+        } else if (!previous.contacts) {
+            if (hasContactAccess()) refreshContacts() else explainContactAccess()
+        }
+        if (!config.search.files) {
+            fileIndexGeneration++
+            files = emptyList()
+            indexingFiles = false
+        } else if (!previous.files) {
+            if (Environment.isExternalStorageManager()) indexFiles() else explainFileAccess()
+        }
+        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
     }
 
     private fun showSearch(animate: Boolean = false) {
@@ -729,8 +793,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val appSnapshot = apps
-        val contactSnapshot = contacts
-        val fileSnapshot = files
+        val contactSnapshot = if (config.search.contacts) contacts else emptyList()
+        val fileSnapshot = if (config.search.files) files else emptyList()
         target.removeAllViews()
         val task = Runnable {
             if (searchWorker.isShutdown) return@Runnable
@@ -765,9 +829,9 @@ class MainActivity : AppCompatActivity() {
             matchingContacts.map { contact -> SearchScreen.ContactRow(contact.name) { contactMenu(contact) } },
             matchingFiles.map { file -> SearchScreen.FileRow(file,
                 open = { openFile(file) }, menu = { searchItemMenu(file) }) },
-            hasContactAccess(), ::requestContactAccess,
-            Environment.isExternalStorageManager(), indexingFiles,
-            requestFileAccess = { requestFileAccess() },
+            config.search.contacts, hasContactAccess(), ::explainContactAccess,
+            config.search.files, Environment.isExternalStorageManager(), indexingFiles,
+            requestFileAccess = { explainFileAccess() },
             searchGoogle = { openWeb("https://www.google.com/search?q=${Uri.encode(query.trim())}") },
             googleMenu = { webResultMenu(query.trim(), "Google") },
             searchStore = { openPlayStore(query.trim()) },
@@ -776,7 +840,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sharedFileUri(file: File): Uri {
-        require(Environment.isExternalStorageManager()) { "Shared storage permission is unavailable" }
+        require(config.search.files && Environment.isExternalStorageManager()) { "File search is unavailable" }
         val root = Environment.getExternalStorageDirectory().canonicalFile
         val canonical = file.canonicalFile
         require(canonical.path.startsWith("${root.path}${File.separator}") && file.exists() &&
@@ -785,12 +849,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun contactMenu(contact: ContactIndex.Contact) {
-        if (!hasContactAccess()) { requestContactAccess(); return }
+        if (!config.search.contacts || !hasContactAccess()) return
         contactWorker.execute {
             val details = runCatching { ContactIndex.details(contentResolver, resources, contact) }
                 .getOrElse { Log.w("Grove", "Cannot read contact details", it); ContactIndex.Details(emptyList(), emptyList()) }
             runOnUiThread {
-                if (isDestroyed || !hasContactAccess()) return@runOnUiThread
+                if (isDestroyed || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
                 val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
                 fun action(label: String, icon: Int, intent: () -> Intent) {
                     actions.add(Triple(label, icon) {
@@ -1440,6 +1504,7 @@ class MainActivity : AppCompatActivity() {
     private fun settings() {
         showActionMenu("Grove settings", listOf(
             Triple("Launcher settings", R.drawable.ic_settings) { launcherSettings() },
+            Triple("Replay first-run setup", R.drawable.ic_info) { startFirstRunSetup() },
             Triple("Set as default launcher", R.drawable.ic_launcher) {
                 val role = getSystemService(RoleManager::class.java)
                 if (role.isRoleAvailable(RoleManager.ROLE_HOME))
@@ -1447,6 +1512,10 @@ class MainActivity : AppCompatActivity() {
             },
             Triple("Add widget", R.drawable.ic_widget) { pickWidget() },
             Triple("Wallpapers", R.drawable.ic_wallpaper) { wallpapers() },
+            Triple("Privacy policy", R.drawable.ic_info) {
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://github.com/davidcit646/Grove/blob/main/PRIVACY.md")))
+            },
             Triple("About Grove", R.drawable.ic_info) {
                 infoDialog("Grove · ${BuildConfig.VERSION_NAME}",
                     "A quiet place to start.\n\nFree and open source · Apache 2.0\nNo telemetry. Internet is used only when downloading selected wallpapers.\n\nSwipe down for search and swipe up for all apps when enabled. Swipe down from the top of the app drawer to close it. Hold and drag pinned apps to reorder them. Pinned apps can be placed near the top or bottom of Home.",
@@ -1455,10 +1524,53 @@ class MainActivity : AppCompatActivity() {
         ))
     }
 
+    private fun startFirstRunSetup() {
+        if (firstRunSetup != null || apps.isEmpty()) return
+        firstRunSetup = FirstRunSetup(
+            this, surface, config, apps.map { it.key to it.label },
+            ::hasContactAccess, { Environment.isExternalStorageManager() },
+            ::explainContactAccess, ::explainFileAccess,
+            { next ->
+                firstRunSetup = null
+                val previousSearch = config.search
+                config = next
+                save()
+                applySearchSettings(previousSearch)
+                prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
+                showHome()
+                val role = getSystemService(RoleManager::class.java)
+                if (role.isRoleAvailable(RoleManager.ROLE_HOME) && !role.isRoleHeld(RoleManager.ROLE_HOME)) {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("Use Grove as your home screen?")
+                        .setMessage("Android will ask you to choose a Home app. You can switch back in Android Settings at any time.")
+                        .setNegativeButton("Later", null)
+                        .setPositiveButton("Choose Home app") { _, _ ->
+                            chooseHome.launch(role.createRequestRoleIntent(RoleManager.ROLE_HOME))
+                        }.show()
+                }
+            },
+            {
+                firstRunSetup = null
+                if (prefs.getBoolean("setup_pending", false) && config.favorites.isEmpty()) {
+                    config = config.copy(favorites = apps.take(8).map { it.key })
+                    save()
+                    showHome()
+                }
+                prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
+            },
+        ).also { it.show() }
+    }
+
     private fun launcherSettings() {
         LauncherSettingsScreen(
             this, { config },
-            { next -> config = next; save(); if (!drawer) showHome() },
+            { next ->
+                val previousSearch = config.search
+                config = next
+                save()
+                if (previousSearch != next.search) applySearchSettings(previousSearch)
+                if (!drawer) showHome()
+            },
             { editConfig() },
             { export.launch("grove-config.json") },
             { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },

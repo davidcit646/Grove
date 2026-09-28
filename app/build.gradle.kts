@@ -1,16 +1,16 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
     namespace = "tech.granet.grove"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "27.3.13750724"
     buildFeatures { buildConfig = true }
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("rustJniLibs"))
     defaultConfig {
         applicationId = "tech.granet.grove"
         minSdk = 31
-        targetSdk = 35
-        versionCode = 27
-        versionName = "0.1.26-alpha"
+        targetSdk = 36
+        versionCode = 28
+        versionName = "0.1.27-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

@@ -108,7 +108,7 @@ fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("version")
         .and_then(Value::as_i64)
         .ok_or("Missing configuration version")?;
-    if !(1..=6).contains(&version) {
+    if !(1..=7).contains(&version) {
         return Err("Unsupported configuration version");
     }
     let wallpaper = root
@@ -153,6 +153,7 @@ fn validate_config(json: &str) -> Result<(), &'static str> {
                 "useWallpaperButtonColors",
             ][..],
         ),
+        ("search", &["contacts", "files"][..]),
     ] {
         if let Some(value) = root.get(section) {
             let map = value
@@ -553,6 +554,8 @@ mod tests {
         assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedAppsHint":"false"}}"#).is_err());
         assert!(validate_config(r#"{"version":6,"wallpaper":12,"favorites":[],"homeScreen":{"useWallpaperButtonColors":true},"folders":[{"name":"Work","apps":["example/.Main"]}]}"#).is_ok());
         assert!(validate_config(r#"{"version":6,"wallpaper":0,"favorites":[],"folders":[{"name":"Bad","apps":["invalid"]}]}"#).is_err());
+        assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"contacts":false,"files":true}}"#).is_ok());
+        assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"files":"true"}}"#).is_err());
     }
 
     #[test]

@@ -46,6 +46,14 @@ internal class LauncherSettingsScreen(
         toggle("Swipe up for app drawer", config.gestures.swipeUpAppDrawer) { enabled ->
             commit(current().copy(gestures = current().gestures.copy(swipeUpAppDrawer = enabled)))
         }
+        content.addSection("Search")
+        toggle("Contact search", config.search.contacts) { enabled ->
+            commit(current().copy(search = current().search.copy(contacts = enabled)))
+        }
+        toggle("File search (shared storage)", config.search.files) { enabled ->
+            commit(current().copy(search = current().search.copy(files = enabled)))
+        }
+        content.addView(activity.bodyText("Turning a search source off clears its in-memory results. Android permissions stay granted; turn the switch back on to use them again."))
         content.addSection("Home screen")
         toggle("Show Apps button", config.homeScreen.showAppsButton) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(showAppsButton = enabled)))

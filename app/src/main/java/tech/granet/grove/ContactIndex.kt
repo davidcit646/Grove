@@ -42,12 +42,12 @@ internal object ContactIndex {
         ).filter { (target, contactHasIt) -> contactHasIt && installed(target.packageName) }
             .map { (target, _) -> target }
 
-    fun load(resolver: ContentResolver): List<Contact> {
+    fun load(resolver: ContentResolver, shouldContinue: () -> Boolean = { true }): List<Contact> {
         val result = ArrayList<Contact>()
         resolver.query(ContactsContract.Contacts.CONTENT_URI,
             arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY,
                 ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null)?.use { cursor ->
-            while (cursor.moveToNext() && result.size < 50_000) {
+            while (shouldContinue() && cursor.moveToNext() && result.size < 50_000) {
                 val name = cursor.getString(2)?.take(512)?.trim().orEmpty()
                 val key = cursor.getString(1)
                 if (name.isNotEmpty() && !key.isNullOrEmpty()) result.add(Contact(cursor.getLong(0), key, name))

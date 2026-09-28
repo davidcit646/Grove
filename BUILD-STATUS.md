@@ -1,6 +1,8 @@
 # Grove build verification
 
-The 0.1.26 alpha source has not been built or installed on a device in this checkout. The GitHub Actions workflow builds and tests the source on pushes to `main`.
+The 0.1.27 alpha first-run setup and optional search-source switches have not yet been built or installed on a device in this checkout. The GitHub Actions workflow builds and tests the source on pushes to `main`.
+
+The source now targets API 36 for the current Google Play submission requirement. The optional broad file-search permission still requires a Play policy decision and declaration before a Play release; see [PLAY-READINESS.md](PLAY-READINESS.md).
 
 ## Earlier 0.1.24 verification
 
