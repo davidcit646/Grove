@@ -1,23 +1,30 @@
 package tech.granet.grove
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import com.google.android.material.button.MaterialButton
-import tech.granet.grove.ui.bodyText
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.color.MaterialColors
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.switchmaterial.SwitchMaterial
 import tech.granet.grove.ui.dp
-import tech.granet.grove.ui.titleText
-import tech.granet.grove.ui.toggleRow
 
 /** Full-screen, replayable setup. Answers are applied together on Finish. */
 internal class FirstRunSetup(
@@ -38,123 +45,308 @@ internal class FirstRunSetup(
     private var searchSources = initial.search
     private val pins = initial.favorites.toMutableSet()
     private var overlay: View? = null
+    private var originalStatusBars: Int? = null
     private var practicedUp = false
     private var practicedDown = false
     private var practicedHold = false
 
+    private fun color(attr: Int, fallback: Int) = MaterialColors.getColor(context, attr, fallback)
+    private val ink get() = color(com.google.android.material.R.attr.colorOnSurface, Color.BLACK)
+    private val muted get() = color(com.google.android.material.R.attr.colorOnSurfaceVariant, 0xff454545.toInt())
+    private val primary get() = color(com.google.android.material.R.attr.colorPrimary, 0xff315b47.toInt())
+    private val onAccent get() = color(com.google.android.material.R.attr.colorOnPrimaryContainer, 0xff183526.toInt())
+    private val accent get() = color(com.google.android.material.R.attr.colorPrimaryContainer, 0xffd8e8d9.toInt())
+    private val surface get() = color(com.google.android.material.R.attr.colorSurface, Color.WHITE)
+    private val canvas get() = color(com.google.android.material.R.attr.colorSurfaceContainerLow, 0xfffafafa.toInt())
+    private fun pages() = if (gestures.swipeDownSearch || gestures.swipeUpAppDrawer)
+        listOf(0, 1, 2, 3, 4, 5, 6, 7) else listOf(0, 1, 3, 4, 5, 6, 7)
+    private fun text(value: String, size: Float = 16f, bold: Boolean = false, color: Int = ink) =
+        TextView(context).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            if (bold) setTypeface(typeface, Typeface.BOLD)
+        }
+    private fun icon(id: Int, tint: Int = primary, size: Int = 32) = ImageView(context).apply {
+        setImageResource(id)
+        imageTintList = ColorStateList.valueOf(tint)
+        layoutParams = LinearLayout.LayoutParams(context.dp(size), context.dp(size))
+    }
+    private fun card(parent: LinearLayout, highlighted: Boolean = false, build: (LinearLayout) -> Unit) {
+        val shell = MaterialCardView(context).apply {
+            radius = context.dp(24).toFloat()
+            cardElevation = 0f
+            setCardBackgroundColor(if (highlighted) accent else surface)
+        }
+        val body = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(context.dp(20), context.dp(20), context.dp(20), context.dp(20))
+        }
+        shell.addView(body)
+        build(body)
+        parent.addView(shell, LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(12) })
+    }
+    private fun heading(parent: LinearLayout, eyebrow: String, title: String, summary: String) {
+        parent.addView(text(eyebrow.uppercase(), 12f, true, primary).apply { letterSpacing = .12f })
+        parent.addView(text(title, 30f, true), LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = context.dp(8)
+        })
+        parent.addView(text(summary, 16f, color = muted), LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = context.dp(12); bottomMargin = context.dp(8)
+        })
+    }
+    private fun feature(parent: LinearLayout, iconId: Int, title: String, body: String, highlighted: Boolean = false) {
+        card(parent, highlighted) { box ->
+            box.addView(icon(iconId, if (highlighted) onAccent else primary))
+            box.addView(text(title, 18f, true, if (highlighted) onAccent else ink),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(14) })
+            box.addView(text(body, 15f, color = if (highlighted) onAccent else muted),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(7) })
+        }
+    }
+    private fun choice(parent: LinearLayout, iconId: Int, title: String, detail: String,
+                       enabled: Boolean, changed: (Boolean) -> Unit) {
+        card(parent) { box ->
+            val row = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(icon(iconId))
+            val labels = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text(title, 17f, true))
+                addView(text(detail, 14f, color = muted))
+            }
+            row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = context.dp(14) })
+            val switch = SwitchMaterial(context).apply {
+                isChecked = enabled
+                contentDescription = title
+                setOnCheckedChangeListener { _, checked -> changed(checked) }
+            }
+            row.addView(switch, LinearLayout.LayoutParams(-2, -2).apply { marginStart = context.dp(8) })
+            box.addView(row)
+            box.setOnClickListener { switch.isChecked = !switch.isChecked }
+        }
+    }
+    private fun action(parent: LinearLayout, label: String, click: () -> Unit) {
+        parent.addView(MaterialButton(context).apply {
+            text = label
+            textSize = 16f
+            minimumHeight = context.dp(54)
+            setOnClickListener { click() }
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
+    }
+
     fun show() = render()
     fun refreshPermissions() { if ((page == 6 || page == 7) && overlay != null) render() }
-    fun back() { if (page > 0) { page--; render() } else { close(); skip() } }
-    private fun close() { overlay?.let(host::removeView); overlay = null }
+    fun back() {
+        val current = pages().indexOf(page)
+        if (current > 0) { page = pages()[current - 1]; render() }
+        else { close(); skip() }
+    }
+    private fun close() {
+        overlay?.let(host::removeView)
+        overlay = null
+        originalStatusBars?.let { original ->
+            (context as? android.app.Activity)?.window?.insetsController?.setSystemBarsAppearance(
+                original, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+        }
+        originalStatusBars = null
+    }
 
     private fun render() {
-        close()
+        overlay?.let(host::removeView)
+        val barsController = (context as? android.app.Activity)?.window?.insetsController
+        if (originalStatusBars == null) originalStatusBars = barsController?.systemBarsAppearance ?: 0
+        barsController?.setSystemBarsAppearance(
+            if (Color.luminance(canvas) > .5) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
         val screen = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             isClickable = true
             isFocusableInTouchMode = true
-            setBackgroundColor(ThemeColors.buttonSurface(context))
-            setPadding(context.dp(24), context.dp(12), context.dp(24), context.dp(12))
+            setBackgroundColor(canvas)
+            setPadding(context.dp(20), context.dp(12), context.dp(20), context.dp(12))
             setOnApplyWindowInsetsListener { view, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
-                view.setPadding(context.dp(24), bars.top + context.dp(12), context.dp(24), bars.bottom + context.dp(12))
+                view.setPadding(context.dp(20), bars.top + context.dp(12), context.dp(20), bars.bottom + context.dp(12))
                 insets
             }
         }
         overlay = screen
         host.addView(screen, FrameLayout.LayoutParams(-1, -1))
         screen.requestApplyInsets()
-        screen.addView(context.bodyText("GROVE SETUP  ·  ${page + 1} OF 8"))
-        val titles = listOf("Welcome to Grove", "Choose your swipes", "Try your swipes",
-            "Open launcher settings", "Choose your home controls", "Pin your apps",
-            "Search your contacts", "Search your files")
-        screen.addView(context.titleText(titles[page]))
-        val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        screen.addView(ScrollView(context).apply { isFillViewport = true; addView(content) },
+        val visible = pages()
+        val current = visible.indexOf(page) + 1
+        val header = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+        header.addView(text("GROVE", 15f, true, primary).apply { letterSpacing = .14f },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(text("$current / ${visible.size}", 14f, true, muted))
+        screen.addView(header, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = context.dp(14) })
+        screen.addView(LinearProgressIndicator(context).apply {
+            max = visible.size
+            setProgressCompat(current, false)
+            trackColor = accent
+            indicatorColor = primary
+        }, LinearLayout.LayoutParams(-1, context.dp(5)))
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            if (page in 0..4) gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, context.dp(22), 0, context.dp(24))
+        }
+        screen.addView(ScrollView(context).apply {
+            isFillViewport = true
+            addView(content)
+        },
             LinearLayout.LayoutParams(-1, 0, 1f))
 
         when (page) {
-            0 -> content.addView(context.bodyText("Grove becomes your home screen when you choose it in Android. Let's set up the controls you want. You can change them later in Launcher settings."))
+            0 -> {
+                heading(content, "Welcome", "Make Home yours.",
+                    "A calmer home screen, set up your way. This takes just a minute.")
+                card(content, true) { box ->
+                    box.minimumHeight = context.dp(270)
+                    box.addView(icon(R.drawable.ic_grove, onAccent, 64))
+                    box.addView(text("Your phone. Your pace.", 24f, true, onAccent),
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(24) })
+                    box.addView(text("Choose how to move around, what appears on Home, and what Grove can search.",
+                        16f, color = onAccent), LinearLayout.LayoutParams(-1, -2).apply {
+                        topMargin = context.dp(10)
+                    })
+                }
+                feature(content, R.drawable.ic_settings, "You stay in control",
+                    "Choose Grove as your Home app at the end. You can change every choice later in Launcher settings.")
+            }
             1 -> {
-                content.addView(context.bodyText("Which swipes should work on Home? The buttons can still open Search and all apps."))
-                content.addView(context.toggleRow("Swipe down to search", gestures.swipeDownSearch) { gestures = gestures.copy(swipeDownSearch = it) })
-                content.addView(context.toggleRow("Swipe up for all apps", gestures.swipeUpAppDrawer) { gestures = gestures.copy(swipeUpAppDrawer = it) })
+                heading(content, "Navigation", "Make it a gesture.",
+                    "Choose the swipes you want on Home. The on-screen buttons still work.")
+                choice(content, R.drawable.ic_search, "Swipe down", "Open Search",
+                    gestures.swipeDownSearch) { gestures = gestures.copy(swipeDownSearch = it) }
+                choice(content, R.drawable.ic_grid, "Swipe up", "Open all apps",
+                    gestures.swipeUpAppDrawer) { gestures = gestures.copy(swipeUpAppDrawer = it) }
+                feature(content, R.drawable.ic_info, "Prefer buttons?",
+                    "Turn both swipes off and we'll skip the practice step.")
             }
             2 -> {
-                content.addView(context.bodyText("Try swiping on the practice area. You can tap Next without practicing."))
-                val status = TextView(context).apply { textSize = 18f; setTextColor(ThemeColors.icon(context)) }
-                fun update() { status.text = "Down to search: ${if (practicedDown) "Got it" else "Try it"}\nUp for apps: ${if (practicedUp) "Got it" else "Try it"}" }
-                update()
-                content.addView(status)
-                content.addView(TextView(context).apply {
-                    text = "Swipe here\n↑  Apps     ↓  Search"
-                    textSize = 20f
-                    gravity = Gravity.CENTER
-                    setTextColor(ThemeColors.icon(context))
-                    contentDescription = "Practice swiping up for apps or down for search. Next skips practice."
-                    setBackgroundColor(ThemeColors.iconSurface(context))
-                    var startY = 0f
-                    setOnTouchListener { view, event ->
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> {
-                                view.parent.requestDisallowInterceptTouchEvent(true)
-                                startY = event.y
-                                true
-                            }
-                            MotionEvent.ACTION_UP -> {
-                                if (event.y - startY > context.dp(55)) practicedDown = true
-                                if (event.y - startY < -context.dp(55)) practicedUp = true
-                                update()
-                                performClick()
-                                true
-                            }
-                            else -> true
-                        }
+                heading(content, "Practice", "Try your swipes.",
+                    "Swipe inside the card. You can continue without practicing.")
+                card(content, true) { box ->
+                    val status = text("", 16f, true, onAccent)
+                    fun update() {
+                        status.text = buildList {
+                            if (gestures.swipeUpAppDrawer) add("↑  All apps  ·  ${if (practicedUp) "Done" else "Try it"}")
+                            if (gestures.swipeDownSearch) add("↓  Search  ·  ${if (practicedDown) "Done" else "Try it"}")
+                        }.joinToString("\n")
                     }
-                }, LinearLayout.LayoutParams(-1, context.dp(220)).apply { topMargin = context.dp(20) })
+                    update()
+                    box.addView(status)
+                    box.addView(text("Swipe here", 24f, true, onAccent).apply {
+                        gravity = Gravity.CENTER
+                        contentDescription = "Practice the enabled Home swipes. Next skips practice."
+                        background = GradientDrawable().apply {
+                            setColor(surface)
+                            cornerRadius = context.dp(20).toFloat()
+                        }
+                        var startY = 0f
+                        isClickable = true
+                        setOnTouchListener { view, event ->
+                            when (event.actionMasked) {
+                                MotionEvent.ACTION_DOWN -> {
+                                    view.parent.requestDisallowInterceptTouchEvent(true)
+                                    startY = event.y
+                                    true
+                                }
+                                MotionEvent.ACTION_UP -> {
+                                    if (event.y - startY > context.dp(55) && gestures.swipeDownSearch) practicedDown = true
+                                    if (event.y - startY < -context.dp(55) && gestures.swipeUpAppDrawer) practicedUp = true
+                                    update()
+                                    view.performClick()
+                                    true
+                                }
+                                else -> true
+                            }
+                        }
+                    }, LinearLayout.LayoutParams(-1, context.dp(220)).apply { topMargin = context.dp(18) })
+                }
             }
             3 -> {
-                content.addView(context.bodyText("Tap and hold an empty area of the Home screen to open Grove settings. You can use this even if you hide the Home buttons. Try holding the area below, or tap Next to continue."))
-                val feedback = context.bodyText(if (practicedHold) "Got it! Hold empty Home space to open settings." else "Try a tap and hold.")
-                content.addView(feedback)
-                content.addView(TextView(context).apply {
-                    text = "Tap and hold here"
-                    textSize = 20f
-                    gravity = Gravity.CENTER
-                    setTextColor(ThemeColors.icon(context))
-                    setBackgroundColor(ThemeColors.iconSurface(context))
-                    contentDescription = "Practice holding empty Home space to open launcher settings"
-                    isLongClickable = true
-                    setOnLongClickListener {
+                heading(content, "Quick access", "Settings are a hold away.",
+                    "Press and hold empty Home space to open Grove settings, even if you hide the buttons.")
+                card(content, true) { box ->
+                    box.minimumHeight = context.dp(220)
+                    box.addView(icon(R.drawable.ic_settings, onAccent, 48))
+                    val feedback = text(if (practicedHold) "You got it!" else "Try holding this card",
+                        20f, true, onAccent)
+                    box.addView(feedback, LinearLayout.LayoutParams(-1, -2).apply {
+                        topMargin = context.dp(24)
+                    })
+                    box.addView(text("Press and hold anywhere in this space.", 15f, color = onAccent),
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(8) })
+                    box.contentDescription = "Practice holding empty Home space to open launcher settings"
+                    box.isLongClickable = true
+                    box.setOnLongClickListener {
                         practicedHold = true
-                        feedback.text = "Got it! Hold empty Home space to open settings."
+                        feedback.text = "You got it!"
                         true
                     }
-                }, LinearLayout.LayoutParams(-1, context.dp(180)).apply { topMargin = context.dp(16) })
+                }
             }
             4 -> {
-                content.addView(context.bodyText("What should be visible on Home? Hold empty space to open settings even if you hide the buttons."))
-                content.addView(context.toggleRow("Search button", home.showSearchButton) { home = home.copy(showSearchButton = it) })
-                content.addView(context.toggleRow("All apps button", home.showAppsButton) { home = home.copy(showAppsButton = it) })
-                content.addView(context.toggleRow("Clock and date", home.showClock) { home = home.copy(showClock = it) })
-                content.addView(context.toggleRow("Pinned apps", home.showPinnedApps) { home = home.copy(showPinnedApps = it) })
+                heading(content, "Home", "Keep what matters.",
+                    "Choose what appears when you unlock your phone.")
+                choice(content, R.drawable.ic_search, "Search button", "Find apps and more",
+                    home.showSearchButton) { home = home.copy(showSearchButton = it) }
+                choice(content, R.drawable.ic_grid, "All apps button", "Open the app drawer",
+                    home.showAppsButton) { home = home.copy(showAppsButton = it) }
+                choice(content, R.drawable.ic_home, "Clock and date", "Time at a glance",
+                    home.showClock) { home = home.copy(showClock = it) }
+                choice(content, R.drawable.ic_star, "Pinned apps", "Your chosen shortcuts",
+                    home.showPinnedApps) { home = home.copy(showPinnedApps = it) }
             }
             5 -> {
-                content.addView(context.bodyText("Choose up to 12 apps for Home. Hold and drag them later to change their order."))
+                heading(content, "Shortcuts", "Pin your favorites.",
+                    "Choose up to 12 apps. Hold and drag them into place later.")
+                val counter = text("", 15f, true, primary)
+                fun updateCounter() { counter.text = "${pins.size} of 12 selected" }
+                updateCounter()
+                content.addView(counter, LinearLayout.LayoutParams(-1, -2).apply {
+                    topMargin = context.dp(8); bottomMargin = context.dp(12)
+                })
                 val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-                val search = EditText(context).apply { hint = "Find an app"; setSingleLine(); contentDescription = "Find an app to pin" }
+                val search = EditText(context).apply {
+                    hint = "Find an app"
+                    setSingleLine()
+                    contentDescription = "Find an app to pin"
+                    setPadding(context.dp(16), context.dp(12), context.dp(16), context.dp(12))
+                    background = GradientDrawable().apply {
+                        setColor(surface); cornerRadius = context.dp(18).toFloat()
+                    }
+                }
                 content.addView(search)
                 fun updateList(query: String) {
                     list.removeAllViews()
-                    apps.filter { it.second.contains(query, ignoreCase = true) }.take(80).forEach { (key, name) ->
-                        list.addView(CheckBox(context).apply {
+                    apps.filter { it.second.contains(query, ignoreCase = true) }
+                        .sortedWith(compareByDescending<Pair<String, String>> { it.first in pins }
+                            .thenBy { it.second.lowercase() })
+                        .take(80).forEach { (key, name) ->
+                        val row = LinearLayout(context).apply {
+                            gravity = Gravity.CENTER_VERTICAL
+                            setPadding(context.dp(8), context.dp(3), context.dp(8), context.dp(3))
+                        }
+                        AppIconStore.icons[key]?.let { bitmap ->
+                            row.addView(ImageView(context).apply { setImageBitmap(bitmap) },
+                                LinearLayout.LayoutParams(context.dp(36), context.dp(36)))
+                        }
+                        row.addView(CheckBox(context).apply {
                             text = name
+                            textSize = 16f
                             isChecked = key in pins
                             setOnCheckedChangeListener { button, checked ->
                                 if (checked && pins.size >= 12) { button.isChecked = false; return@setOnCheckedChangeListener }
                                 if (checked) pins.add(key) else pins.remove(key)
+                                updateCounter()
                             }
-                        }, LinearLayout.LayoutParams(-1, -2))
+                        }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = context.dp(8) })
+                        list.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                            bottomMargin = context.dp(3)
+                        })
                     }
                 }
                 search.addTextChangedListener(object : TextWatcher {
@@ -163,58 +355,65 @@ internal class FirstRunSetup(
                     override fun afterTextChanged(s: Editable?) = Unit
                 })
                 updateList("")
-                content.addView(list)
+                content.addView(list, LinearLayout.LayoutParams(-1, -2).apply {
+                    topMargin = context.dp(12)
+                })
             }
             6 -> {
-                content.addView(context.bodyText("We recommend contact search for easier calling and texting. Type a person's name in Grove, then choose Call, Text, or their contact card. When you choose an action, Android passes the selected number to the app you pick."))
-                content.addView(context.bodyText("If you don't need it, leaving it off means fewer results to search. Searches may be a little faster and use less battery, especially with a large contact list."))
-                content.addView(context.bodyText("Grove reads contacts only on your device while this is enabled. GraNet does not collect or receive your contacts. Results stay in memory; no contact copy is uploaded."))
-                content.addView(MaterialButton(context).apply {
-                    text = if (searchSources.contacts && hasContacts()) "Contact search enabled" else "Enable contact search"
-                    isEnabled = !searchSources.contacts || !hasContacts()
-                    setOnClickListener {
-                        searchSources = searchSources.copy(contacts = true)
-                        render()
-                        if (!hasContacts()) requestContacts()
-                    }
-                })
-                if (searchSources.contacts) content.addView(MaterialButton(context).apply {
-                    text = "Don't use contact search"
-                    setOnClickListener { searchSources = searchSources.copy(contacts = false); render() }
-                })
-                content.addView(context.bodyText("You can change this later in Launcher settings. Turning it off stops contact reads and hides contact results; Android retains any permission you granted until you revoke it in system settings."))
+                heading(content, "Recommended", "People, one search away.",
+                    "Type a name to call, text, or open a contact card. Android sends the selected number to the app you choose.")
+                feature(content, R.drawable.ic_contact, "Why enable it?",
+                    "Reach people without opening your contacts app.", true)
+                feature(content, R.drawable.ic_info, "Why leave it off?",
+                    "Fewer results can mean faster searches and less battery use.")
+                feature(content, R.drawable.ic_home, "Private and on your device",
+                    "Grove reads names and numbers only while enabled. They stay in memory. GraNet does not collect contacts; no copy is uploaded.")
+                if (!searchSources.contacts || !hasContacts()) action(content, "Enable contact search") {
+                    searchSources = searchSources.copy(contacts = true)
+                    render()
+                    if (!hasContacts()) requestContacts()
+                } else feature(content, R.drawable.ic_contact, "Contact search enabled",
+                    "Names are ready to appear in Grove Search.", true)
+                if (searchSources.contacts) action(content, "Don't use contact search") {
+                    searchSources = searchSources.copy(contacts = false); render()
+                }
+                content.addView(text("Turning this off stops reads and hides results. Android keeps a granted permission until you revoke it in system settings.",
+                    14f, color = muted), LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
             }
             7 -> {
-                content.addView(context.bodyText("You probably don't need file search, but it's here if you keep music, documents, or other files on your device and want to find them by name in Grove."))
-                content.addView(context.bodyText("Leaving it off avoids scanning shared storage. Searches may be faster and use less battery, especially if you have many files."))
-                content.addView(context.bodyText("Android's All files access grants broad read and write access to shared storage, but not other apps' private data or system partitions. Grove only reads file names and paths for an in-memory index. It does not read contents, change files, or upload the index. GraNet does not collect or receive your file list. Opening a result shares that one file with the app you choose."))
-                content.addView(MaterialButton(context).apply {
-                    text = if (searchSources.files && hasFiles()) "File search enabled" else "Enable file search"
-                    isEnabled = !searchSources.files || !hasFiles()
-                    setOnClickListener {
-                        searchSources = searchSources.copy(files = true)
-                        render()
-                        if (!hasFiles()) requestFiles()
-                    }
-                })
-                if (searchSources.files) content.addView(MaterialButton(context).apply {
-                    text = "Don't use file search"
-                    setOnClickListener { searchSources = searchSources.copy(files = false); render() }
-                })
-                content.addView(context.bodyText("You can change this later in Launcher settings. Turning it off clears Grove's in-memory index and hides file results. Android retains any permission you granted until you revoke it in system settings."))
+                heading(content, "Optional", "Search files on your phone.",
+                    "You probably don't need this. It's here for on-device music, documents, and other files you want to find by name.")
+                feature(content, R.drawable.ic_document, "When it helps",
+                    "Find local files without browsing folders.", true)
+                feature(content, R.drawable.ic_info, "Why leave it off?",
+                    "Skipping storage scans can make searches faster and use less battery.")
+                feature(content, R.drawable.ic_home, "What Android grants",
+                    "All files access grants broad read and write access to shared storage, but not other apps' private data or system partitions. Grove indexes names and paths in memory. It does not read contents, change files, or upload the index. GraNet does not collect your file list. Opening a result shares only that file with the app you choose.")
+                if (!searchSources.files || !hasFiles()) action(content, "Enable file search") {
+                    searchSources = searchSources.copy(files = true)
+                    render()
+                    if (!hasFiles()) requestFiles()
+                } else feature(content, R.drawable.ic_document, "File search enabled",
+                    "Local file names can appear in Grove Search.", true)
+                if (searchSources.files) action(content, "Don't use file search") {
+                    searchSources = searchSources.copy(files = false); render()
+                }
+                content.addView(text("Turning this off clears the in-memory index and hides results. Android keeps a granted permission until you revoke it in system settings.",
+                    14f, color = muted), LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
             }
         }
-        val navigation = LinearLayout(context).apply { gravity = Gravity.END or Gravity.CENTER_VERTICAL }
-        navigation.addView(MaterialButton(context).apply {
+        val navigation = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+        navigation.addView(MaterialButton(context, null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = if (page == 0) "Skip setup" else "Back"
+            textSize = 16f
+            minimumHeight = context.dp(52)
             setOnClickListener { back() }
-        })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         navigation.addView(MaterialButton(context).apply {
-            text = when (page) {
-                6 -> if (searchSources.contacts && hasContacts()) "Continue" else "No thanks, next"
-                7 -> if (searchSources.files && hasFiles()) "Finish" else "No thanks, finish"
-                else -> "Next"
-            }
+            text = if (page == 7) "Finish" else "Next"
+            textSize = 16f
+            minimumHeight = context.dp(52)
             setOnClickListener {
                 if (page == 6 && !hasContacts()) searchSources = searchSources.copy(contacts = false)
                 if (page == 7) {
@@ -222,9 +421,11 @@ internal class FirstRunSetup(
                     close()
                     finish(initial.copy(gestures = gestures, homeScreen = home, search = searchSources,
                         favorites = apps.map { it.first }.filter { it in pins }))
-                } else { page++; render() }
+                } else { page = pages().first { it > page }; render() }
             }
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = context.dp(12) })
+        screen.addView(navigation, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = context.dp(8)
         })
-        screen.addView(navigation)
     }
 }

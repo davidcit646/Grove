@@ -1,6 +1,11 @@
 # Grove Launcher
 
-An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.28 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.29 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+
+## 0.1.29 changes
+
+- Reworked first-run setup with larger type, progress, visual cards, app icons in the pin picker, and readable permission disclosures. The setup colors follow the Android light or dark theme.
+- When both Home swipe gestures are disabled, the swipe-practice page is omitted. When one is enabled, practice shows only that gesture and the progress count reflects the visible pages.
 
 ## 0.1.28 changes
 

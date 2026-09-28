@@ -9,8 +9,8 @@ android {
         applicationId = "tech.granet.grove"
         minSdk = 31
         targetSdk = 36
-        versionCode = 29
-        versionName = "0.1.28-alpha"
+        versionCode = 30
+        versionName = "0.1.29-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

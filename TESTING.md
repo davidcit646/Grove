@@ -7,9 +7,11 @@
 - With large font and display size, confirm the preview/details scroll while Previous, Next, and credits stay visible.
 - Check that landscape photos crop to the display instead of stretching; set a photo to Home, Lock, and Both, then confirm each destination.
 
-## First-run setup (0.1.27)
+## First-run setup (0.1.29)
 
-- Clear app data, launch Grove, and verify the seven-step setup appears over Home with visible Back, Next, and Skip controls.
+- Clear app data, launch Grove, and verify the eight-step setup appears over Home with visible Back, Next, and Skip controls and readable light-mode status icons.
+- Turn both swipe gestures off and verify Next skips swipe practice, the count becomes seven steps, and Back returns to gesture selection. Enable only one gesture and verify practice shows only that gesture.
+- Check the new cards, larger type, and navigation in light/dark mode, small screens, large font/display settings, and landscape. Permission details must remain readable and scrollable.
 - Change both swipe switches, practice an upward and downward swipe, then hide each home control independently. Verify the choices persist after Finish and restart.
 - Search for an installed app outside the first page of results, select pins, finish, and verify only the chosen apps appear on Home. Replay setup and check that the current choices are preselected.
 - Skip contacts and file access and verify Grove still opens apps and search. Replay setup, grant contacts, deny it on another run, and confirm both paths return to setup.
