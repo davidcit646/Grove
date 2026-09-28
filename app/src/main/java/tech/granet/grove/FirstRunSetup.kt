@@ -184,7 +184,7 @@ internal class FirstRunSetup(
             max = visible.size
             setProgressCompat(current, false)
             trackColor = accent
-            indicatorColor = primary
+            setIndicatorColor(primary)
         }, LinearLayout.LayoutParams(-1, context.dp(5)))
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
