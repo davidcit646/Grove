@@ -40,9 +40,10 @@ internal class FirstRunSetup(
     private var overlay: View? = null
     private var practicedUp = false
     private var practicedDown = false
+    private var practicedHold = false
 
     fun show() = render()
-    fun refreshPermissions() { if ((page == 5 || page == 6) && overlay != null) render() }
+    fun refreshPermissions() { if ((page == 6 || page == 7) && overlay != null) render() }
     fun back() { if (page > 0) { page--; render() } else { close(); skip() } }
     private fun close() { overlay?.let(host::removeView); overlay = null }
 
@@ -63,9 +64,10 @@ internal class FirstRunSetup(
         overlay = screen
         host.addView(screen, FrameLayout.LayoutParams(-1, -1))
         screen.requestApplyInsets()
-        screen.addView(context.bodyText("GROVE SETUP  ·  ${page + 1} OF 7"))
+        screen.addView(context.bodyText("GROVE SETUP  ·  ${page + 1} OF 8"))
         val titles = listOf("Welcome to Grove", "Choose your swipes", "Try your swipes",
-            "Choose your home controls", "Pin your apps", "Search your contacts", "Search your files")
+            "Open launcher settings", "Choose your home controls", "Pin your apps",
+            "Search your contacts", "Search your files")
         screen.addView(context.titleText(titles[page]))
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         screen.addView(ScrollView(context).apply { isFillViewport = true; addView(content) },
@@ -112,13 +114,32 @@ internal class FirstRunSetup(
                 }, LinearLayout.LayoutParams(-1, context.dp(220)).apply { topMargin = context.dp(20) })
             }
             3 -> {
+                content.addView(context.bodyText("Tap and hold an empty area of the Home screen to open Grove settings. You can use this even if you hide the Home buttons. Try holding the area below, or tap Next to continue."))
+                val feedback = context.bodyText(if (practicedHold) "Got it! Hold empty Home space to open settings." else "Try a tap and hold.")
+                content.addView(feedback)
+                content.addView(TextView(context).apply {
+                    text = "Tap and hold here"
+                    textSize = 20f
+                    gravity = Gravity.CENTER
+                    setTextColor(ThemeColors.icon(context))
+                    setBackgroundColor(ThemeColors.iconSurface(context))
+                    contentDescription = "Practice holding empty Home space to open launcher settings"
+                    isLongClickable = true
+                    setOnLongClickListener {
+                        practicedHold = true
+                        feedback.text = "Got it! Hold empty Home space to open settings."
+                        true
+                    }
+                }, LinearLayout.LayoutParams(-1, context.dp(180)).apply { topMargin = context.dp(16) })
+            }
+            4 -> {
                 content.addView(context.bodyText("What should be visible on Home? Hold empty space to open settings even if you hide the buttons."))
                 content.addView(context.toggleRow("Search button", home.showSearchButton) { home = home.copy(showSearchButton = it) })
                 content.addView(context.toggleRow("All apps button", home.showAppsButton) { home = home.copy(showAppsButton = it) })
                 content.addView(context.toggleRow("Clock and date", home.showClock) { home = home.copy(showClock = it) })
                 content.addView(context.toggleRow("Pinned apps", home.showPinnedApps) { home = home.copy(showPinnedApps = it) })
             }
-            4 -> {
+            5 -> {
                 content.addView(context.bodyText("Choose up to 12 apps for Home. Hold and drag them later to change their order."))
                 val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
                 val search = EditText(context).apply { hint = "Find an app"; setSingleLine(); contentDescription = "Find an app to pin" }
@@ -144,7 +165,7 @@ internal class FirstRunSetup(
                 updateList("")
                 content.addView(list)
             }
-            5 -> {
+            6 -> {
                 content.addView(context.bodyText("We recommend contact search for easier calling and texting. Type a person's name in Grove, then choose Call, Text, or their contact card. When you choose an action, Android passes the selected number to the app you pick."))
                 content.addView(context.bodyText("If you don't need it, leaving it off means fewer results to search. Searches may be a little faster and use less battery, especially with a large contact list."))
                 content.addView(context.bodyText("Grove reads contacts only on your device while this is enabled. GraNet does not collect or receive your contacts. Results stay in memory; no contact copy is uploaded."))
@@ -163,7 +184,7 @@ internal class FirstRunSetup(
                 })
                 content.addView(context.bodyText("You can change this later in Launcher settings. Turning it off stops contact reads and hides contact results; Android retains any permission you granted until you revoke it in system settings."))
             }
-            6 -> {
+            7 -> {
                 content.addView(context.bodyText("You probably don't need file search, but it's here if you keep music, documents, or other files on your device and want to find them by name in Grove."))
                 content.addView(context.bodyText("Leaving it off avoids scanning shared storage. Searches may be faster and use less battery, especially if you have many files."))
                 content.addView(context.bodyText("Android's All files access grants broad read and write access to shared storage, but not other apps' private data or system partitions. Grove only reads file names and paths for an in-memory index. It does not read contents, change files, or upload the index. GraNet does not collect or receive your file list. Opening a result shares that one file with the app you choose."))
@@ -190,13 +211,13 @@ internal class FirstRunSetup(
         })
         navigation.addView(MaterialButton(context).apply {
             text = when (page) {
-                5 -> if (searchSources.contacts && hasContacts()) "Continue" else "No thanks, next"
-                6 -> if (searchSources.files && hasFiles()) "Finish" else "No thanks, finish"
+                6 -> if (searchSources.contacts && hasContacts()) "Continue" else "No thanks, next"
+                7 -> if (searchSources.files && hasFiles()) "Finish" else "No thanks, finish"
                 else -> "Next"
             }
             setOnClickListener {
-                if (page == 5 && !hasContacts()) searchSources = searchSources.copy(contacts = false)
-                if (page == 6) {
+                if (page == 6 && !hasContacts()) searchSources = searchSources.copy(contacts = false)
+                if (page == 7) {
                     if (!hasFiles()) searchSources = searchSources.copy(files = false)
                     close()
                     finish(initial.copy(gestures = gestures, homeScreen = home, search = searchSources,

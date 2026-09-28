@@ -1527,6 +1527,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun startFirstRunSetup() {
         if (firstRunSetup != null || apps.isEmpty()) return
+        if (prefs.getBoolean("setup_pending", false))
+            prefs.edit().remove("widget_tutorial_seen").apply()
         firstRunSetup = FirstRunSetup(
             this, surface, config, apps.map { it.key to it.label },
             ::hasContactAccess, { Environment.isExternalStorageManager() },
@@ -1575,6 +1577,22 @@ class MainActivity : AppCompatActivity() {
             { editConfig() },
             { export.launch("grove-config.json") },
             { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+            { prefs.getBoolean("setup_pending", false) },
+            { enabled ->
+                prefs.edit().apply {
+                    putBoolean("setup_complete", !enabled)
+                    if (enabled) putBoolean("setup_pending", true)
+                    else remove("setup_pending")
+                }.apply()
+            },
+            {
+                if (prefs.getBoolean("setup_pending", false)) root.post {
+                    if (!isDestroyed && prefs.getBoolean("setup_pending", false)) {
+                        showHome()
+                        startFirstRunSetup()
+                    }
+                }
+            },
         ).show()
     }
     private fun editConfig(initialText: String? = null) {
@@ -1604,6 +1622,21 @@ class MainActivity : AppCompatActivity() {
     // Widget lifecycle: allocate -> bind consent -> optional configuration -> persist.
     private fun pickWidget() {
         if (pendingWidget != -1) { message("Finish adding the current widget first"); return }
+        if (!prefs.getBoolean("widget_tutorial_seen", false)) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Widget controls")
+                .setMessage("Once a widget is on your Home screen, tap and hold it for options such as resizing, configuring, or removing it.")
+                .setPositiveButton("Got It!") { _, _ ->
+                    prefs.edit().putBoolean("widget_tutorial_seen", true).apply()
+                    showWidgetPicker()
+                }
+                .setNegativeButton("Not now", null)
+                .show()
+            return
+        }
+        showWidgetPicker()
+    }
+    private fun showWidgetPicker() {
         val providers = manager.installedProviders.sortedBy { it.loadLabel(packageManager).lowercase() }
         listDialog("Add widget", providers.map { it.loadLabel(packageManager).toString() }, negative = "Cancel") { index ->
             val provider = providers[index]

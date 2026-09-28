@@ -22,6 +22,9 @@ internal class LauncherSettingsScreen(
     private val editCustom: () -> Unit,
     private val exportConfig: () -> Unit,
     private val importConfig: () -> Unit,
+    private val tutorialsPending: () -> Boolean,
+    private val resetTutorials: (Boolean) -> Unit,
+    private val onClose: () -> Unit,
 ) {
     fun show() {
         val config = current()
@@ -78,6 +81,12 @@ internal class LauncherSettingsScreen(
             commit(current().copy(homeScreen = current().homeScreen.copy(pinnedAppsAtBottom = enabled)))
         }
 
+        content.addSection("Tutorials")
+        toggle("Replay tutorials on next Home", tutorialsPending()) { enabled ->
+            resetTutorials(enabled)
+        }
+        content.addView(activity.bodyText("Turning this on restarts the full setup when you return Home and shows the widget tip again. Turn it off before leaving settings to cancel. Your current choices stay in place until you finish setup."))
+
         content.addSection("Crash reports")
         toggle("Crash reporting", CrashReporter.isEnabled(activity)) { enabled ->
             CrashReporter.setEnabled(activity, enabled)
@@ -127,6 +136,6 @@ internal class LauncherSettingsScreen(
 
         content.addView(activity.bodyText("Tap and hold empty home space to open this menu when enabled. If all controls are hidden, open Grove from another launcher’s app list or its Android app settings shortcut to restore them. Widgets remain until removed.")
             .apply { setPadding(0, activity.dp(16), 0, activity.dp(12)) })
-        activity.scrollDialog("Launcher settings", content)
+        activity.scrollDialog("Launcher settings", content).setOnDismissListener { onClose() }
     }
 }
