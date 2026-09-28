@@ -3,6 +3,7 @@ package tech.granet.grove
 import android.app.WallpaperManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.io.FileOutputStream
@@ -86,20 +87,53 @@ internal class WallpaperController(
                     check(temp.renameTo(target)) { "Could not save wallpaper" }
                 } finally { connection.disconnect() }
                 true
-            }.getOrDefault(false)
+            }.onFailure { Log.w("Grove", "Wallpaper download failed for ${wallpaper.fileName}", it) }
+                .getOrDefault(false)
             temp.delete()
             activity.runOnUiThread { if (!activity.isDestroyed) done(ok) }
         }
     }
 
-    fun apply(index: Int) {
+    /** A small preview is decoded off the UI thread. The caller owns and recycles it. */
+    fun preview(index: Int, done: (Bitmap?) -> Unit) {
+        fun decodePreview() {
+            worker.execute {
+                val full = runCatching {
+                    if (index < 3) WallpaperArt.create(index)
+                    else decode(WallpaperArt.cachedFile(activity.filesDir, index))
+                }.getOrNull()
+                val preview = full?.let {
+                    val scaled = Bitmap.createScaledBitmap(it, 360, 800, true)
+                    if (scaled !== it) it.recycle()
+                    scaled
+                }
+                activity.runOnUiThread {
+                    if (activity.isDestroyed) preview?.recycle() else done(preview)
+                }
+            }
+        }
+        if (index < 3) decodePreview()
+        else {
+            val cached = WallpaperArt.cachedFile(activity.filesDir, index)
+            worker.execute {
+                val valid = runCatching { decode(cached)?.also { it.recycle() } != null }.getOrDefault(false)
+                activity.runOnUiThread {
+                    if (activity.isDestroyed) return@runOnUiThread
+                    if (valid) decodePreview()
+                    else download(index) { ok -> if (ok) decodePreview() else done(null) }
+                }
+            }
+        }
+    }
+
+    fun apply(index: Int, which: Int) {
         worker.execute {
             runCatching {
                 val source = if (index >= 3) decode(WallpaperArt.cachedFile(activity.filesDir, index))
                     ?: error("Wallpaper cache is missing") else WallpaperArt.create(index)
                 val bitmap = centerCrop(source, activity.resources.displayMetrics.widthPixels,
                     activity.resources.displayMetrics.heightPixels)
-                try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM) }
+                try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which) }
                 finally { bitmap.recycle(); if (source !== bitmap) source.recycle() }
             }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) message("Wallpaper applied") } }
                 .onFailure { activity.runOnUiThread { if (!activity.isDestroyed) message("Theme updated; system wallpaper could not be changed") } }

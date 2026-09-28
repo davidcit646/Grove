@@ -2,6 +2,7 @@ package tech.granet.grove
 
 import android.Manifest
 import android.app.role.RoleManager
+import android.app.WallpaperManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetHostView
@@ -1638,33 +1639,12 @@ class MainActivity : AppCompatActivity() {
     private fun renderWidgets(target: LinearLayout) = WidgetScreen(this, manager, host, prefs, widgetIds) { showHome() }.render(target)
 
     private fun wallpapers() {
-        val choices = buildList {
-            add("Fern · abstract")
-            add("Ember · mountain")
-            add("Dusk · mountain")
-            WallpaperArt.commons.forEach { add("${it.color} · ${it.title} (${it.license})") }
-            add("Wallpaper credits and licenses")
-        }
-        listDialog("Wallpapers", choices, negative = "Cancel") { index ->
-            if (index == choices.lastIndex) {
-                val credits = WallpaperArt.commons.joinToString("\n") { "${it.color}: ${it.title} — ${it.author}\n${it.sourcePage}\n${it.license}" }
-                infoDialog("Wallpaper sources",
-                    "These wallpapers are hosted by Wikimedia Commons. Follow each source link for its license and terms.\n\n$credits",
-                    "Done")
-            } else if (index < 3) {
+        WallpaperPicker(this, wallpaperController, config.wallpaper) { index, which ->
+            if (which and WallpaperManager.FLAG_SYSTEM != 0) {
                 config = config.copy(wallpaper = index); save(); artworkStyle = -1; showHome()
-                wallpaperController.apply(index)
-            } else {
-                val wallpaperIndex = index
-                message("Downloading ${WallpaperArt.commons[index - 3].color} wallpaper…")
-                wallpaperController.download(wallpaperIndex) { success ->
-                    if (success) {
-                        config = config.copy(wallpaper = wallpaperIndex); save(); artworkStyle = -1; showHome()
-                        wallpaperController.apply(wallpaperIndex)
-                    } else message("Could not download this wallpaper. Check your connection and try again.")
-                }
             }
-        }
+            wallpaperController.apply(index, which)
+        }.show()
     }
 
 }

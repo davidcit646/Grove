@@ -68,7 +68,7 @@ internal class FirstRunSetup(
             "Choose your home controls", "Pin your apps", "Search your contacts", "Search your files")
         screen.addView(context.titleText(titles[page]))
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        screen.addView(ScrollView(context).apply { fillViewport = true; addView(content) },
+        screen.addView(ScrollView(context).apply { isFillViewport = true; addView(content) },
             LinearLayout.LayoutParams(-1, 0, 1f))
 
         when (page) {
