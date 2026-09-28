@@ -1,0 +1,8 @@
+Grove Launcher 0.1.13-alpha refactor source
+Kotlin: compiled against retained Android and dependency jars
+JUnit: 35 tests passed (Search, SearchResults, Config, Gestures, PinnedApps)
+Shell: scripts/build-rust-android.sh passed bash -n
+Rust/Cargo: not runnable in this workspace (toolchain absent)
+Android Gradle/NDK/APK/lint: not runnable in this workspace (toolchain absent)
+CI: workflow installs Rust and NDK and runs Cargo tests plus Gradle assembleDebug, Kotlin tests, lint
+No 0.1.13 APK has been produced. Previous 0.1.12 APK is not this revision.

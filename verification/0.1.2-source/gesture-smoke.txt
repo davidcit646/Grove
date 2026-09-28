@@ -1,0 +1,7 @@
+PASS: swipe down
+PASS: swipe up
+PASS: down disabled
+PASS: up disabled
+PASS: horizontal ignored
+PASS: tiny ignored
+PASS: slow ignored

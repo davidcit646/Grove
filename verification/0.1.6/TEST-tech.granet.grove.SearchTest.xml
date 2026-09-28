@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tech.granet.grove.SearchTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-27T21:20:57" hostname="fbeff3180e74" time="0.007">
+  <properties/>
+  <testcase name="exactOutranksPrefixAndSubstring" classname="tech.granet.grove.SearchTest" time="0.004"/>
+  <testcase name="allWordsAreRequired" classname="tech.granet.grove.SearchTest" time="0.001"/>
+  <testcase name="emptyQueryIncludesEveryApp" classname="tech.granet.grove.SearchTest" time="0.0"/>
+  <testcase name="multiWordOrderCanDiffer" classname="tech.granet.grove.SearchTest" time="0.0"/>
+  <testcase name="preparedSearchMatchesExistingRanking" classname="tech.granet.grove.SearchTest" time="0.002"/>
+  <testcase name="accentsAndCaseMatch" classname="tech.granet.grove.SearchTest" time="0.0"/>
+  <testcase name="preparedQueryPreservesAccentAndMultiwordMatching" classname="tech.granet.grove.SearchTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

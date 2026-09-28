@@ -1,0 +1,1558 @@
+package tech.granet.grove
+
+import android.Manifest
+import android.app.role.RoleManager
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetHostView
+import android.content.*
+import android.content.res.ColorStateList
+import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
+import android.database.ContentObserver
+import android.graphics.*
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.LayerDrawable
+import android.net.Uri
+import android.os.Environment
+import android.provider.Settings
+import android.provider.ContactsContract
+import android.telephony.PhoneNumberUtils
+import android.util.Log
+import android.os.*
+import android.text.Editable
+import android.text.InputFilter
+import android.text.TextWatcher
+import android.view.*
+import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import tech.granet.grove.ui.MenuRow
+import tech.granet.grove.ui.confirmDialog
+import tech.granet.grove.ui.dp
+import tech.granet.grove.ui.infoDialog
+import tech.granet.grove.ui.label
+import tech.granet.grove.ui.listDialog
+import tech.granet.grove.ui.menuDialog
+import tech.granet.grove.ui.message
+import java.util.*
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.Executors
+
+/** Root HOME activity. Owns navigation; Android owns external apps and widget providers. */
+class MainActivity : AppCompatActivity() {
+    private val prefs by lazy { getSharedPreferences("grove", MODE_PRIVATE) }
+    private val configStore by lazy { ConfigStore(prefs) }
+    private val launcher by lazy { getSystemService(LauncherApps::class.java) }
+    // Widget RemoteViews must inflate with a plain framework context. An
+    // AppCompatActivity context can substitute AppCompat views that reject
+    // RemoteViews actions and end up in Android's "Couldn't add widget" view.
+    private val manager by lazy { AppWidgetManager.getInstance(applicationContext) }
+    private val host by lazy { AppWidgetHost(applicationContext, 1024) }
+    private val worker = Executors.newSingleThreadExecutor()
+    private val searchWorker = Executors.newSingleThreadExecutor()
+    private val contactWorker = Executors.newSingleThreadExecutor()
+    private val searchHandler = Handler(Looper.getMainLooper())
+    @Volatile private var searchGeneration = 0
+    private var pendingSearch: Runnable? = null
+    private var contacts = emptyList<ContactIndex.Contact>()
+    private var contactObserverRegistered = false
+    private var contactWarningShown = false
+    private var lastContactRefresh = 0L
+    private val delayedContactRefresh = Runnable { refreshContacts() }
+    private val contactObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            searchHandler.removeCallbacks(delayedContactRefresh)
+            searchHandler.postDelayed(delayedContactRefresh, 400L)
+        }
+    }
+    private val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) refreshContacts() else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+    }
+    private val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
+    // Every installed app icon is decoded during app discovery and retained for the
+    // lifetime of the launcher process. Drawer rendering never decodes icons.
+    private val iconCache get() = AppIconStore.icons
+    private var drawerAdapter: AppAdapter? = null
+    private var drawerEmpty: TextView? = null
+    private var drawerGrid: GridView? = null
+    private var drawerVisibleCount = 0
+    private val selectedApps = linkedSetOf<String>()
+    private var selectingApps = false
+    private data class DrawerDrag(val key: String)
+    private val pendingUninstalls = ArrayDeque<String>()
+    private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        loadApps()
+        launchNextUninstall()
+    }
+    private var config = Config()
+    private var apps = emptyList<App>()
+    private var widgetIds = mutableListOf<Int>()
+    private var pendingWidget = -1
+    private var drawer = false
+    private var searchMode = false
+    private var files = emptyList<IndexedFile>()
+    private var indexingFiles = false
+    private var searchResults: LinearLayout? = null
+    private lateinit var surface: FrameLayout
+    private lateinit var root: LinearLayout
+    private data class PinDrag(val key: String)
+    private var activePinDrag: PinDrag? = null
+    private var heldPin: View? = null
+    private lateinit var body: LinearLayout
+    private var homeScrollY = 0
+    private var searchField: EditText? = null
+    @Volatile private var loadGeneration = 0
+    private var artworkStyle = -1
+    private var artwork: Bitmap? = null
+    private var backdrop: Bitmap? = null
+    private var backdropWidth = 0
+    private var backdropHeight = 0
+    private var wallpaperButtonColors: Pair<Int, Int>? = null
+    private var gestureStartX = 0f
+    private var gestureStartY = 0f
+    private var gestureStartTime = 0L
+    private var gestureTracking = false
+    private var gestureBlocked = false
+    private var contextMenuBlocked = false
+    private var longPressTriggered = false
+    private var touchMoved = false
+    private var swipeCaptured = false
+    private var drawerSwipeTracking = false
+    private var drawerSwipeCaptured = false
+    private var drawerStartedAtTop = false
+    private var touchedScroll: ScrollView? = null
+    private var loadingApps = true
+    private val longPressHandler = Handler(Looper.getMainLooper())
+    private val longPressRunnable = Runnable {
+        if (gestureTracking && !drawer && !contextMenuBlocked && config.gestures.longPressHomeContextMenu) {
+            longPressTriggered = true
+            gestureTracking = false
+            cancelChildTouch()
+            settings()
+        }
+    }
+    private data class App(val component: ComponentName, val label: String) {
+        val key = component.flattenToString()
+        val searchName = Search.normalize(label.take(512))
+    }
+
+    private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) runCatching { contentResolver.openOutputStream(uri)?.use { it.write(config.json().toByteArray()) } ?: error("Cannot open file") }
+            .onFailure { message("Could not export configuration") }
+    }
+    private val importConfig = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) runCatching {
+            val bytes = contentResolver.openInputStream(uri)?.use { input -> val buffer = java.io.ByteArrayOutputStream(); val chunk = ByteArray(4096); while (buffer.size() <= 65536) { val count = input.read(chunk, 0, minOf(chunk.size, 65537 - buffer.size())); if (count < 0) break; buffer.write(chunk, 0, count) }; buffer.toByteArray() } ?: error("Cannot open file")
+            require(bytes.size <= 65536) { "Configuration exceeds 64 KB" }
+            ConfigStore.parse(bytes.toString(Charsets.UTF_8))
+        }.onSuccess { activateConfig(it); showHome(); message("Configuration imported") }
+            .onFailure { message(it.message ?: "Invalid configuration") }
+    }
+    private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) configureWidget() else cancelWidget()
+    }
+    private val configureResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) finishWidget() else {
+            Log.w("Grove", "Widget configuration returned ${result.resultCode} for id $pendingWidget")
+            cancelWidget()
+        }
+    }
+    private val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    private val changes = object : LauncherApps.Callback() {
+        override fun onPackageAdded(p: String, u: UserHandle) { loadApps(p); if (hasContactAccess()) refreshContacts() }
+        override fun onPackageRemoved(p: String, u: UserHandle) { loadApps(); if (hasContactAccess()) refreshContacts() }
+        override fun onPackageChanged(p: String, u: UserHandle) { loadApps(p); if (hasContactAccess()) refreshContacts() }
+        override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = loadApps()
+        override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = loadApps()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        config = configStore.load()
+        widgetIds = prefs.getStringSet("widgets", emptySet())!!.mapNotNull { it.toIntOrNull() }.sorted().toMutableList()
+        pendingWidget = savedInstanceState?.getInt("pending", -1) ?: prefs.getInt("pending", -1)
+        // Recover orphan allocation after process death with no pending activity result.
+        if (savedInstanceState == null && pendingWidget != -1) cancelWidget()
+        window.setDecorFitsSystemWindows(false)
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            // The drawer's search field must not take focus (and open the IME)
+            // merely because it is the first focusable child.
+            isFocusableInTouchMode = true
+        }
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            val edges = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+            v.setPadding(dp(20), edges.top + dp(12), dp(20), edges.bottom + dp(12)); insets
+        }
+        surface = FrameLayout(this).apply { addView(root, FrameLayout.LayoutParams(-1, -1)) }
+        setContentView(surface)
+        CrashReporter.promptIfPending(this)
+        root.setOnDragListener { _, event ->
+            if (event.localState !is PinDrag) false else {
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_LOCATION -> scrollPinDrag(root, event)
+                    DragEvent.ACTION_DRAG_ENDED -> {
+                        activePinDrag = null
+                        releasePinHold()
+                        root.post { if (!drawer && !isDestroyed) showHome() }
+                    }
+                }
+                true
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (drawer && selectingApps) { clearAppSelection(); refreshDrawer() }
+                else if (drawer || searchMode) animateDrawerClosed()
+                // Back at Home has no navigation destination. Recreating the
+                // view here would unexpectedly jump a scrolled layout to top.
+            }
+        })
+        launcher.registerCallback(changes, Handler(Looper.getMainLooper()))
+        homeScrollY = savedInstanceState?.getInt("homeScrollY") ?: 0
+        showHome(); loadApps(); indexFiles(); refreshContacts()
+        if (configStore.brokenCustomConfig != null) root.post { showConfigRecoveryDialog() }
+        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { settings() }
+    }
+    override fun onStart() { super.onStart(); host.startListening() }
+    private fun clearAppSelection() {
+        selectingApps = false
+        selectedApps.clear()
+    }
+    override fun onResume() {
+        super.onResume()
+        if (Environment.isExternalStorageManager() && files.isEmpty() && !indexingFiles) indexFiles()
+        if (!hasContactAccess() || SystemClock.elapsedRealtime() - lastContactRefresh > 15 * 60_000L) refreshContacts()
+    }
+    override fun onStop() {
+        releasePinHold(); longPressHandler.removeCallbacks(longPressRunnable)
+        gestureTracking = false; host.stopListening()
+        clearAppSelection()
+        if (drawer) refreshDrawer()
+        super.onStop()
+    }
+    override fun onDestroy() {
+        launcher.unregisterCallback(changes)
+        longPressHandler.removeCallbacks(longPressRunnable)
+        pendingSearch?.let(searchHandler::removeCallbacks)
+        searchHandler.removeCallbacks(delayedContactRefresh)
+        searchGeneration++
+        searchWorker.shutdownNow()
+        contactWorker.shutdownNow()
+        if (contactObserverRegistered) contentResolver.unregisterContentObserver(contactObserver)
+        worker.shutdownNow()
+        super.onDestroy()
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        rememberHomeScroll()
+        outState.putInt("pending", pendingWidget)
+        outState.putInt("homeScrollY", homeScrollY)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent); setIntent(intent)
+        if (drawer || searchMode) showHome()
+        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { settings() }
+    }
+
+    private fun cancelChildTouch() {
+        val cancel = MotionEvent.obtain(gestureStartTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+        super.dispatchTouchEvent(cancel); cancel.recycle()
+    }
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (heldPin != null || activePinDrag != null) {
+            gestureTracking = false
+            return super.dispatchTouchEvent(event)
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                root.animate().cancel()
+                root.translationY = 0f
+                root.alpha = 1f
+                gestureStartX = event.rawX; gestureStartY = event.rawY; gestureStartTime = event.eventTime
+                longPressTriggered = false; touchMoved = false; swipeCaptured = false
+                drawerSwipeCaptured = false
+                longPressHandler.removeCallbacks(longPressRunnable)
+
+                if (drawer || searchMode) {
+                    val grid = drawerGrid
+                    drawerStartedAtTop = grid != null && !grid.canScrollVertically(-1) && pointInside(grid, event.rawX, event.rawY)
+                    drawerSwipeTracking = drawerStartedAtTop
+                    gestureTracking = false
+                    return super.dispatchTouchEvent(event)
+                }
+
+                drawerSwipeTracking = false
+                gestureTracking = ::root.isInitialized
+                gestureBlocked = gestureTracking && touchInsideWidget(root, event.rawX, event.rawY)
+                contextMenuBlocked = gestureTracking && touchInsideInteractive(root, event.rawX, event.rawY)
+                touchedScroll = if (gestureTracking) scrollAt(root, event.rawX, event.rawY) else null
+                if (gestureTracking && !contextMenuBlocked && config.gestures.longPressHomeContextMenu) {
+                    longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> {
+                longPressHandler.removeCallbacks(longPressRunnable)
+                gestureTracking = false
+                drawerSwipeTracking = false
+                settleSwipeFeedback()
+                if (swipeCaptured || drawerSwipeCaptured || longPressTriggered) {
+                    swipeCaptured = false; drawerSwipeCaptured = false; longPressTriggered = false
+                    return true
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (drawerSwipeTracking) {
+                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
+                    val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
+                    if (!drawerSwipeCaptured && dy > slop && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.1f) {
+                        drawerSwipeCaptured = true
+                        cancelChildTouch()
+                    }
+                    if (drawerSwipeCaptured) {
+                        val offset = dy.coerceAtLeast(0f) * 0.72f
+                        root.translationY = offset
+                        return true
+                    }
+                }
+
+                if (longPressTriggered) return true
+                if (gestureTracking) {
+                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
+                    val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
+                    if (dx * dx + dy * dy > slop * slop) {
+                        touchMoved = true; longPressHandler.removeCallbacks(longPressRunnable)
+                        if (!swipeCaptured && touchedScroll?.canScrollVertically(if (dy > 0) -1 else 1) == true) gestureBlocked = true
+                    }
+                    if (!gestureBlocked && !contextMenuBlocked) {
+                        val preview = (dy * 0.10f).coerceIn(-dp(24).toFloat(), dp(24).toFloat())
+                        root.translationY = preview
+                    }
+                    if (!gestureBlocked && !swipeCaptured && Gestures.resolve(dx, dy, event.eventTime - gestureStartTime,
+                            dp(72).toFloat(), config.gestures) != HomeGesture.NONE) {
+                        swipeCaptured = true; cancelChildTouch()
+                    }
+                    if (swipeCaptured) return true
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                longPressHandler.removeCallbacks(longPressRunnable)
+
+                if (drawerSwipeTracking || drawerSwipeCaptured) {
+                    drawerSwipeTracking = false
+                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
+                    val close = drawerSwipeCaptured && Gestures.drawerClose(
+                        dx, dy, event.eventTime - gestureStartTime, dp(88).toFloat(), drawerStartedAtTop
+                    )
+                    drawerSwipeCaptured = false
+                    if (close) {
+                        animateDrawerClosed()
+                        return true
+                    }
+                    settleSwipeFeedback()
+                    if (drawerStartedAtTop && dy > ViewConfiguration.get(this).scaledTouchSlop) return true
+                }
+
+                if (longPressTriggered) {
+                    longPressTriggered = false; gestureTracking = false; settleSwipeFeedback(); return true
+                }
+                if (gestureTracking) {
+                    gestureTracking = false
+                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
+                    val gesture = if (!gestureBlocked) Gestures.resolve(dx, dy, event.eventTime - gestureStartTime,
+                        dp(72).toFloat(), config.gestures) else HomeGesture.NONE
+                    if (gesture != HomeGesture.NONE) {
+                        if (!swipeCaptured) cancelChildTouch()
+                        swipeCaptured = false
+                        animateHomeGesture(gesture)
+                        return true
+                    }
+                    settleSwipeFeedback()
+                    if (swipeCaptured) { swipeCaptured = false; return true }
+                    val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
+                    val tap = !touchMoved && dx * dx + dy * dy <= slop * slop && event.eventTime - gestureStartTime <= 350L
+                    if (!contextMenuBlocked && tap && config.gestures.tapHomeContextMenu) {
+                        cancelChildTouch(); settings(); return true
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    private fun pointInside(view: View, rawX: Float, rawY: Float): Boolean {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        return rawX >= location[0] && rawX < location[0] + view.width &&
+            rawY >= location[1] && rawY < location[1] + view.height
+    }
+
+    private fun settleSwipeFeedback() {
+        root.animate().cancel()
+        root.animate().translationY(0f).setDuration(140L).start()
+    }
+
+    private fun animateHomeGesture(gesture: HomeGesture) {
+        when (gesture) {
+            HomeGesture.SEARCH -> showSearch(animate = true)
+            HomeGesture.APP_DRAWER -> showDrawer(false, animate = true)
+            else -> settleSwipeFeedback()
+        }
+    }
+
+    private fun animateDrawerClosed() {
+        if (!drawer && !searchMode) return
+        getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
+        root.animate().cancel()
+        root.animate().translationY(root.height.toFloat()).setInterpolator(android.view.animation.AccelerateInterpolator())
+            .setDuration(180L).withEndAction {
+            showHome()
+            enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
+        }.start()
+    }
+    private fun scrollAt(view: View, x: Float, y: Float): ScrollView? {
+        val bounds = Rect()
+        if (!view.getGlobalVisibleRect(bounds) || !bounds.contains(x.toInt(), y.toInt())) return null
+        if (view is ScrollView) return view
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            scrollAt(view.getChildAt(index), x, y)?.let { return it }
+        }
+        return null
+    }
+
+    private fun touchInsideWidget(view: View, rawX: Float, rawY: Float): Boolean {
+        if (view.visibility != View.VISIBLE) return false
+        if (view is AppWidgetHostView) {
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            return rawX >= location[0] && rawX < location[0] + view.width &&
+                rawY >= location[1] && rawY < location[1] + view.height
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                if (touchInsideWidget(view.getChildAt(index), rawX, rawY)) return true
+            }
+        }
+        return false
+    }
+
+    private fun touchInsideInteractive(view: View, rawX: Float, rawY: Float): Boolean {
+        if (view.visibility != View.VISIBLE) return false
+        if (view !== root && (view.isClickable || view.isLongClickable || view is EditText || view is AppWidgetHostView)) {
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            if (rawX >= location[0] && rawX < location[0] + view.width &&
+                rawY >= location[1] && rawY < location[1] + view.height) return true
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                if (touchInsideInteractive(view.getChildAt(index), rawX, rawY)) return true
+            }
+        }
+        return false
+    }
+
+    private fun loadApps(changedPackage: String? = null) {
+        if (isDestroyed || worker.isShutdown) return
+        val generation = ++loadGeneration
+        val iconSize = dp(48)
+        AppIconStore.useSize(iconSize)
+        val reusable = iconCache.filterKeys { ComponentName.unflattenFromString(it)?.packageName != changedPackage }
+        worker.execute {
+            runCatching {
+                val loadedApps = launcher.getActivityList(null, android.os.Process.myUserHandle())
+                    .filter { it.componentName.packageName != packageName }
+                    .map { App(it.componentName, it.label.toString().take(512)) }
+                    .sortedBy { it.searchName }
+                val fallbackIcon = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+                    packageManager.defaultActivityIcon.apply { setBounds(0, 0, iconSize, iconSize); draw(Canvas(bitmap)) }
+                }
+                runOnUiThread {
+                    if (isDestroyed || generation != loadGeneration) return@runOnUiThread
+                    apps = loadedApps
+                    drawerVisibleCount = if (loadedApps.all { reusable.containsKey(it.key) })
+                        loadedApps.size else minOf(24, loadedApps.size)
+                    iconCache.clear()
+                    loadedApps.forEach { iconCache[it.key] = reusable[it.key] ?: fallbackIcon }
+                    if (!prefs.contains("initialized")) {
+                        if (config.favorites.isEmpty()) config = config.copy(favorites = apps.take(8).map { it.key })
+                        prefs.edit().putBoolean("initialized", true).apply(); save()
+                    }
+                    if (drawer) renderApps(searchField?.text?.toString().orEmpty())
+                    else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+                    else if (activePinDrag == null && heldPin == null) showHome()
+                }
+                val batch = HashMap<String, Bitmap>(16)
+                loadedApps.forEach { app ->
+                    if (generation != loadGeneration) return@runCatching
+                    val cached = reusable[app.key]
+                    if (cached != null) return@forEach
+                    runCatching {
+                        val drawable = packageManager.getActivityIcon(app.component)
+                        Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+                            drawable.setBounds(0, 0, iconSize, iconSize)
+                            drawable.draw(Canvas(bitmap))
+                        }
+                    }.getOrDefault(fallbackIcon).let { batch[app.key] = it }
+                    if (batch.size >= 16) {
+                        publishIcons(generation, HashMap(batch))
+                        batch.clear()
+                    }
+                }
+                if (batch.isNotEmpty()) publishIcons(generation, HashMap(batch))
+                runOnUiThread {
+                    if (isDestroyed || generation != loadGeneration) return@runOnUiThread
+                    loadingApps = false
+                    drawerVisibleCount = loadedApps.size
+                    if (drawer && searchField?.text.isNullOrEmpty()) renderApps("")
+                }
+            }.onFailure {
+                Log.w("Grove", "Unable to load apps", it)
+                runOnUiThread { if (!isDestroyed && generation == loadGeneration) {
+                    loadingApps = false; message("Unable to load apps")
+                    if (drawer) renderApps(searchField?.text?.toString().orEmpty())
+                } }
+            }
+        }
+    }
+
+    private fun publishIcons(generation: Int, batch: Map<String, Bitmap>) {
+        runOnUiThread {
+            if (isDestroyed || generation != loadGeneration) return@runOnUiThread
+            iconCache.putAll(batch)
+            drawerVisibleCount = minOf(apps.size, drawerVisibleCount + 16)
+            fun update(view: View) {
+                if (view is ImageView) (view.tag as? String)?.let { key ->
+                    batch[key]?.let(view::setImageBitmap)
+                }
+                if (view is ViewGroup) for (index in 0 until view.childCount) update(view.getChildAt(index))
+            }
+            update(root)
+            if (drawer && searchField?.text.isNullOrEmpty()) renderApps("")
+            else drawerAdapter?.notifyDataSetChanged()
+        }
+    }
+    private fun save() = configStore.save(config)
+    private fun activateConfig(next: Config) {
+        config = next
+        configStore.activate(config)
+    }
+    private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
+        this.text = text
+        val colors = if (config.homeScreen.useWallpaperButtonColors) {
+            wallpaperButtonColors ?: ThemeColors.wallpaperButtonColors(artwork!!).also { wallpaperButtonColors = it }
+        } else ThemeColors.buttonSurface(this@MainActivity) to ThemeColors.onButtonSurface(this@MainActivity)
+        backgroundTintList = ColorStateList.valueOf(colors.first)
+        setTextColor(colors.second)
+        val iconId = when (text) {
+            "Search", "Search apps" -> R.drawable.ic_search
+            "All apps" -> R.drawable.ic_grid
+            "Home" -> R.drawable.ic_home
+            "Edit" -> R.drawable.ic_settings
+            else -> 0
+        }
+        if (iconId != 0) {
+            setIconResource(iconId)
+            iconTint = ColorStateList.valueOf(colors.second)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+        }
+        setOnClickListener { action() }
+    }
+    private fun base() {
+        pendingSearch?.let(searchHandler::removeCallbacks)
+        pendingSearch = null
+        searchGeneration++
+        searchField = null; searchResults = null; drawerAdapter = null; drawerEmpty = null; drawerGrid = null
+        root.animate().cancel(); root.translationY = 0f; root.alpha = 1f
+        root.removeAllViews()
+        if (artworkStyle != config.wallpaper) {
+            artwork = wallpaperController.artwork(config.wallpaper)
+            artworkStyle = config.wallpaper
+            backdrop = null
+            wallpaperButtonColors = null
+        }
+        val width = surface.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val height = surface.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        if (backdrop == null || width != backdropWidth || height != backdropHeight) {
+            backdrop = WallpaperController.centerCrop(artwork!!, width, height)
+            backdropWidth = width; backdropHeight = height
+        }
+        surface.background = LayerDrawable(arrayOf(
+            BitmapDrawable(resources, backdrop!!).apply { gravity = Gravity.FILL },
+            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x66000000, 0xaa000000.toInt()))
+        ))
+    }
+    private fun openSearch() = showSearch(animate = true)
+    private fun openAppDrawer() = showDrawer(false, animate = true)
+
+    private fun enterContent(fromY: Float) {
+        root.translationY = fromY
+        root.animate().translationY(0f).setInterpolator(android.view.animation.DecelerateInterpolator())
+            .setDuration(220L).start()
+    }
+
+    private fun showHome(animate: Boolean = false) {
+        rememberHomeScroll()
+        clearAppSelection()
+        getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
+        drawer = false; searchMode = false; base()
+        body = HomeScreen(this).render(root, config.homeScreen, ::button,
+            ::openSearch, ::openAppDrawer, ::renderPinnedApps, ::renderWidgets)
+        (body.parent as ScrollView).apply {
+            val restored = homeScrollY
+            post { if (body.parent === this) scrollTo(0, restored) }
+        }
+        if (animate) enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
+    }
+
+    private fun rememberHomeScroll() {
+        if (!::body.isInitialized || drawer || searchMode) return
+        (body.parent as? ScrollView)?.let { homeScrollY = it.scrollY }
+    }
+
+    private fun renderPinnedApps(target: LinearLayout) {
+        if (config.homeScreen.showPinnedAppsHint) {
+            val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            heading.addView(label("PINNED APPS", 12f), LinearLayout.LayoutParams(0, -2, 1f))
+            target.addView(heading)
+            target.addView(label("Hold and drag to move. Hold and release for options.", 12f))
+        }
+        addGrid(apps.filter { it.key in config.favorites }.sortedBy { config.favorites.indexOf(it.key) }, target)
+        if (config.favorites.isEmpty()) target.addView(label("Long-press an app in the drawer to pin it here."))
+    }
+
+    private fun indexFiles() {
+        if (!Environment.isExternalStorageManager() || indexingFiles) return
+        indexingFiles = true
+        worker.execute {
+            val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory()) }
+            runOnUiThread(Runnable {
+                indexingFiles = false
+                result.onSuccess { files = it }.onFailure { message("Could not index shared storage") }
+                if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+            })
+        }
+    }
+
+    private fun hasContactAccess() = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    private fun refreshContacts() {
+        if (!hasContactAccess()) {
+            contacts = emptyList()
+            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+            return
+        }
+        if (!contactObserverRegistered) {
+            runCatching { contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI,
+                true, contactObserver); contactObserverRegistered = true }
+        }
+        lastContactRefresh = SystemClock.elapsedRealtime()
+        if (contactWorker.isShutdown) return
+        contactWorker.execute {
+            val result = runCatching { ContactIndex.load(contentResolver) }
+            runOnUiThread {
+                if (isDestroyed || !hasContactAccess()) return@runOnUiThread
+                result.onSuccess {
+                    contacts = it
+                    if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+                    if (it.isEmpty() && !contactWarningShown) {
+                        contactWarningShown = true
+                        infoDialog("No device contacts found",
+                            "Grove can search contacts available through Android. If your contacts are kept only inside another app, enable its device contact sync.")
+                    }
+                }
+                    .onFailure {
+                        Log.w("Grove", "Contacts provider unavailable", it)
+                        if (!contactWarningShown) {
+                            contactWarningShown = true
+                            infoDialog("Contact search unavailable",
+                                "Grove couldn't read the device's contacts provider. Check that a contacts app is enabled and contact access is allowed.")
+                        }
+                    }
+            }
+        }
+    }
+
+    private fun requestContactAccess() { requestContacts.launch(Manifest.permission.READ_CONTACTS) }
+
+    private fun requestFileAccess() {
+        runCatching {
+            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:$packageName")))
+        }.onFailure { message("Open Android settings to allow shared storage search") }
+    }
+
+    private fun showSearch(animate: Boolean = false) {
+        rememberHomeScroll()
+        clearAppSelection()
+        drawer = false; searchMode = true; base()
+        root.addView(label("Search", 30f))
+        val field = EditText(this).apply {
+            hint = "Apps, contacts, files, web, and Play Store"
+            filters = arrayOf(InputFilter.LengthFilter(256))
+            setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(0xffc1ccc5.toInt())
+            contentDescription = "Search apps, contacts, files, Google, and Play Store"
+        }
+        searchField = field
+        root.addView(field)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        searchResults = list
+        root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(button("Home") { animateDrawerClosed() })
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderSearch(s.toString())
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        renderSearch("")
+        if (animate) enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
+        field.requestFocus()
+        field.post { if (searchMode && searchField === field) getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, 0) }
+    }
+
+    private val searchScreen by lazy { SearchScreen(this) }
+
+    private fun renderSearch(query: String) {
+        val target = searchResults ?: return
+        val generation = ++searchGeneration
+        pendingSearch?.let(searchHandler::removeCallbacks)
+        pendingSearch = null
+        val prepared = Search.prepare(query)
+        if (prepared.text.isEmpty()) {
+            displaySearch(target, query, emptyList(), emptyList(), emptyList())
+            return
+        }
+        val appSnapshot = apps
+        val contactSnapshot = contacts
+        val fileSnapshot = files
+        target.removeAllViews()
+        val task = Runnable {
+            if (searchWorker.isShutdown) return@Runnable
+            searchWorker.execute {
+                if (generation != searchGeneration) return@execute
+                val matchingApps = SearchResults.matching(appSnapshot, prepared, 12) { it.searchName }
+                if (generation != searchGeneration) return@execute
+                val matchingContacts = SearchResults.matching(contactSnapshot, prepared, 12) { it.searchName }
+                if (generation != searchGeneration) return@execute
+                val matchingFiles = SearchResults.matching(fileSnapshot, prepared, 12) { it.searchName }
+                runOnUiThread {
+                    if (generation != searchGeneration || !searchMode || searchResults !== target) return@runOnUiThread
+                    pendingSearch = null
+                    displaySearch(target, query, matchingApps, matchingContacts, matchingFiles)
+                }
+            }
+        }
+        pendingSearch = task
+        searchHandler.postDelayed(task, 80L)
+    }
+
+    private fun displaySearch(target: LinearLayout, query: String,
+                              matchingApps: List<App>, matchingContacts: List<ContactIndex.Contact>,
+                              matchingFiles: List<IndexedFile>) {
+        searchScreen.render(
+            target, query,
+            matchingApps.map { app -> SearchScreen.AppRow(app.key, app.label, iconCache[app.key],
+                open = {
+                    runCatching { launcher.startMainActivity(app.component, android.os.Process.myUserHandle(), null, null) }
+                        .onFailure { message("This app is unavailable"); loadApps() }
+                }, menu = { appMenu(app) }) },
+            matchingContacts.map { contact -> SearchScreen.ContactRow(contact.name) { contactMenu(contact) } },
+            matchingFiles.map { file -> SearchScreen.FileRow(file,
+                open = { openFile(file) }, menu = { searchItemMenu(file) }) },
+            hasContactAccess(), ::requestContactAccess,
+            Environment.isExternalStorageManager(), indexingFiles,
+            requestFileAccess = { requestFileAccess() },
+            searchGoogle = { openWeb("https://www.google.com/search?q=${Uri.encode(query.trim())}") },
+            googleMenu = { webResultMenu(query.trim(), "Google") },
+            searchStore = { openPlayStore(query.trim()) },
+            storeMenu = { playStoreMenu(query.trim()) },
+        )
+    }
+
+    private fun sharedFileUri(file: File): Uri {
+        require(Environment.isExternalStorageManager()) { "Shared storage permission is unavailable" }
+        val root = Environment.getExternalStorageDirectory().canonicalFile
+        val canonical = file.canonicalFile
+        require(canonical.path.startsWith("${root.path}${File.separator}") && file.exists() &&
+            !Files.isSymbolicLink(file.toPath())) { "File is outside shared storage" }
+        return FileProvider.getUriForFile(this, "$packageName.files", canonical)
+    }
+
+    private fun contactMenu(contact: ContactIndex.Contact) {
+        if (!hasContactAccess()) { requestContactAccess(); return }
+        contactWorker.execute {
+            val details = runCatching { ContactIndex.details(contentResolver, resources, contact) }
+                .getOrElse { Log.w("Grove", "Cannot read contact details", it); ContactIndex.Details(emptyList(), emptyList()) }
+            runOnUiThread {
+                if (isDestroyed || !hasContactAccess()) return@runOnUiThread
+                val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
+                fun action(label: String, icon: Int, intent: () -> Intent) {
+                    actions.add(Triple(label, icon) {
+                        runCatching { startActivity(intent()) }.onFailure { message("No compatible app is available") }
+                    })
+                }
+                val waTargets = ContactIndex.whatsAppTargets(details.channels) { pkg ->
+                    apps.any { it.component.packageName == pkg }
+                }
+                val numbers = details.numbers
+                fun callRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_call) {
+                    runCatching {
+                        startActivity(Intent.createChooser(
+                            Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number.value, null)), "Call with"))
+                    }.onFailure { message("No compatible app is available") }
+                    Unit
+                }
+                fun textRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_message) {
+                    runCatching {
+                        startActivity(Intent.createChooser(
+                            Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number.value, null)), "Message with"))
+                    }.onFailure { message("No compatible app is available") }
+                    Unit
+                }
+                // One Call row and one Text row per contact. Tapping always asks which app
+                // (Phone, Google Voice, Linphone, …) should place it. A number picker only
+                // appears when the contact genuinely has several different numbers.
+                when {
+                    numbers.size == 1 -> {
+                        actions.add(callRow(numbers[0]))
+                        actions.add(textRow(numbers[0]))
+                    }
+                    numbers.size > 1 -> {
+                        actions.add(Triple("Call", R.drawable.ic_call) {
+                            showActionMenu("Call ${contact.name}", numbers.map(::callRow))
+                            Unit
+                        })
+                        actions.add(Triple("Text", R.drawable.ic_message) {
+                            showActionMenu("Text ${contact.name}", numbers.map(::textRow))
+                            Unit
+                        })
+                    }
+                }
+                numbers.forEach { number ->
+                    val international = PhoneNumberUtils.formatNumberToE164(number.value, Locale.getDefault().country)
+                    if (international != null && international.startsWith('+') && international.length in 9..16) {
+                        val digits = international.drop(1)
+                        waTargets.forEach { target ->
+                            action("Message ${number.label} via ${target.label}", R.drawable.ic_message) {
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits")).setPackage(target.packageName)
+                            }
+                        }
+                    }
+                }
+                ContactIndex.collapseChannels(details.channels).forEach { channel ->
+                    val packageName = when (channel.label) {
+                        "WhatsApp" -> if (channel.mime.contains("w4b")) "com.whatsapp.w4b" else "com.whatsapp"
+                        "Messenger" -> "com.facebook.orca"
+                        else -> null
+                    }
+                    if (packageName != null && apps.any { it.component.packageName == packageName }) {
+                        action("Open in ${channel.label}", R.drawable.ic_message) {
+                            Intent(Intent.ACTION_VIEW, channel.uri).setPackage(packageName)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    }
+                }
+                action("View contact card", R.drawable.ic_contact) { Intent(Intent.ACTION_VIEW, contact.uri) }
+                action("Edit contact", R.drawable.ic_edit) {
+                    Intent(Intent.ACTION_EDIT).setDataAndType(contact.uri, ContactsContract.Contacts.CONTENT_ITEM_TYPE)
+                }
+                showActionMenu(contact.name, actions)
+            }
+        }
+    }
+
+    private fun openFile(file: IndexedFile) {
+        val uri = runCatching { sharedFileUri(file.file) }
+            .getOrElse { Log.w("Grove", "Cannot share indexed file", it); message("Cannot open this file"); return }
+        fun openAs(mime: String) = runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            })
+        }.isSuccess
+        if (!openAs(file.mime) && !openAs("*/*")) {
+            Log.w("Grove", "No app handles MIME type ${file.mime}")
+            message("No app can open this file")
+        }
+    }
+
+    private fun openPlayStore(query: String, install: Boolean = false) {
+        val encoded = Uri.encode(query)
+        val marketUrl = if (install) "market://search?q=$encoded&c=apps" else "market://search?q=$encoded"
+        val webUrl = if (install) "https://play.google.com/store/search?q=$encoded&c=apps" else "https://play.google.com/store/search?q=$encoded"
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(marketUrl))) }
+            .onFailure { openWeb(webUrl) }
+    }
+
+    private fun appMenu(app: App) {
+        val pinned = app.key in config.favorites
+        showActionMenu(app.label, listOf(
+            Triple(if (pinned) "Unpin from home" else "Pin to home", R.drawable.ic_grid) {
+                config = config.copy(favorites = if (pinned) config.favorites - app.key else config.favorites + app.key)
+                save(); if (!drawer) showHome()
+            },
+            Triple("App info", R.drawable.ic_info) {
+                runCatching { launcher.startAppDetailsActivity(app.component, android.os.Process.myUserHandle(), null, null) }
+                    .onFailure { message("App information unavailable") }
+            },
+            Triple("Uninstall", R.drawable.ic_delete) {
+                runCatching { startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.component.packageName}"))) }
+                    .onFailure { message("This app cannot be uninstalled") }
+            },
+        ))
+    }
+
+    private fun searchItemMenu(file: IndexedFile) {
+        showActionMenu(file.name, listOf(
+            Triple("Open", R.drawable.ic_open) { openFile(file) },
+            Triple("Open containing folder", R.drawable.ic_folder) {
+                val parent = file.file.parentFile
+                if (parent == null) message("Containing folder unavailable") else openFile(IndexedFile(parent.name, "resource/folder", parent, "Folder"))
+            },
+            Triple("Share", R.drawable.ic_share) {
+                runCatching {
+                    val uri = sharedFileUri(file.file)
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = file.mime
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = android.content.ClipData.newUri(contentResolver, file.name, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "Share ${file.name}"))
+                }.onFailure { message("Could not share this file") }
+            },
+            Triple("File details", R.drawable.ic_info) {
+                infoDialog(file.name,
+                    "${file.category}\n${file.file.absolutePath}\n${file.file.length()} bytes", "Done")
+            },
+        ))
+    }
+
+    private fun webResultMenu(query: String, provider: String) {
+        showActionMenu("$provider search", listOf(
+            Triple("Search with Google", R.drawable.ic_public) { openWeb("https://www.google.com/search?q=${Uri.encode(query)}") },
+            Triple("Ask an AI (ChatGPT)", R.drawable.ic_ai) { openWeb("https://chatgpt.com/?q=${Uri.encode(query)}") },
+            Triple("Ask an AI (Gemini)", R.drawable.ic_ai) { openWeb("https://gemini.google.com/app?q=${Uri.encode(query)}") },
+            Triple("Copy search text", R.drawable.ic_copy) {
+                getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("Search", query))
+                message("Search copied")
+            },
+            Triple("Share search", R.drawable.ic_share) {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, query), "Share search"))
+            },
+        ))
+    }
+
+    private fun playStoreMenu(query: String) {
+        showActionMenu("Play Store search", listOf(
+            Triple("Install an app", R.drawable.ic_download) { openPlayStore(query, install = true) },
+            Triple("View in Play Store", R.drawable.ic_store) { openPlayStore(query) },
+            Triple("Leave a Play Store review", R.drawable.ic_star) {
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://writeReview?package=$packageName"))) }
+                    .onFailure { openWeb("https://play.google.com/store/apps/details?id=$packageName") }
+            },
+            Triple("Copy search text", R.drawable.ic_copy) {
+                getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("Search", query))
+                message("Search copied")
+            },
+        ))
+    }
+
+    private fun showActionMenu(title: String, actions: List<Triple<String, Int, () -> Unit>>) {
+        menuDialog(title, actions.map { (name, icon, action) -> MenuRow(name, icon, action) })
+    }
+
+    private fun openWeb(url: String) {
+        runCatching {
+            val uri = Uri.parse(url)
+            require(uri.scheme == "https") { "Only HTTPS links are supported" }
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
+            .onFailure { message("No app can open this search") }
+    }
+
+    private fun showDrawer(keyboard: Boolean, animate: Boolean = false) {
+        rememberHomeScroll()
+        clearAppSelection()
+        drawer = true; searchMode = false; base()
+        root.requestFocus()
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        header.addView(label("All apps", 30f), LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_settings)
+            imageTintList = ColorStateList.valueOf(ThemeColors.icon(this@MainActivity))
+            contentDescription = "App drawer options"
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            isClickable = true; isFocusable = true
+            setOnClickListener { drawerOptions() }
+        }, LinearLayout.LayoutParams(dp(52), dp(52)))
+        root.addView(header)
+        val field = EditText(this).apply {
+            hint = "Search installed apps"; setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(0xffc1ccc5.toInt())
+            filters = arrayOf(InputFilter.LengthFilter(256))
+            contentDescription = "Search installed apps"
+        }
+        searchField = field; root.addView(field)
+        val content = FrameLayout(this)
+        val empty = label(if (loadingApps) "Preparing apps and icons…" else "No matching apps").apply { gravity = Gravity.CENTER }
+        drawerEmpty = empty
+        val grid = GridView(this).apply {
+            numColumns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
+            stretchMode = GridView.STRETCH_COLUMN_WIDTH
+            verticalSpacing = dp(4)
+            clipToPadding = false
+        }
+        drawerGrid = grid
+        drawerAdapter = AppAdapter()
+        grid.adapter = drawerAdapter
+        content.addView(grid, FrameLayout.LayoutParams(-1, -1))
+        content.addView(empty, FrameLayout.LayoutParams(-1, -1))
+        grid.emptyView = empty
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderApps(s.toString()) }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        renderApps("")
+        root.addView(button("Home") { animateDrawerClosed() })
+        if (animate) enterContent(maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat() * if (keyboard) -1f else 1f)
+        if (keyboard) { field.requestFocus(); field.post { if (drawer && searchField === field && field.hasFocus()) getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, 0) } }
+    }
+    private fun renderApps(query: String) {
+        drawerEmpty?.text = if (loadingApps) "Preparing apps and icons…" else "No matching apps"
+        val prepared = Search.prepare(query)
+        val filtered = if (prepared.text.isEmpty()) {
+            val assigned = config.folders.flatMap { it.apps }.toSet()
+            config.folders.map { DrawerItem.Folder(it) } + apps.take(drawerVisibleCount)
+                .filterNot { it.key in assigned }.map { DrawerItem.Application(it) }
+        } else SearchResults.matching(apps, prepared) { it.searchName }.map { DrawerItem.Application(it) }
+        drawerAdapter?.submit(filtered)
+    }
+    private sealed class DrawerItem {
+        data class Application(val app: App) : DrawerItem()
+        data class Folder(val folder: AppFolder) : DrawerItem()
+    }
+    private class Tile(val layout: LinearLayout, val icon: ImageView, val name: TextView, val badge: ImageView)
+    private fun createTile(): Tile {
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+            setPadding(dp(4), dp(10), dp(4), dp(10))
+            isFocusable = true; isClickable = true
+        }
+        val icon = ImageView(this).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        val name = label("", 12f).apply { gravity = Gravity.CENTER; maxLines = 2; minLines = 2 }
+        val iconFrame = FrameLayout(this)
+        iconFrame.addView(icon, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
+        val badge = ImageView(this).apply {
+            setPadding(dp(7), dp(7), dp(7), dp(7))
+            imageTintList = ColorStateList.valueOf(ThemeColors.icon(this@MainActivity))
+            background = GradientDrawable().apply {
+                setColor(ThemeColors.iconSurface(this@MainActivity))
+                cornerRadius = dp(10).toFloat()
+            }
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        iconFrame.addView(badge, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.TOP or Gravity.END))
+        layout.addView(iconFrame, LinearLayout.LayoutParams(dp(56), dp(52)))
+        layout.addView(name)
+        return Tile(layout, icon, name, badge).also { layout.tag = it }
+    }
+    private fun bindTile(tile: Tile, app: App) {
+        tile.badge.visibility = View.GONE
+        tile.icon.alpha = 1f
+        tile.layout.contentDescription = app.label; tile.name.text = app.label; tile.icon.imageTintList = null
+        bindIcon(tile.icon, app)
+        tile.layout.setOnClickListener {
+            runCatching { launcher.startMainActivity(app.component, android.os.Process.myUserHandle(), null, null) }
+                .onFailure { message("This app is unavailable"); loadApps() }
+        }
+        tile.layout.setOnLongClickListener { appMenu(app); true }
+        tile.layout.setOnTouchListener(null)
+        tile.layout.setOnDragListener(null)
+    }
+    private fun bindIcon(view: ImageView, app: App) {
+        view.tag = app.key
+        val cached = iconCache[app.key]
+        view.setImageBitmap(cached)
+    }
+    private inner class AppAdapter : BaseAdapter() {
+        private var items = emptyList<DrawerItem>()
+        fun submit(next: List<DrawerItem>) { items = next; notifyDataSetChanged() }
+        override fun getCount() = items.size
+        override fun getItem(position: Int) = items[position]
+        override fun getItemId(position: Int) = position.toLong()
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val tile = (convertView?.tag as? Tile) ?: createTile()
+            when (val item = items[position]) {
+                is DrawerItem.Application -> bindDrawerApp(tile, item.app)
+                is DrawerItem.Folder -> bindDrawerFolder(tile, item.folder)
+            }
+            return tile.layout
+        }
+    }
+    private fun refreshDrawer() { if (drawer && !searchMode) renderApps(searchField?.text?.toString().orEmpty()) }
+
+    private fun bindDrawerApp(tile: Tile, app: App) {
+        bindTile(tile, app)
+        tile.icon.alpha = if (selectingApps) 0.35f else 1f
+        tile.badge.visibility = if (selectingApps) View.VISIBLE else View.GONE
+        tile.badge.setImageResource(if (app.key in selectedApps) R.drawable.ic_remove else R.drawable.ic_add)
+        tile.layout.setOnClickListener {
+            if (selectingApps) {
+                if (!selectedApps.add(app.key)) selectedApps.remove(app.key)
+                drawerAdapter?.notifyDataSetChanged()
+            } else runCatching { launcher.startMainActivity(app.component, Process.myUserHandle(), null, null) }
+                .onFailure { message("This app is unavailable"); loadApps() }
+        }
+        if (selectingApps) tile.layout.setOnLongClickListener {
+            selectedApps.add(app.key); drawerAdapter?.notifyDataSetChanged(); true
+        } else configureDrawerDrag(tile.layout, app)
+        tile.layout.setOnDragListener { view, event ->
+            if (event.localState !is DrawerDrag) false else {
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_ENTERED -> view.alpha = 0.55f
+                    DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> view.alpha = 1f
+                    DragEvent.ACTION_DROP -> {
+                        view.alpha = 1f
+                        val source = (event.localState as DrawerDrag).key
+                        if (source != app.key) promptFolderName(listOf(source, app.key))
+                    }
+                }
+                true
+            }
+        }
+    }
+
+    private fun bindDrawerFolder(tile: Tile, folder: AppFolder) {
+        tile.layout.setOnTouchListener(null)
+        tile.layout.contentDescription = "Folder ${folder.name}"
+        tile.name.text = folder.name
+        tile.icon.setImageResource(R.drawable.ic_folder)
+        tile.icon.imageTintList = ColorStateList.valueOf(ThemeColors.icon(this))
+        tile.icon.alpha = 1f
+        tile.badge.visibility = View.GONE
+        tile.layout.setOnClickListener { openFolder(folder.name) }
+        tile.layout.setOnLongClickListener { folderOptions(folder.name); true }
+        tile.layout.setOnDragListener { view, event ->
+            if (event.localState !is DrawerDrag) false else {
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_ENTERED -> view.alpha = 0.55f
+                    DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> view.alpha = 1f
+                    DragEvent.ACTION_DROP -> {
+                        view.alpha = 1f
+                        moveAppsToFolder(setOf((event.localState as DrawerDrag).key), folder.name)
+                    }
+                }
+                true
+            }
+        }
+    }
+
+    private fun folderOptions(name: String) {
+        showActionMenu(name, listOf(
+            Triple("Open folder", R.drawable.ic_folder) { openFolder(name) },
+            Triple("Rename folder", R.drawable.ic_edit) { promptRenameFolder(name) },
+            Triple("Delete folder", R.drawable.ic_delete) {
+                confirmDialog("Delete $name?", "Apps in this folder will return to All apps.", "Delete") {
+                        config = config.copy(folders = config.folders.filterNot { it.name == name }); save(); refreshDrawer()
+                    }
+            },
+        ))
+    }
+
+    private fun openFolder(name: String) {
+        val folder = config.folders.firstOrNull { it.name == name } ?: return
+        val members = folder.apps.mapNotNull { key -> apps.firstOrNull { it.key == key } }
+        val grid = GridView(this).apply {
+            numColumns = 4; verticalSpacing = dp(8)
+            adapter = object : BaseAdapter() {
+                override fun getCount() = members.size
+                override fun getItem(position: Int) = members[position]
+                override fun getItemId(position: Int) = position.toLong()
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                    val tile = (convertView?.tag as? Tile) ?: createTile()
+                    bindTile(tile, members[position])
+                    tile.layout.setOnLongClickListener {
+                        showActionMenu(members[position].label, listOf(
+                            Triple("Remove from folder", R.drawable.ic_delete) {
+                                removeFromFolders(setOf(members[position].key)); refreshDrawer(); openFolder(name)
+                            },
+                            Triple("App options", R.drawable.ic_settings) { appMenu(members[position]) },
+                        )); true
+                    }
+                    return tile.layout
+                }
+            }
+        }
+        grid.layoutParams = ViewGroup.LayoutParams(-1, dp(320))
+        MaterialAlertDialogBuilder(this).setTitle(name).setView(grid).setPositiveButton("Done", null).show()
+    }
+
+    private fun removeFromFolders(keys: Set<String>) {
+        config = config.copy(folders = config.folders.map { it.copy(apps = it.apps.filterNot(keys::contains)) })
+        save()
+    }
+
+    private fun moveAppsToFolder(keys: Set<String>, name: String) {
+        config = config.copy(folders = config.folders.map { folder ->
+            if (folder.name == name) folder.copy(apps = (folder.apps + keys).distinct())
+            else folder.copy(apps = folder.apps.filterNot(keys::contains))
+        })
+        selectedApps.clear(); save(); refreshDrawer()
+    }
+
+    private fun promptFolderName(keys: List<String> = emptyList()) {
+        val input = EditText(this).apply { hint = "Folder name"; isSingleLine = true; setPadding(dp(24), dp(16), dp(24), dp(16)) }
+        val dialog = MaterialAlertDialogBuilder(this).setTitle("Create folder").setView(input)
+            .setNegativeButton("Cancel", null).setPositiveButton("Create", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val name = input.text.toString().trim()
+                if (name.isEmpty() || name.length > 40) { input.error = "Enter a name up to 40 characters"; return@setOnClickListener }
+                if (config.folders.any { it.name.equals(name, true) }) { input.error = "Folder already exists"; return@setOnClickListener }
+                val members = keys.distinct()
+                config = config.copy(folders = config.folders.map { it.copy(apps = it.apps.filterNot(members::contains)) } + AppFolder(name, members))
+                selectedApps.clear(); save(); refreshDrawer(); dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun promptRenameFolder(name: String) {
+        val input = EditText(this).apply { setText(name); isSingleLine = true; setPadding(dp(24), dp(16), dp(24), dp(16)) }
+        MaterialAlertDialogBuilder(this).setTitle("Rename folder").setView(input)
+            .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
+                val next = input.text.toString().trim()
+                if (next.length in 1..40 && config.folders.none { it.name.equals(next, true) && it.name != name }) {
+                    config = config.copy(folders = config.folders.map { if (it.name == name) it.copy(name = next) else it })
+                    save(); refreshDrawer()
+                } else message("Choose a unique folder name up to 40 characters")
+            }.show()
+    }
+
+    private fun drawerOptions() {
+        val keys = selectedApps.toSet()
+        val actions = buildList {
+            add(Triple(if (selectingApps) "Done selecting" else "Select apps", R.drawable.ic_grid) {
+                selectingApps = !selectingApps
+                if (!selectingApps) selectedApps.clear()
+                refreshDrawer()
+            })
+            add(Triple("Create folder", R.drawable.ic_folder) { promptFolderName() })
+            if (keys.isNotEmpty()) {
+                add(Triple("Add to new folder", R.drawable.ic_folder) { promptFolderName(keys.toList()) })
+                if (config.folders.isNotEmpty()) add(Triple("Move to folder", R.drawable.ic_folder) { chooseFolder(keys) })
+                add(Triple("Pin to home screen", R.drawable.ic_home) {
+                    config = config.copy(favorites = (config.favorites + keys).distinct()); save()
+                    selectedApps.clear(); refreshDrawer(); message("Apps pinned to Home")
+                })
+                add(Triple("Uninstall apps", R.drawable.ic_delete) { uninstallSelected(keys) })
+            }
+        }
+        showActionMenu("App drawer", actions)
+    }
+
+    private fun chooseFolder(keys: Set<String>) {
+        val names = config.folders.map { it.name }
+        listDialog("Move to folder", names) { index -> moveAppsToFolder(keys, names[index]) }
+    }
+
+    private fun uninstallSelected(keys: Set<String>) {
+        val packages = apps.filter { it.key in keys }.map { it.component.packageName }.distinct()
+        confirmDialog("Uninstall ${packages.size} app${if (packages.size == 1) "" else "s"}?",
+            "Android will ask you to confirm each uninstall.", "Continue") {
+                pendingUninstalls.clear()
+                pendingUninstalls.addAll(packages)
+                launchNextUninstall()
+                selectedApps.clear(); refreshDrawer()
+            }
+    }
+
+    private fun launchNextUninstall() {
+        val packageName = pendingUninstalls.pollFirst() ?: return
+        runCatching { uninstallNext.launch(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))) }
+            .onFailure { message("Cannot uninstall $packageName"); launchNextUninstall() }
+    }
+    private fun addGrid(items: List<App>, target: LinearLayout) {
+        val columns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
+        items.chunked(columns).forEach { group ->
+            val row = LinearLayout(this)
+            group.forEach { app ->
+                val tile = createTile(); bindTile(tile, app); configurePinDrag(tile.layout, app)
+                row.addView(tile.layout, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+            repeat(columns - group.size) { row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f)) }
+            target.addView(row)
+        }
+    }
+    private fun scrollPinDrag(target: View, event: DragEvent) {
+        val scroll = body.parent as? ScrollView ?: return
+        val bounds = Rect(); scroll.getGlobalVisibleRect(bounds)
+        val location = IntArray(2); target.getLocationOnScreen(location)
+        val y = event.y + location[1]
+        if (y < bounds.top + dp(64)) scroll.smoothScrollBy(0, -dp(28))
+        else if (y > bounds.bottom - dp(64)) scroll.smoothScrollBy(0, dp(28))
+    }
+
+    private fun releasePinHold() {
+        heldPin?.apply {
+            scaleX = 1f; scaleY = 1f
+            parent?.requestDisallowInterceptTouchEvent(false)
+        }
+        heldPin = null
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun configureDrawerDrag(view: View, app: App) {
+        var downX = 0f
+        var downY = 0f
+        var touchActive = false
+        var dragArmed = false
+        var dragging = false
+        fun release() {
+            dragArmed = false
+            view.scaleX = 1f; view.scaleY = 1f
+            view.parent?.requestDisallowInterceptTouchEvent(false)
+        }
+        view.setOnLongClickListener {
+            // A stationary hold opens actions on release. Moving after the
+            // hold starts a drag, so either gesture can be used on one app.
+            if (!touchActive) appMenu(app) else {
+                dragArmed = true
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+                view.scaleX = 1.08f; view.scaleY = 1.08f
+            }
+            true
+        }
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX; downY = event.rawY
+                    touchActive = true; dragging = false
+                }
+                MotionEvent.ACTION_MOVE -> if (dragArmed) {
+                    val dx = event.rawX - downX; val dy = event.rawY - downY
+                    val slop = ViewConfiguration.get(this).scaledTouchSlop
+                    if (dx * dx + dy * dy > slop * slop) {
+                        dragging = view.startDragAndDrop(null, View.DragShadowBuilder(view), DrawerDrag(app.key), 0)
+                        release()
+                    }
+                    return@setOnTouchListener true
+                }
+                MotionEvent.ACTION_UP -> {
+                    touchActive = false
+                    if (dragArmed) {
+                        release(); view.isPressed = false; appMenu(app)
+                        return@setOnTouchListener true
+                    }
+                    if (dragging) { dragging = false; return@setOnTouchListener true }
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
+                    touchActive = false; dragging = false
+                    view.cancelLongPress(); view.isPressed = false
+                    if (dragArmed) release()
+                }
+            }
+            false
+        }
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun configurePinDrag(view: View, app: App) {
+        var downX = 0f
+        var downY = 0f
+        var touchActive = false
+        var touchCanceled = false
+        view.setOnLongClickListener {
+            // Accessibility long-click has no pointer to drag: open app options directly.
+            if (!touchActive) appMenu(app) else {
+                heldPin = view
+                gestureTracking = false
+                longPressHandler.removeCallbacks(longPressRunnable)
+                view.parent.requestDisallowInterceptTouchEvent(true)
+                view.scaleX = 1.08f; view.scaleY = 1.08f
+            }
+            true
+        }
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX; downY = event.rawY; touchActive = true; touchCanceled = false
+                }
+                MotionEvent.ACTION_MOVE -> if (heldPin === view) {
+                    val dx = event.rawX - downX; val dy = event.rawY - downY
+                    val slop = ViewConfiguration.get(this).scaledTouchSlop
+                    if (dx * dx + dy * dy > slop * slop) {
+                        val drag = PinDrag(app.key)
+                        activePinDrag = drag
+                        val started = view.startDragAndDrop(null, View.DragShadowBuilder(view), drag, 0)
+                        releasePinHold()
+                        if (!started) activePinDrag = null
+                    }
+                    return@setOnTouchListener true
+                }
+                MotionEvent.ACTION_UP -> {
+                    touchActive = false
+                    if (touchCanceled) { view.isPressed = false; return@setOnTouchListener true }
+                    if (heldPin === view) {
+                        releasePinHold(); view.isPressed = false; appMenu(app)
+                        return@setOnTouchListener true
+                    }
+                    if (activePinDrag != null) return@setOnTouchListener true
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
+                    touchActive = false; touchCanceled = true
+                    view.cancelLongPress(); view.isPressed = false
+                    if (heldPin === view) releasePinHold()
+                }
+            }
+            false
+        }
+        view.setOnDragListener { target, event ->
+            val drag = event.localState as? PinDrag
+            if (drag == null) false else {
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_LOCATION -> scrollPinDrag(target, event)
+                    DragEvent.ACTION_DRAG_ENTERED -> {
+                        target.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100L).start()
+                    }
+                    DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> {
+                        target.animate().scaleX(1f).scaleY(1f).setDuration(100L).start()
+                    }
+                    DragEvent.ACTION_DROP -> {
+                        config = config.copy(favorites = PinnedApps.moveTo(config.favorites, drag.key, app.key))
+                        save()
+                    }
+                }
+                true
+            }
+        }
+    }
+
+    private fun settings() {
+        showActionMenu("Grove settings", listOf(
+            Triple("Launcher settings", R.drawable.ic_settings) { launcherSettings() },
+            Triple("Set as default launcher", R.drawable.ic_launcher) {
+                val role = getSystemService(RoleManager::class.java)
+                if (role.isRoleAvailable(RoleManager.ROLE_HOME))
+                    chooseHome.launch(role.createRequestRoleIntent(RoleManager.ROLE_HOME))
+            },
+            Triple("Add widget", R.drawable.ic_widget) { pickWidget() },
+            Triple("Wallpapers", R.drawable.ic_wallpaper) { wallpapers() },
+            Triple("About Grove", R.drawable.ic_info) {
+                infoDialog("Grove · ${BuildConfig.VERSION_NAME}",
+                    "A quiet place to start.\n\nFree and open source · Apache 2.0\nNo telemetry. Internet is used only when downloading selected wallpapers.\n\nSwipe down for search and swipe up for all apps when enabled. Swipe down from the top of the app drawer to close it. Hold and drag pinned apps to reorder them. Pinned apps can be placed near the top or bottom of Home.",
+                    "Done")
+            },
+        ))
+    }
+
+    private fun launcherSettings() {
+        LauncherSettingsScreen(
+            this, { config },
+            { next -> config = next; save(); if (!drawer) showHome() },
+            { editConfig() },
+            { export.launch("grove-config.json") },
+            { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+        ).show()
+    }
+    private fun editConfig(initialText: String? = null) {
+        val editor = EditText(this).apply {
+            filters = arrayOf(InputFilter.LengthFilter(65_536))
+            setText(initialText ?: config.json())
+            typeface = Typeface.MONOSPACE
+            minLines = 8
+        }
+        val dialog = MaterialAlertDialogBuilder(this).setTitle("Configuration").setView(editor).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create()
+        dialog.setOnShowListener { dialog.getButton(-1).setOnClickListener {
+            runCatching { require(editor.length() <= 65536); ConfigStore.parse(editor.text.toString()) }
+                .onSuccess { activateConfig(it); dialog.dismiss(); showHome() }.onFailure { editor.error = it.message ?: "Invalid JSON" }
+        } }; dialog.show()
+    }
+
+    private fun showConfigRecoveryDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Configuration problem")
+            .setMessage("Grove couldn’t read your saved custom configuration, so a safe fallback configuration is active. Your custom configuration has been preserved. You can continue editing it and try loading it, or load defaults and start over.")
+            .setCancelable(false)
+            .setPositiveButton("Edit custom config") { _, _ -> editConfig(configStore.brokenCustomConfig) }
+            .setNegativeButton("Load defaults") { _, _ -> activateConfig(Config()); showHome(); message("Default configuration loaded") }
+            .show()
+    }
+
+    // Widget lifecycle: allocate -> bind consent -> optional configuration -> persist.
+    private fun pickWidget() {
+        if (pendingWidget != -1) { message("Finish adding the current widget first"); return }
+        val providers = manager.installedProviders.sortedBy { it.loadLabel(packageManager).lowercase() }
+        listDialog("Add widget", providers.map { it.loadLabel(packageManager).toString() }, negative = "Cancel") { index ->
+            val provider = providers[index]
+            pendingWidget = host.allocateAppWidgetId(); prefs.edit().putInt("pending", pendingWidget).apply()
+            if (manager.bindAppWidgetIdIfAllowed(pendingWidget, provider.provider)) configureWidget()
+            else runCatching { bindWidget.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidget).putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider)) }
+                .onFailure { Log.e("Grove", "Widget bind failed for ${provider.provider}", it); cancelWidget(); message("Cannot bind this widget") }
+        }
+    }
+    private fun configureWidget() {
+        val info = manager.getAppWidgetInfo(pendingWidget) ?: run {
+            Log.w("Grove", "No widget provider info for id $pendingWidget")
+            cancelWidget(); message("Couldn't add this widget"); return
+        }
+        if (info.configure != null) {
+            runCatching { configureResult.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).setComponent(info.configure)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidget)) }
+                .onFailure { Log.e("Grove", "Widget configuration failed to launch for ${info.configure}", it); cancelWidget(); message("Widget configuration unavailable") }
+        } else finishWidget()
+    }
+    private fun finishWidget() {
+        if (pendingWidget != -1 && manager.getAppWidgetInfo(pendingWidget) != null) {
+            if (pendingWidget !in widgetIds) widgetIds.add(pendingWidget)
+            prefs.edit().putStringSet("widgets", widgetIds.map { it.toString() }.toSet()).apply()
+        } else if (pendingWidget != -1) host.deleteAppWidgetId(pendingWidget)
+        pendingWidget = -1; prefs.edit().remove("pending").apply(); showHome()
+    }
+    private fun cancelWidget() {
+        if (pendingWidget != -1) host.deleteAppWidgetId(pendingWidget)
+        pendingWidget = -1; prefs.edit().remove("pending").apply()
+    }
+    private fun renderWidgets(target: LinearLayout) = WidgetScreen(this, manager, host, prefs, widgetIds) { showHome() }.render(target)
+
+    private fun wallpapers() {
+        val choices = buildList {
+            add("Fern · abstract")
+            add("Ember · mountain")
+            add("Dusk · mountain")
+            WallpaperArt.commons.forEach { add("${it.color} · ${it.title} (${it.license})") }
+            add("Wallpaper credits and licenses")
+        }
+        listDialog("Wallpapers", choices, negative = "Cancel") { index ->
+            if (index == choices.lastIndex) {
+                val credits = WallpaperArt.commons.joinToString("\n") { "${it.color}: ${it.title} — ${it.author}\n${it.sourcePage}\n${it.license}" }
+                infoDialog("Wallpaper sources",
+                    "These wallpapers are hosted by Wikimedia Commons. Follow each source link for its license and terms.\n\n$credits",
+                    "Done")
+            } else if (index < 3) {
+                config = config.copy(wallpaper = index); save(); artworkStyle = -1; showHome()
+                wallpaperController.apply(index)
+            } else {
+                val wallpaperIndex = index
+                message("Downloading ${WallpaperArt.commons[index - 3].color} wallpaper…")
+                wallpaperController.download(wallpaperIndex) { success ->
+                    if (success) {
+                        config = config.copy(wallpaper = wallpaperIndex); save(); artworkStyle = -1; showHome()
+                        wallpaperController.apply(wallpaperIndex)
+                    } else message("Could not download this wallpaper. Check your connection and try again.")
+                }
+            }
+        }
+    }
+
+}

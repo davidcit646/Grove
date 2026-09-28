@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tech.granet.grove.ConfigTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-27T21:55:54" hostname="fbeff3180e74" time="0.025">
+  <properties/>
+  <testcase name="versionOneMigratesWithVisibleDefaults" classname="tech.granet.grove.ConfigTest" time="0.016"/>
+  <testcase name="everyHomeSettingCombinationRoundTrips" classname="tech.granet.grove.ConfigTest" time="0.005"/>
+  <testcase name="duplicatesRemoved" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="versionThreeKeepsOldPinnedPlacement" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <testcase name="versionTwoMigratesNewControls" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="badWallpaperRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="unknownVersionRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="malformedToggleRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="invalidComponentRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="malformedSectionRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="everyGestureCombinationRoundTrips" classname="tech.granet.grove.ConfigTest" time="0.002"/>
+  <testcase name="roundTripPreservesSettings" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

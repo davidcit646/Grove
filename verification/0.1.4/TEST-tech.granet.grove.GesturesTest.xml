@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tech.granet.grove.GesturesTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-27T16:02:02" hostname="99bd523d3cf8" time="0.001">
+  <properties/>
+  <testcase name="swipeUpOpensDrawerWhenEnabled" classname="tech.granet.grove.GesturesTest" time="0.0"/>
+  <testcase name="swipeDownOpensSearchWhenEnabled" classname="tech.granet.grove.GesturesTest" time="0.0"/>
+  <testcase name="tinyAndSlowMovementsAreIgnored" classname="tech.granet.grove.GesturesTest" time="0.0"/>
+  <testcase name="horizontalMovementIsIgnored" classname="tech.granet.grove.GesturesTest" time="0.0"/>
+  <testcase name="disabledGesturesDoNothing" classname="tech.granet.grove.GesturesTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

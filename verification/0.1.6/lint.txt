@@ -1,0 +1,114 @@
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:363: Warning: Use the KTX function createBitmap instead? [UseKtx]
+                val fallbackIcon = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:372: Warning: Use the KTX function createBitmap instead? [UseKtx]
+                        Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:389: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                        prefs.edit().putBoolean("initialized", true).apply(); save()
+                        ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:396: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+    private fun save() { prefs.edit().putString("config", config.json()).apply() }
+                         ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:412: Warning: Use the KTX extension function Bitmap.toDrawable instead? [UseKtx]
+            BitmapDrawable(resources, artwork!!).apply { gravity = Gravity.FILL },
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:412: Warning: Use the KTX extension function Bitmap.toDrawable instead? [UseKtx]
+            BitmapDrawable(resources, artwork!!).apply { gravity = Gravity.FILL },
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:656: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+                    startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.component.packageName}")))
+                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:762: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            pendingWidget = host.allocateAppWidgetId(); prefs.edit().putInt("pending", pendingWidget).apply()
+                                                        ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:780: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+            prefs.edit().putStringSet("widgets", widgetIds.map { it.toString() }.toSet()).apply()
+            ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:782: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        pendingWidget = -1; prefs.edit().remove("pending").apply(); showHome()
+                            ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:786: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        pendingWidget = -1; prefs.edit().remove("pending").apply()
+                            ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:795: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    if (choice == 3) { host.deleteAppWidgetId(id); widgetIds.remove(id); prefs.edit().putStringSet("widgets", widgetIds.map { it.toString() }.toSet()).remove("height_$id").apply() }
+                                                                                         ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:796: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+                    else prefs.edit().putInt("height_$id", listOf(140, 240, 360)[choice]).apply()
+                         ~~~~~~~~~~~~
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/WallpaperArt.kt:8: Warning: Use the KTX function createBitmap instead? [UseKtx]
+        val bitmap = Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseKtx":
+   The Android KTX libraries decorates the Android platform SDK as well as
+   various libraries with more convenient extension functions available from
+   Kotlin, allowing you to use default parameters, named parameters, and
+   more.
+
+   Available options:
+
+   **remove-defaults** (default is true):
+   Whether to skip arguments that match the defaults provided by the extension.
+
+   Extensions often provide default values for some of the parameters. For example:
+   ```kotlin
+   fun Path.readLines(charset: Charset = Charsets.UTF_8): List<String> { return Files.readAllLines(this, charset) }
+   ```
+   This lint check will by default automatically omit parameters that match the default, so if your code was calling ```kotlin
+   Files.readAllLines(file, Charset.UTF_8)
+   ```
+   lint would replace this with
+   ```kotlin
+   file.readLines()
+   ```
+   rather than
+   ```kotlin
+   file.readLines(Charset.UTF_8
+   ```
+   You can turn this behavior off using this option.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="remove-defaults" value="true" />
+       </issue>
+   </lint>
+   ```
+
+   **require-present** (default is true):
+   Whether to only offer extensions already available.
+
+   This option lets you only have lint suggest extension replacements if those extensions are already available on the class path (in other words, you're already depending on the library containing the extension method.)
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="require-present" value="true" />
+       </issue>
+   </lint>
+   ```
+
+/workspace/scratch/46d686ae8b49/grove-launcher/app/src/main/java/tech/granet/grove/MainActivity.kt:738: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            text = "Tap and hold empty home space to open this menu when enabled. If all controls are hidden, open Grove from another launcher’s app list or its Android app settings shortcut to restore them. Widgets remain until removed."
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetTextI18n":
+   When calling TextView#setText
+   * Never call Number#toString() to format numbers; it will not handle
+   fraction separators and locale-specific digits properly. Consider using
+   String#format with proper format specifications (%d or %f) instead.
+   * Do not pass a string literal (e.g. "Hello") to display text. Hardcoded
+   text can not be properly translated to other languages. Consider using
+   Android resource strings instead.
+   * Do not build messages by concatenating text chunks. Such messages can not
+   be properly translated.
+
+   https://developer.android.com/guide/topics/resources/localization.html
+
+0 errors, 15 warnings

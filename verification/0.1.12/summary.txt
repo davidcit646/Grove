@@ -1,0 +1,7 @@
+Grove Launcher 0.1.12-alpha
+Version code: 13
+Build: assembleDebug successful
+Tests: testDebugUnitTest successful
+Lint: lintDebug successful
+
+Changes: pinned hint toggle also hides section heading; wallpaper images are center-cropped without distortion; launcher menu has Material-style icons; configuration editor moved under Advanced with warning; invalid custom config opens with a saved fallback and recovery options.

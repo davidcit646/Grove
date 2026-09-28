@@ -1,0 +1,21 @@
+name: Android build
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager --install 'ndk;27.3.13750724'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path rust/grove-core/Cargo.toml
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grove-debug-apk
+          path: app/build/outputs/apk/debug/*.apk

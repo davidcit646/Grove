@@ -1,0 +1,15 @@
+<resources>
+    <color name="grove_primary">#C6DBB1</color>
+    <color name="grove_on_primary">#183526</color>
+    <color name="grove_surface">#1D1D1D</color>
+    <color name="grove_on_surface">#E6E6E6</color>
+    <color name="grove_surface_variant">#303030</color>
+    <color name="grove_on_surface_variant">#C4C4C4</color>
+    <color name="grove_surface_container_lowest">#121212</color>
+    <color name="grove_surface_container_low">#1A1A1A</color>
+    <color name="grove_surface_container">#202020</color>
+    <color name="grove_surface_container_high">#292929</color>
+    <color name="grove_surface_container_highest">#333333</color>
+    <color name="grove_surface_bright">#3B3B3B</color>
+    <color name="grove_surface_dim">#121212</color>
+</resources>

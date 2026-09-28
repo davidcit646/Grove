@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tech.granet.grove.ConfigTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-27T05:10:26" hostname="b2f45c6959cb" time="0.031">
+  <properties/>
+  <testcase name="duplicatesRemoved" classname="tech.granet.grove.ConfigTest" time="0.028"/>
+  <testcase name="badWallpaperRejected" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <testcase name="unknownVersionRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="invalidComponentRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="roundTripPreservesSettings" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tech.granet.grove.ConfigTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-27T16:02:02" hostname="99bd523d3cf8" time="0.042">
+  <properties/>
+  <testcase name="versionOneMigratesWithVisibleDefaults" classname="tech.granet.grove.ConfigTest" time="0.03"/>
+  <testcase name="duplicatesRemoved" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="everyHomeVisibilityCombinationRoundTrips" classname="tech.granet.grove.ConfigTest" time="0.003"/>
+  <testcase name="versionTwoMigratesNewControls" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="badWallpaperRejected" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <testcase name="unknownVersionRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="malformedToggleRejected" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <testcase name="invalidComponentRejected" classname="tech.granet.grove.ConfigTest" time="0.0"/>
+  <testcase name="malformedSectionRejected" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <testcase name="everyGestureCombinationRoundTrips" classname="tech.granet.grove.ConfigTest" time="0.002"/>
+  <testcase name="roundTripPreservesSettings" classname="tech.granet.grove.ConfigTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

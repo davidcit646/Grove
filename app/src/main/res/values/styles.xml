@@ -1,0 +1,21 @@
+<resources>
+    <style name="Theme.Grove" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">#14251C</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">@color/grove_primary</item>
+        <item name="colorPrimary">@color/grove_primary</item>
+        <item name="colorOnPrimary">@color/grove_on_primary</item>
+        <item name="colorSurface">@color/grove_surface</item>
+        <item name="colorOnSurface">@color/grove_on_surface</item>
+        <item name="colorSurfaceVariant">@color/grove_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/grove_on_surface_variant</item>
+        <item name="colorSurfaceContainerLowest">@color/grove_surface_container_lowest</item>
+        <item name="colorSurfaceContainerLow">@color/grove_surface_container_low</item>
+        <item name="colorSurfaceContainer">@color/grove_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/grove_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/grove_surface_container_highest</item>
+        <item name="colorSurfaceBright">@color/grove_surface_bright</item>
+        <item name="colorSurfaceDim">@color/grove_surface_dim</item>
+    </style>
+</resources>

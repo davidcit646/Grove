@@ -1,0 +1,6 @@
+package: name='tech.granet.grove' versionCode='5' versionName='0.1.4-alpha' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+sdkVersion:'31'
+targetSdkVersion:'35'
+uses-permission: name='android.permission.SET_WALLPAPER'
+uses-permission: name='android.permission.REQUEST_DELETE_PACKAGES'
+uses-permission: name='tech.granet.grove.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
