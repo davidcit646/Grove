@@ -1,6 +1,11 @@
 # Grove Launcher
 
-An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.27 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.28 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+
+## 0.1.28 changes
+
+- Accept Wikimedia Commons' dedicated `thumb.wikimedia.org` thumbnail redirects while retaining HTTPS, host, image, and download-size checks. This fixes remote wallpapers whose previews previously failed even with a working connection.
+- Keep the wallpaper navigation and credits visible when error text or large fonts need more room; scroll the preview details instead. Preview photos now crop to the phone aspect ratio instead of stretching.
 
 ## 0.1.27 changes
 

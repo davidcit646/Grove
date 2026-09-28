@@ -23,9 +23,7 @@ internal class WallpaperController(
     private fun wallpaperConnection(start: URL): HttpURLConnection {
         var url = start
         repeat(5) {
-            require(url.protocol.equals("https", true) &&
-                url.host.lowercase(Locale.ROOT) in setOf("commons.wikimedia.org", "upload.wikimedia.org") &&
-                (url.port == -1 || url.port == 443) && url.userInfo == null) { "Unexpected wallpaper destination" }
+            require(allowedWallpaperDestination(url)) { "Unexpected wallpaper destination" }
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 15_000
             connection.readTimeout = 20_000
@@ -37,7 +35,7 @@ internal class WallpaperController(
                     val location = connection.getHeaderField("Location") ?: error("Wallpaper redirect has no destination")
                     url = URL(url, location)
                 } else {
-                    require(status in 200..299) { "Wallpaper download failed" }
+                    require(status in 200..299) { "Wallpaper download failed (HTTP $status)" }
                     require(connection.contentType?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)?.startsWith("image/") == true) {
                         "Wallpaper response is not an image"
                     }
@@ -98,15 +96,17 @@ internal class WallpaperController(
     fun preview(index: Int, done: (Bitmap?) -> Unit) {
         fun decodePreview() {
             worker.execute {
-                val full = runCatching {
-                    if (index < 3) WallpaperArt.create(index)
-                    else decode(WallpaperArt.cachedFile(activity.filesDir, index))
-                }.getOrNull()
-                val preview = full?.let {
-                    val scaled = Bitmap.createScaledBitmap(it, 360, 800, true)
-                    if (scaled !== it) it.recycle()
-                    scaled
-                }
+                val preview = runCatching {
+                    val full = if (index < 3) WallpaperArt.create(index)
+                        else decode(WallpaperArt.cachedFile(activity.filesDir, index))
+                    full?.let {
+                        val cropped = centerCrop(it, 360, 800)
+                        val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
+                        if (cropped !== scaled && cropped !== it) cropped.recycle()
+                        if (it !== scaled) it.recycle()
+                        scaled
+                    }
+                }.onFailure { Log.w("Grove", "Wallpaper preview failed", it) }.getOrNull()
                 activity.runOnUiThread {
                     if (activity.isDestroyed) preview?.recycle() else done(preview)
                 }
@@ -136,11 +136,22 @@ internal class WallpaperController(
                 try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which) }
                 finally { bitmap.recycle(); if (source !== bitmap) source.recycle() }
             }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) message("Wallpaper applied") } }
-                .onFailure { activity.runOnUiThread { if (!activity.isDestroyed) message("Theme updated; system wallpaper could not be changed") } }
+                .onFailure {
+                    Log.w("Grove", "Could not apply wallpaper", it)
+                    activity.runOnUiThread { if (!activity.isDestroyed) message("System wallpaper could not be changed") }
+                }
         }
     }
 
     companion object {
+        /** Wikimedia now redirects scaled images to its dedicated thumbnail host. */
+        fun allowedWallpaperDestination(url: URL): Boolean =
+            url.protocol.equals("https", true) &&
+                url.host.lowercase(Locale.ROOT) in setOf(
+                    "commons.wikimedia.org", "upload.wikimedia.org", "thumb.wikimedia.org"
+                ) &&
+                (url.port == -1 || url.port == 443) && url.userInfo == null
+
         fun decode(file: File): Bitmap? {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, bounds)

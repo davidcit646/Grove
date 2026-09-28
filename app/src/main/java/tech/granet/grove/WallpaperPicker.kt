@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
@@ -54,6 +55,11 @@ internal class WallpaperPicker(
         header.addView(close, LinearLayout.LayoutParams(activity.dp(48), activity.dp(48)))
         column.addView(header)
 
+        // Keep navigation visible even when an error, large text, or a translated
+        // label takes more space than the preview section can hold.
+        val details = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(ScrollView(activity).apply { addView(details) },
+            LinearLayout.LayoutParams(-1, 0, 1f))
         preview = ImageView(activity).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(ThemeColors.iconSurface(activity))
@@ -77,9 +83,9 @@ internal class WallpaperPicker(
                 }
             }
         }
-        val height = (activity.resources.displayMetrics.heightPixels * 0.54f).toInt()
-            .coerceIn(activity.dp(260), activity.dp(590))
-        column.addView(preview, LinearLayout.LayoutParams(-1, height))
+        val height = (activity.resources.displayMetrics.heightPixels * 0.46f).toInt()
+            .coerceIn(activity.dp(180), activity.dp(500))
+        details.addView(preview, LinearLayout.LayoutParams(-1, height))
 
         title = TextView(activity).apply {
             textSize = 19f
@@ -87,25 +93,25 @@ internal class WallpaperPicker(
             setTextColor(ThemeColors.icon(activity))
             setPadding(0, activity.dp(14), 0, 0)
         }
-        column.addView(title)
+        details.addView(title)
         subtitle = TextView(activity).apply {
             textSize = 13f
             setTextColor(ThemeColors.icon(activity))
             setPadding(0, activity.dp(4), 0, 0)
         }
-        column.addView(subtitle)
+        details.addView(subtitle)
         status = TextView(activity).apply {
             textSize = 14f
             setTextColor(ThemeColors.icon(activity))
             setPadding(0, activity.dp(8), 0, activity.dp(4))
         }
-        column.addView(status)
+        details.addView(status)
         retry = MaterialButton(activity).apply {
             text = "Retry preview"
             visibility = View.GONE
             setOnClickListener { load() }
         }
-        column.addView(retry)
+        details.addView(retry)
         val navigation = LinearLayout(activity).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, activity.dp(6), 0, 0)
@@ -136,7 +142,10 @@ internal class WallpaperPicker(
             bitmap = null
         }
         dialog.show()
-        dialog.window?.setLayout((activity.resources.displayMetrics.widthPixels * 0.94f).toInt(), -2)
+        dialog.window?.setLayout(
+            (activity.resources.displayMetrics.widthPixels * 0.94f).toInt(),
+            (activity.resources.displayMetrics.heightPixels * 0.86f).toInt(),
+        )
         load()
     }
 

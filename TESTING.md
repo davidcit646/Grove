@@ -1,5 +1,12 @@
 # Device acceptance checklist
 
+## Wallpaper picker (0.1.28)
+
+- On a clean install, browse all ten Commons images over a working connection; verify scaled photos that redirect to `thumb.wikimedia.org` show previews. Red, orange, blue, brown, and black and white previously failed.
+- Disable connectivity and open an uncached image. Verify Retry, Previous, Next, credits, and X remain reachable; restore connectivity and retry.
+- With large font and display size, confirm the preview/details scroll while Previous, Next, and credits stay visible.
+- Check that landscape photos crop to the display instead of stretching; set a photo to Home, Lock, and Both, then confirm each destination.
+
 ## First-run setup (0.1.27)
 
 - Clear app data, launch Grove, and verify the seven-step setup appears over Home with visible Back, Next, and Skip controls.
