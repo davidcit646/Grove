@@ -9,7 +9,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: sdkmanager --install 'ndk;27.3.13750724'
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --manifest-path rust/grove-core/Cargo.toml
