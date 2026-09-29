@@ -21,10 +21,11 @@ jobs:
           GROVE_SIGNING_PASSWORD: ${{ secrets.GROVE_SIGNING_PASSWORD }}
         run: |
           if [ -z "$GROVE_SIGNING_PASSWORD" ]; then
-            echo 'GROVE_SIGNING_PASSWORD is not configured; signed APK unavailable'
-            exit 0
+            echo 'GROVE_SIGNING_PASSWORD is not configured; signed release build cannot proceed' >&2
+            exit 1
           fi
           ./gradlew assembleRelease
+          test -s app/build/outputs/apk/release/app-release.apk
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
           test -n "$apksigner"
           "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk |
