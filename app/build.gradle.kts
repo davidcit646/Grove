@@ -1,4 +1,5 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+val signingPassword = providers.environmentVariable("GROVE_SIGNING_PASSWORD").orNull
 android {
     namespace = "tech.granet.grove"
     compileSdk = 36
@@ -9,12 +10,24 @@ android {
         applicationId = "tech.granet.grove"
         minSdk = 31
         targetSdk = 36
-        versionCode = 30
-        versionName = "0.1.29-alpha"
+        versionCode = 31
+        versionName = "0.1.30-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
+    signingConfigs {
+        create("groveRelease") {
+            storeFile = rootProject.file("signing/grove-release.p12")
+            storeType = "pkcs12"
+            storePassword = signingPassword
+            keyAlias = "grove"
+            keyPassword = signingPassword
+        }
+    }
+    buildTypes {
+        getByName("release") { signingConfig = signingConfigs.getByName("groveRelease") }
+    }
 }
 dependencies {
     implementation("com.google.android.material:material:1.12.0")

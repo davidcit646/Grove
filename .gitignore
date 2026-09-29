@@ -5,3 +5,6 @@ local.properties
 rust/**/target/
 *.jks
 *.keystore
+*.p12
+!signing/grove-release.p12
+*signing-password*.txt

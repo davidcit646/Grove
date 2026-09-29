@@ -3,6 +3,8 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GROVE_SIGNING_PASSWORD: ${{ secrets.GROVE_SIGNING_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -15,7 +17,23 @@ jobs:
       - run: cargo test --manifest-path rust/grove-core/Cargo.toml
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
+      - name: Build signed release APK
+        if: ${{ env.GROVE_SIGNING_PASSWORD != '' }}
+        run: ./gradlew assembleRelease
+      - name: Verify stable signing certificate
+        if: ${{ env.GROVE_SIGNING_PASSWORD != '' }}
+        run: |
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -n "$apksigner"
+          "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk |
+            grep -Fi '6e34977d69ed454a5b8ac6b234cb2d2403903b33ed19a6be1c5abd044fae6397'
       - uses: actions/upload-artifact@v4
         with:
           name: grove-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+      - name: Upload signed release APK
+        if: ${{ env.GROVE_SIGNING_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: grove-signed-release-apk
+          path: app/build/outputs/apk/release/*.apk
