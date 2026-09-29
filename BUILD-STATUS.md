@@ -1,6 +1,6 @@
 # Grove build verification
 
-The 0.1.29 alpha onboarding redesign has not yet been installed on a device. The previous 0.1.28 alpha build passed GitHub Actions; the workflow builds and tests source on pushes to `main`.
+The 0.1.30 alpha source passed GitHub Actions at commit `181c4ab` (Android unit tests, Rust tests, debug APK, and lint). That run uploaded only a debug APK; `GROVE_SIGNING_PASSWORD` was not configured, so no signed release artifact was made. The release workflow now fails on `main` if signing cannot complete and packages both APK and App Bundle after certificate verification. The 0.1.29 onboarding redesign and 0.1.30 clock/date actions still need on-device validation.
 
 The source now targets API 36 for the current Google Play submission requirement. The optional broad file-search permission still requires a Play policy decision and declaration before a Play release; see [PLAY-READINESS.md](PLAY-READINESS.md).
 
