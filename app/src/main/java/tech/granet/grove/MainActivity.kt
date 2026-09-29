@@ -18,6 +18,7 @@ import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Environment
 import android.provider.Settings
+import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.telephony.PhoneNumberUtils
 import android.util.Log
@@ -608,6 +609,17 @@ class MainActivity : AppCompatActivity() {
     private fun openSearch() = showSearch(animate = true)
     private fun openAppDrawer() = showDrawer(false, animate = true)
 
+    private fun openClock() {
+        runCatching { startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS)) }
+            .onFailure { message("No Clock app is available") }
+    }
+
+    private fun openCalendar() {
+        runCatching {
+            startActivity(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))
+        }.onFailure { message("No Calendar app is available") }
+    }
+
     private fun enterContent(fromY: Float) {
         root.translationY = fromY
         root.animate().translationY(0f).setInterpolator(android.view.animation.DecelerateInterpolator())
@@ -620,7 +632,8 @@ class MainActivity : AppCompatActivity() {
         getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
         drawer = false; searchMode = false; base()
         body = HomeScreen(this).render(root, config.homeScreen, ::button,
-            ::openSearch, ::openAppDrawer, ::renderPinnedApps, ::renderWidgets)
+            ::openSearch, ::openAppDrawer, ::openClock, ::openCalendar,
+            ::renderPinnedApps, ::renderWidgets)
         (body.parent as ScrollView).apply {
             val restored = homeScrollY
             post { if (body.parent === this) scrollTo(0, restored) }

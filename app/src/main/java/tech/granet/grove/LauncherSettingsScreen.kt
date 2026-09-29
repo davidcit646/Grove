@@ -67,6 +67,9 @@ internal class LauncherSettingsScreen(
         toggle("Show clock and date", config.homeScreen.showClock) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(showClock = enabled)))
         }
+        toggle("Tap clock to open Clock", config.homeScreen.tapClockOpensClock) { enabled ->
+            commit(current().copy(homeScreen = current().homeScreen.copy(tapClockOpensClock = enabled)))
+        }
         toggle("Show pinned apps", config.homeScreen.showPinnedApps) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(showPinnedApps = enabled)))
         }

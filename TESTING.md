@@ -46,6 +46,7 @@ Device behavior and visual layout have not yet been validated on hardware. Local
 - Interact/scroll inside an Android widget and verify launcher gestures do not fire from a touch that starts inside the widget.
 - Open Settings -> Launcher settings and verify all eight switches persist across launcher restart.
 - Toggle Show Apps button, Show clock, and Show pinned apps independently and in all combinations.
+- Tap the Home clock to open the phone's Clock alarms screen; disable "Tap clock to open Clock" in launcher settings and confirm the clock no longer opens it. Tap the date to open Calendar. If either app is missing, confirm Grove shows a short unavailable message.
 - With all three Home visibility switches disabled, verify Search apps remains available; long-press empty home space opens the menu when enabled; any user-added widgets remain visible.
 - Import a version-1 JSON configuration and verify the legacy home appearance remains visible and both new gestures default enabled.
 - Export configuration and verify schema version 3 includes `gestures` and `homeScreen`.

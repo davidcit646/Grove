@@ -16,6 +16,7 @@ data class HomeScreenSettings(
     val showAppsButton: Boolean = true,
     val showSearchButton: Boolean = true,
     val showClock: Boolean = true,
+    val tapClockOpensClock: Boolean = true,
     val showPinnedApps: Boolean = true,
     val showPinnedAppsHint: Boolean = true,
     val useWallpaperButtonColors: Boolean = false,
@@ -60,6 +61,7 @@ data class Config(
                 .put("showAppsButton", homeScreen.showAppsButton)
                 .put("showSearchButton", homeScreen.showSearchButton)
                 .put("showClock", homeScreen.showClock)
+                .put("tapClockOpensClock", homeScreen.tapClockOpensClock)
                 .put("showPinnedApps", homeScreen.showPinnedApps)
                 .put("showPinnedAppsHint", homeScreen.showPinnedAppsHint)
                 .put("useWallpaperButtonColors", homeScreen.useWallpaperButtonColors)
@@ -107,6 +109,7 @@ data class Config(
                 showAppsButton = flag(homeJson, "showAppsButton", true),
                 showSearchButton = flag(homeJson, "showSearchButton", true),
                 showClock = flag(homeJson, "showClock", true),
+                tapClockOpensClock = flag(homeJson, "tapClockOpensClock", true),
                 showPinnedApps = flag(homeJson, "showPinnedApps", true),
                 showPinnedAppsHint = flag(homeJson, "showPinnedAppsHint", true),
                 useWallpaperButtonColors = flag(homeJson, "useWallpaperButtonColors", false),

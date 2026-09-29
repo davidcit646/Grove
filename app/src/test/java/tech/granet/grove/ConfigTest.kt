@@ -18,6 +18,7 @@ class ConfigTest {
                 showAppsButton = false,
                 showSearchButton = false,
                 showClock = true,
+                tapClockOpensClock = false,
                 showPinnedApps = false,
                 showPinnedAppsHint = false,
                 pinnedAppsAtBottom = false,
@@ -49,6 +50,7 @@ class ConfigTest {
         assertFalse(migrated.homeScreen.showAppsButton)
         assertTrue(migrated.homeScreen.showSearchButton)
         assertTrue(migrated.homeScreen.showClock)
+        assertTrue(migrated.homeScreen.tapClockOpensClock)
         assertFalse(migrated.homeScreen.showPinnedApps)
         assertTrue(migrated.homeScreen.pinnedAppsAtBottom)
     }
@@ -66,6 +68,11 @@ class ConfigTest {
     @Test fun disabledSearchSourcesSurviveExport() {
         val config = Config(search = SearchSettings(contacts = false, files = false))
         assertEquals(config.search, Config.parse(config.json()).search)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun invalidClockActionSwitchRejected() {
+        Config.parse("""{"version":7,"wallpaper":0,"favorites":[],"homeScreen":{"tapClockOpensClock":"false"}}""")
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -94,7 +101,7 @@ class ConfigTest {
     }
 
     @Test fun everyHomeSettingCombinationRoundTrips() {
-        for (mask in 0 until 128) {
+        for (mask in 0 until 256) {
             val home = HomeScreenSettings(
                 showAppsButton = mask and 1 != 0,
                 showSearchButton = mask and 2 != 0,
@@ -103,6 +110,7 @@ class ConfigTest {
                 pinnedAppsAtBottom = mask and 16 != 0,
                 showPinnedAppsHint = mask and 32 != 0,
                 useWallpaperButtonColors = mask and 64 != 0,
+                tapClockOpensClock = mask and 128 != 0,
             )
             val parsed = Config.parse(Config(homeScreen = home).json())
             assertEquals(home, parsed.homeScreen)
