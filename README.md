@@ -1,6 +1,10 @@
 # Grove Launcher
 
-An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.29 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.30 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+
+## 0.1.30 changes
+
+- Tapping the Home clock opens the device's clock app by default. A Launcher settings switch controls this action; tapping the date opens the default calendar app.
 
 ## 0.1.29 changes
 
@@ -81,7 +85,7 @@ Android views, storage permissions, widgets, intents, and wallpaper APIs remain 
 
 File sharing uses read only, per intent content URI grants. The provider is not exported. Configuration input and wallpaper downloads have size limits; wallpaper redirects stay on the expected HTTPS hosts. Android's broad storage access remains necessary for device wide file search and requires Play policy review and approval before distribution; see [PLAY-READINESS.md](PLAY-READINESS.md) and [PRIVACY.md](PRIVACY.md).
 
-The APK under `app/build` is a development build, not a release signed distribution. Release signing and Play distribution are separate work.
+The debug APK under `app/build` is for development. The main-branch workflow builds a release-signed APK and Play App Bundle only when the repository's `GROVE_SIGNING_PASSWORD` Actions secret is configured. See [signing/README.md](signing/README.md) and [PLAY-READINESS.md](PLAY-READINESS.md) before distribution.
 
 ## License
 
