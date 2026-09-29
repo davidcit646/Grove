@@ -1360,7 +1360,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun launchNextUninstall() {
         val packageName = pendingUninstalls.pollFirst() ?: return
-        runCatching { uninstallNext.launch(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))) }
+        runCatching { uninstallNext.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE,
+            Uri.parse("package:$packageName")).putExtra(Intent.EXTRA_RETURN_RESULT, true)) }
             .onFailure { message("Cannot uninstall $packageName"); launchNextUninstall() }
     }
     private fun addGrid(items: List<App>, target: LinearLayout) {
