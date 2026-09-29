@@ -89,9 +89,10 @@ class MainActivity : AppCompatActivity() {
     private var selectingApps = false
     private data class DrawerDrag(val key: String)
     private val pendingUninstalls = ArrayDeque<String>()
-    private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         loadApps()
-        launchNextUninstall()
+        if (result.resultCode == RESULT_OK) launchNextUninstall()
+        else pendingUninstalls.clear()
     }
     private var config = Config()
     private var firstRunSetup: FirstRunSetup? = null
@@ -668,7 +669,10 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread(Runnable {
                 if (generation != fileIndexGeneration || isDestroyed) return@Runnable
                 indexingFiles = false
-                result.onSuccess { files = it }.onFailure { message("Could not index shared storage") }
+                result.onSuccess {
+                    files = it.files
+                    if (it.skippedDirectories > 0) message("File search skipped ${it.skippedDirectories} inaccessible folder(s)")
+                }.onFailure { message("Could not index shared storage") }
                 if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
             })
         }
@@ -686,7 +690,6 @@ class MainActivity : AppCompatActivity() {
             runCatching { contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI,
                 true, contactObserver); contactObserverRegistered = true }
         }
-        lastContactRefresh = SystemClock.elapsedRealtime()
         if (contactWorker.isShutdown) return
         val generation = ++contactGeneration
         contactWorker.execute {
@@ -695,6 +698,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isDestroyed || generation != contactGeneration || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
                 result.onSuccess {
+                    lastContactRefresh = SystemClock.elapsedRealtime()
                     contacts = it
                     if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                     if (it.isEmpty() && !contactWarningShown) {
@@ -1356,7 +1360,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun launchNextUninstall() {
         val packageName = pendingUninstalls.pollFirst() ?: return
-        runCatching { uninstallNext.launch(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))) }
+        runCatching { uninstallNext.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE,
+            Uri.parse("package:$packageName")).putExtra(Intent.EXTRA_RETURN_RESULT, true)) }
             .onFailure { message("Cannot uninstall $packageName"); launchNextUninstall() }
     }
     private fun addGrid(items: List<App>, target: LinearLayout) {
