@@ -9,12 +9,13 @@ class StartupCoordinatorTest {
         contactsGranted: Boolean = false,
         lastContacts: Long = 0,
         indexingContacts: Boolean = false,
+        contactLoadFailed: Boolean = false,
         files: Boolean = false,
         filesGranted: Boolean = false,
         hasFiles: Boolean = false,
         indexingFiles: Boolean = false,
     ) = StartupCoordinator.Snapshot(
-        contacts, contactsGranted, lastContacts, indexingContacts,
+        contacts, contactsGranted, lastContacts, indexingContacts, contactLoadFailed,
         files, filesGranted, hasFiles, indexingFiles,
     )
 
@@ -39,6 +40,9 @@ class StartupCoordinatorTest {
         assertEquals(StartupCoordinator.Plan(), StartupCoordinator.resume(
             state(contacts = true, contactsGranted = true, indexingContacts = true),
             15 * 60_000L + 1))
+        assertEquals(StartupCoordinator.Plan(refreshContacts = true),
+            StartupCoordinator.resume(state(contacts = true, contactsGranted = true,
+                lastContacts = 1_000, contactLoadFailed = true), 2_000))
         assertEquals(StartupCoordinator.Plan(indexFiles = true), StartupCoordinator.resume(
             state(files = true, filesGranted = true), 2_000))
         assertEquals(StartupCoordinator.Plan(), StartupCoordinator.resume(
