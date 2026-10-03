@@ -69,6 +69,8 @@ class MainActivity : AppCompatActivity() {
     private var contactObserverRegistered = false
     private var contactWarningShown = false
     private var lastContactRefresh = 0L
+    private var indexingContacts = false
+    private var contactLoadFailed = false
     private val delayedContactRefresh = Runnable { refreshContacts() }
     private val contactObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
@@ -105,6 +107,8 @@ class MainActivity : AppCompatActivity() {
     private var searchMode = false
     private var files = emptyList<IndexedFile>()
     private var indexingFiles = false
+    private var fileLoadFailed = false
+    private var fileScanSkipped = 0
     @Volatile private var fileIndexGeneration = 0
     @Volatile private var contactGeneration = 0
     private var searchResults: LinearLayout? = null
@@ -314,6 +318,8 @@ class MainActivity : AppCompatActivity() {
             fileIndexGeneration++
             files = emptyList()
             indexingFiles = false
+            fileLoadFailed = false
+            fileScanSkipped = 0
             if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         }
         if (plan.loadApps) loadApps()
@@ -731,6 +737,8 @@ class MainActivity : AppCompatActivity() {
         if (!config.search.files || !Environment.isExternalStorageManager() || indexingFiles) return
         val generation = ++fileIndexGeneration
         indexingFiles = true
+        fileLoadFailed = false
+        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         worker.execute {
             if (generation != fileIndexGeneration) return@execute
             val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory(),
@@ -738,7 +746,17 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread(Runnable {
                 if (generation != fileIndexGeneration || isDestroyed) return@Runnable
                 indexingFiles = false
-                result.onSuccess { files = it }.onFailure { message("Could not index shared storage") }
+                result.onSuccess {
+                    files = it.files
+                    fileScanSkipped = it.skippedDirectories
+                    fileLoadFailed = false
+                }.onFailure {
+                    files = emptyList()
+                    fileScanSkipped = 0
+                    fileLoadFailed = true
+                    Log.w("Grove", "Could not index shared storage", it)
+                    message("Could not index shared storage")
+                }
                 if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
             })
         }
@@ -748,7 +766,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshContacts() {
         if (!config.search.contacts || !hasContactAccess()) {
+            contactGeneration++
             contacts = emptyList()
+            indexingContacts = false
+            contactLoadFailed = false
             if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
             return
         }
@@ -758,14 +779,19 @@ class MainActivity : AppCompatActivity() {
         }
         lastContactRefresh = SystemClock.elapsedRealtime()
         if (contactWorker.isShutdown) return
+        indexingContacts = true
+        contactLoadFailed = false
+        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         val generation = ++contactGeneration
         contactWorker.execute {
             if (generation != contactGeneration) return@execute
             val result = runCatching { ContactIndex.load(contentResolver) { generation == contactGeneration } }
             runOnUiThread {
                 if (isDestroyed || generation != contactGeneration || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
+                indexingContacts = false
                 result.onSuccess {
                     contacts = it
+                    contactLoadFailed = false
                     if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                     if (it.isEmpty() && !contactWarningShown) {
                         contactWarningShown = true
@@ -774,6 +800,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                     .onFailure {
+                        contacts = emptyList()
+                        contactLoadFailed = true
+                        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                         Log.w("Grove", "Contacts provider unavailable", it)
                         if (!contactWarningShown) {
                             contactWarningShown = true
@@ -818,6 +847,8 @@ class MainActivity : AppCompatActivity() {
         if (!config.search.contacts) {
             contactGeneration++
             contacts = emptyList()
+            indexingContacts = false
+            contactLoadFailed = false
             searchHandler.removeCallbacks(delayedContactRefresh)
             if (contactObserverRegistered) {
                 contentResolver.unregisterContentObserver(contactObserver)
@@ -830,6 +861,8 @@ class MainActivity : AppCompatActivity() {
             fileIndexGeneration++
             files = emptyList()
             indexingFiles = false
+            fileLoadFailed = false
+            fileScanSkipped = 0
         } else if (!previous.files) {
             if (Environment.isExternalStorageManager()) indexFiles() else explainFileAccess()
         }
@@ -913,9 +946,12 @@ class MainActivity : AppCompatActivity() {
             matchingContacts.map { contact -> SearchScreen.ContactRow(contact.name) { contactMenu(contact) } },
             matchingFiles.map { file -> SearchScreen.FileRow(file,
                 open = { openFile(file) }, menu = { searchItemMenu(file) }) },
-            config.search.contacts, hasContactAccess(), ::explainContactAccess,
-            config.search.files, Environment.isExternalStorageManager(), indexingFiles,
-            requestFileAccess = { explainFileAccess() },
+            SearchSourceState.resolve(config.search.contacts, hasContactAccess(),
+                indexingContacts, contactLoadFailed, contacts.size),
+            ::explainContactAccess, ::refreshContacts,
+            SearchSourceState.resolve(config.search.files, Environment.isExternalStorageManager(),
+                indexingFiles, fileLoadFailed, files.size, fileScanSkipped),
+            requestFileAccess = { explainFileAccess() }, retryFiles = { indexFiles() },
             searchGoogle = { openWeb("https://www.google.com/search?q=${Uri.encode(query.trim())}") },
             googleMenu = { webResultMenu(query.trim(), "Google") },
             searchStore = { openPlayStore(query.trim()) },
