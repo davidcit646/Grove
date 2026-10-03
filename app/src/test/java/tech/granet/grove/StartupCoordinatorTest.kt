@@ -8,12 +8,14 @@ class StartupCoordinatorTest {
         contacts: Boolean = false,
         contactsGranted: Boolean = false,
         lastContacts: Long = 0,
+        indexingContacts: Boolean = false,
         files: Boolean = false,
         filesGranted: Boolean = false,
         hasFiles: Boolean = false,
         indexingFiles: Boolean = false,
     ) = StartupCoordinator.Snapshot(
-        contacts, contactsGranted, lastContacts, files, filesGranted, hasFiles, indexingFiles,
+        contacts, contactsGranted, lastContacts, indexingContacts,
+        files, filesGranted, hasFiles, indexingFiles,
     )
 
     @Test fun coldStartLoadsOnlyEnabledGrantedSources() {
@@ -34,6 +36,9 @@ class StartupCoordinatorTest {
         assertEquals(StartupCoordinator.Plan(), StartupCoordinator.resume(recent, 2_000))
         assertEquals(StartupCoordinator.Plan(refreshContacts = true),
             StartupCoordinator.resume(recent, 1_000 + 15 * 60_000L + 1))
+        assertEquals(StartupCoordinator.Plan(), StartupCoordinator.resume(
+            state(contacts = true, contactsGranted = true, indexingContacts = true),
+            15 * 60_000L + 1))
         assertEquals(StartupCoordinator.Plan(indexFiles = true), StartupCoordinator.resume(
             state(files = true, filesGranted = true), 2_000))
         assertEquals(StartupCoordinator.Plan(), StartupCoordinator.resume(
