@@ -46,8 +46,8 @@ class ConfigStore(private val prefs: SharedPreferences) {
             usingFallback = true
             brokenCustomConfig = raw
             val safe = Config()
-            prefs.edit().putString("broken_config", raw).putString("fallback_config", safe.json())
-                .putBoolean("using_fallback_config", true).apply()
+            check(prefs.edit().putString("broken_config", raw).putString("fallback_config", safe.json())
+                .putBoolean("using_fallback_config", true).commit()) { "Could not persist recovery configuration" }
             safe
         }
     }
@@ -56,13 +56,15 @@ class ConfigStore(private val prefs: SharedPreferences) {
         val editor = prefs.edit()
         if (usingFallback) editor.putString("fallback_config", config.json())
         else editor.putString("config", config.json())
-        editor.apply()
+        check(editor.commit()) { "Could not save configuration" }
     }
 
     fun activate(config: Config) {
+        check(prefs.edit().putString("config", config.json()).remove("broken_config")
+            .remove("fallback_config").remove("using_fallback_config").commit()) {
+            "Could not activate configuration"
+        }
         usingFallback = false
         brokenCustomConfig = null
-        prefs.edit().putString("config", config.json()).remove("broken_config")
-            .remove("fallback_config").remove("using_fallback_config").apply()
     }
 }
