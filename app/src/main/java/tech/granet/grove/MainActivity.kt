@@ -51,6 +51,8 @@ class MainActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("grove", MODE_PRIVATE) }
     private val configStore by lazy { ConfigStore(prefs) }
     private val launcher by lazy { getSystemService(LauncherApps::class.java) }
+    private var launcherCallbackRegistered = false
+    private var coreRecoveryVisible = false
     // Widget RemoteViews must inflate with a plain framework context. An
     // AppCompatActivity context can substitute AppCompat views that reject
     // RemoteViews actions and end up in Android's "Couldn't add widget" view.
@@ -225,12 +227,70 @@ class MainActivity : AppCompatActivity() {
                 // view here would unexpectedly jump a scrolled layout to top.
             }
         })
-        launcher.registerCallback(changes, Handler(Looper.getMainLooper()))
+        if (!ensureLauncherCallback()) return
         homeScrollY = savedInstanceState?.getInt("homeScrollY") ?: 0
         showHome(); applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
         if (configStore.brokenCustomConfig != null) root.post { showConfigRecoveryDialog() }
         if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { settings() }
     }
+    private fun ensureLauncherCallback(): Boolean {
+        if (launcherCallbackRegistered) return true
+        return try {
+            launcher.registerCallback(changes, Handler(Looper.getMainLooper()))
+            launcherCallbackRegistered = true
+            true
+        } catch (error: Exception) {
+            Log.e("Grove", "Launcher service unavailable", error)
+            showCoreRecovery("Grove could not connect to Android's app launcher service.")
+            false
+        }
+    }
+
+    private fun showCoreRecovery(detail: String) {
+        coreRecoveryVisible = true
+        drawer = false
+        searchMode = false
+        root.animate().cancel()
+        root.removeAllViews()
+        root.setBackgroundColor(0xff182421.toInt())
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+        }
+        panel.addView(TextView(this).apply {
+            text = "Grove cannot load your apps"
+            textSize = 24f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        })
+        panel.addView(TextView(this).apply {
+            text = detail
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        })
+        panel.addView(Button(this).apply {
+            text = "Retry"
+            setOnClickListener { if (ensureLauncherCallback()) loadApps() }
+        })
+        panel.addView(Button(this).apply {
+            text = "Android Home settings"
+            setOnClickListener {
+                try {
+                    startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+                } catch (_: Exception) {
+                    try {
+                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                    } catch (_: Exception) {
+                        message("Android Settings is unavailable")
+                    }
+                }
+            }
+        })
+        root.addView(panel, LinearLayout.LayoutParams(-1, -1))
+    }
+
     override fun onStart() { super.onStart(); host.startListening() }
     private fun clearAppSelection() {
         selectingApps = false
@@ -272,7 +332,11 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
     }
     override fun onDestroy() {
-        launcher.unregisterCallback(changes)
+        if (launcherCallbackRegistered) {
+            try { launcher.unregisterCallback(changes) }
+            catch (error: Exception) { Log.w("Grove", "Could not unregister launcher callback", error) }
+            launcherCallbackRegistered = false
+        }
         longPressHandler.removeCallbacks(longPressRunnable)
         pendingSearch?.let(searchHandler::removeCallbacks)
         searchHandler.removeCallbacks(delayedContactRefresh)
@@ -520,7 +584,11 @@ class MainActivity : AppCompatActivity() {
                             config = config.copy(favorites = apps.take(8).map { it.key })
                         prefs.edit().putBoolean("initialized", true).apply(); save()
                     }
-                    if (drawer) renderApps(searchField?.text?.toString().orEmpty())
+                    if (coreRecoveryVisible) {
+                        coreRecoveryVisible = false
+                        root.setBackgroundColor(Color.TRANSPARENT)
+                        showHome()
+                    } else if (drawer) renderApps(searchField?.text?.toString().orEmpty())
                     else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                     else if (activePinDrag == null && heldPin == null) showHome()
                     if (prefs.getBoolean("setup_pending", false) && firstRunSetup == null &&
@@ -553,8 +621,10 @@ class MainActivity : AppCompatActivity() {
             }.onFailure {
                 Log.w("Grove", "Unable to load apps", it)
                 runOnUiThread { if (!isDestroyed && generation == loadGeneration) {
-                    loadingApps = false; message("Unable to load apps")
-                    if (drawer) renderApps(searchField?.text?.toString().orEmpty())
+                    loadingApps = false
+                    apps = emptyList()
+                    iconCache.clear()
+                    showCoreRecovery("Android could not provide the installed app list. Retry, or change your Home app in Android Settings.")
                 } }
             }
         }
