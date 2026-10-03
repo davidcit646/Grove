@@ -35,8 +35,9 @@ internal class SearchScreen(private val context: Context) {
     }
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>, contacts: List<ContactRow>, files: List<FileRow>,
-               contactEnabled: Boolean, contactAccess: Boolean, requestContactAccess: () -> Unit,
-               fileEnabled: Boolean, fileAccess: Boolean, indexing: Boolean, requestFileAccess: () -> Unit,
+               contactState: SearchSourceState, requestContactAccess: () -> Unit,
+               retryContacts: () -> Unit, fileState: SearchSourceState,
+               requestFileAccess: () -> Unit, retryFiles: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
         target.removeAllViews()
@@ -46,22 +47,37 @@ internal class SearchScreen(private val context: Context) {
             target.addView(row(app.label, R.drawable.ic_grid, bitmap = app.icon, iconKey = app.key,
                 action = app.open, longPress = app.menu))
         }
-        if (contactEnabled && (contacts.isNotEmpty() || !contactAccess))
+        if (contactState !is SearchSourceState.Disabled &&
+            (contacts.isNotEmpty() || contactState !is SearchSourceState.Ready))
             target.addView(heading("CONTACTS", R.drawable.ic_contact))
-        contacts.takeIf { contactEnabled }.orEmpty().forEach { contact ->
+        if (contactState is SearchSourceState.Ready) contacts.forEach { contact ->
             target.addView(row(contact.name, R.drawable.ic_contact, action = contact.open, longPress = contact.open))
         }
-        if (contactEnabled && !contactAccess) target.addView(row("Allow contact search", R.drawable.ic_contact,
-            "Allow Grove to search your contacts", action = requestContactAccess))
-        if (fileEnabled && (files.isNotEmpty() || !fileAccess || indexing))
+        when (contactState) {
+            SearchSourceState.PermissionRequired -> target.addView(row("Allow contact search", R.drawable.ic_contact,
+                "Allow Grove to search your contacts", action = requestContactAccess))
+            SearchSourceState.Loading -> target.addView(context.label("Loading contacts…", 14f))
+            SearchSourceState.Failed -> target.addView(row("Retry contact search", R.drawable.ic_contact,
+                "The contacts provider could not be read", action = retryContacts))
+            else -> Unit
+        }
+        if (fileState !is SearchSourceState.Disabled &&
+            (files.isNotEmpty() || fileState !is SearchSourceState.Ready))
             target.addView(heading("FILES", R.drawable.ic_folder))
-        files.takeIf { fileEnabled }.orEmpty().forEach { entry ->
+        if (fileState is SearchSourceState.Ready || fileState is SearchSourceState.Partial) files.forEach { entry ->
             target.addView(row(entry.file.name, R.drawable.ic_document, entry.file.category,
                 action = entry.open, longPress = entry.menu))
         }
-        if (fileEnabled && !fileAccess) target.addView(row("Allow device file search", R.drawable.ic_folder,
-            "Allow access to shared storage", action = requestFileAccess))
-        else if (indexing && files.isEmpty()) target.addView(context.label("Searching files…", 14f))
+        when (fileState) {
+            SearchSourceState.PermissionRequired -> target.addView(row("Allow device file search", R.drawable.ic_folder,
+                "Allow access to shared storage", action = requestFileAccess))
+            SearchSourceState.Loading -> target.addView(context.label("Searching files…", 14f))
+            SearchSourceState.Failed -> target.addView(row("Retry file search", R.drawable.ic_folder,
+                "Shared storage could not be indexed", action = retryFiles))
+            is SearchSourceState.Partial -> target.addView(context.label(
+                "Some folders could not be searched (${fileState.skippedDirectories} skipped).", 14f))
+            else -> Unit
+        }
         target.addView(heading("GOOGLE", R.drawable.ic_public))
         target.addView(row("Search Google for “${query.trim()}”", R.drawable.ic_public,
             action = searchGoogle, longPress = googleMenu))
