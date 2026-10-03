@@ -25,7 +25,7 @@ object FileIndex {
         queue.add(root)
         while (shouldContinue() && queue.isNotEmpty() && found.size < limit && visited.size < 10_000 && scannedEntries < 100_000) {
             val parent = queue.removeFirst()
-            val path = runCatching { parent.canonicalPath }.getOrElse { error ->
+            val path = try { parent.canonicalPath } catch (error: Exception) {
                 if (parent == root) throw error
                 skippedDirectories++
                 continue
