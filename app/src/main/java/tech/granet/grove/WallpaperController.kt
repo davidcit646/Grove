@@ -52,9 +52,23 @@ internal class WallpaperController(
     }
 
     fun artwork(index: Int): Bitmap = if (index >= 3) {
-        WallpaperArt.cachedFile(activity.filesDir, index).takeIf { it.exists() }?.let(::decode)
-            ?: WallpaperArt.create(0)
+        decode(WallpaperArt.cachedFile(activity.filesDir, index))
+            ?: error("Selected wallpaper cache is unavailable")
     } else WallpaperArt.create(index)
+
+    /** Decode and crop on the worker. The caller owns the returned bitmap. */
+    fun background(index: Int, width: Int, height: Int, done: (Bitmap?) -> Unit) {
+        worker.execute {
+            val prepared = runCatching {
+                val source = artwork(index)
+                try { centerCrop(source, width, height).also { if (it !== source) source.recycle() } }
+                catch (error: Throwable) { source.recycle(); throw error }
+            }.onFailure { Log.w("Grove", "Wallpaper background unavailable", it) }.getOrNull()
+            activity.runOnUiThread {
+                if (activity.isDestroyed) prepared?.recycle() else done(prepared)
+            }
+        }
+    }
 
     fun download(index: Int, done: (Boolean) -> Unit) {
         val wallpaper = WallpaperArt.commons[index - 3]
@@ -126,7 +140,7 @@ internal class WallpaperController(
         }
     }
 
-    fun apply(index: Int, which: Int) {
+    fun apply(index: Int, which: Int, done: (Boolean) -> Unit) {
         worker.execute {
             runCatching {
                 val source = if (index >= 3) decode(WallpaperArt.cachedFile(activity.filesDir, index))
@@ -135,10 +149,10 @@ internal class WallpaperController(
                     activity.resources.displayMetrics.heightPixels)
                 try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which) }
                 finally { bitmap.recycle(); if (source !== bitmap) source.recycle() }
-            }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) message("Wallpaper applied") } }
+            }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) { message("Wallpaper applied"); done(true) } } }
                 .onFailure {
                     Log.w("Grove", "Could not apply wallpaper", it)
-                    activity.runOnUiThread { if (!activity.isDestroyed) message("System wallpaper could not be changed") }
+                    activity.runOnUiThread { if (!activity.isDestroyed) { message("System wallpaper could not be changed"); done(false) } }
                 }
         }
     }
