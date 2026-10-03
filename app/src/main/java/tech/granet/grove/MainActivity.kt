@@ -307,6 +307,7 @@ class MainActivity : AppCompatActivity() {
         contactSearchEnabled = config.search.contacts,
         contactsGranted = hasContactAccess(),
         lastContactRefreshMs = lastContactRefresh,
+        indexingContacts = indexingContacts,
         fileSearchEnabled = config.search.files,
         filesGranted = Environment.isExternalStorageManager(),
         hasFiles = files.isNotEmpty(),
@@ -777,7 +778,6 @@ class MainActivity : AppCompatActivity() {
             runCatching { contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI,
                 true, contactObserver); contactObserverRegistered = true }
         }
-        lastContactRefresh = SystemClock.elapsedRealtime()
         if (contactWorker.isShutdown) return
         indexingContacts = true
         contactLoadFailed = false
@@ -791,6 +791,7 @@ class MainActivity : AppCompatActivity() {
                 indexingContacts = false
                 result.onSuccess {
                     contacts = it
+                    lastContactRefresh = SystemClock.elapsedRealtime()
                     contactLoadFailed = false
                     if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                     if (it.isEmpty() && !contactWarningShown) {
