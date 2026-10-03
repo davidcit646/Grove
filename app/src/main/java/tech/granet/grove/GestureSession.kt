@@ -39,14 +39,14 @@ internal class GestureSession {
         blocked = home && widget
         interactive = home && interactiveTarget
         moved = false; captured = false; drawerCaptured = false; longPressed = false
-        return home && !interactive
+        return home && !interactive && !blocked
     }
 
     val downTime: Long get() = startedAt
     fun verticalDelta(y: Float): Float = y - startY
 
     fun longPress(): Boolean {
-        if (!home || interactive) return false
+        if (!home || interactive || blocked) return false
         longPressed = true
         home = false
         return true
@@ -96,6 +96,7 @@ internal class GestureSession {
             drawer = false; drawerCaptured = false
             if (close) return Release(consume = true, closeDrawer = true)
             if (swallow) return Release(consume = true, settle = true)
+            return Release(settle = true)
         }
         if (longPressed) {
             longPressed = false; home = false
