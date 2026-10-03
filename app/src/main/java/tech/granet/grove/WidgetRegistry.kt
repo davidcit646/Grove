@@ -39,7 +39,9 @@ internal class WidgetRegistry(
     fun finish(): Boolean {
         val id = pending
         if (id == -1) return false
-        if (manager.getAppWidgetInfo(id) == null) {
+        val info = runCatching { manager.getAppWidgetInfo(id) }
+            .onFailure { Log.w("Grove", "Widget provider lookup failed for $id", it) }.getOrNull()
+        if (info == null) {
             cancel()
             return false
         }
