@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var searchGeneration = 0
     private var pendingSearch: Runnable? = null
     private var contacts = emptyList<ContactIndex.Contact>()
+    private var contactSearch = SearchResults.prepare(contacts) { it.searchName }
     private var contactObserverRegistered = false
     private var contactWarningShown = false
     private var lastContactRefresh = 0L
@@ -101,11 +102,13 @@ class MainActivity : AppCompatActivity() {
     private var config = Config()
     private var firstRunSetup: FirstRunSetup? = null
     private var apps = emptyList<App>()
+    private var appSearch = SearchResults.prepare(apps) { it.searchName }
     private var widgetIds = mutableListOf<Int>()
     private var pendingWidget = -1
     private var drawer = false
     private var searchMode = false
     private var files = emptyList<IndexedFile>()
+    private var fileSearch = SearchResults.prepare(files) { it.searchName }
     private var indexingFiles = false
     private var fileLoadFailed = false
     private var fileScanSkipped = 0
@@ -319,6 +322,7 @@ class MainActivity : AppCompatActivity() {
         if (plan.clearFiles) {
             fileIndexGeneration++
             files = emptyList()
+            fileSearch = SearchResults.prepare(files) { it.searchName }
             indexingFiles = false
             fileLoadFailed = false
             fileScanSkipped = 0
@@ -572,9 +576,11 @@ class MainActivity : AppCompatActivity() {
             changedPackage, iconSize, reusable,
             current = { generation == loadGeneration && !isDestroyed },
             onCatalog = { loadedApps, fallbackIcon ->
+                val preparedApps = SearchResults.prepare(loadedApps) { it.searchName }
                 runOnUiThread {
                     if (isDestroyed || generation != loadGeneration) return@runOnUiThread
                     apps = loadedApps
+                    appSearch = preparedApps
                     drawerVisibleCount = if (loadedApps.all { reusable.containsKey(it.key) })
                         loadedApps.size else minOf(24, loadedApps.size)
                     iconCache.replace(loadedApps.associate { it.key to (reusable[it.key] ?: fallbackIcon) })
@@ -609,6 +615,7 @@ class MainActivity : AppCompatActivity() {
                     if (isDestroyed || generation != loadGeneration) return@runOnUiThread
                     loadingApps = false
                     apps = emptyList()
+                    appSearch = SearchResults.prepare(apps) { it.searchName }
                     iconCache.clear()
                     showCoreRecovery("Android could not provide the installed app list. Retry, or change your Home app in Android Settings.")
                 }
@@ -743,17 +750,22 @@ class MainActivity : AppCompatActivity() {
         if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         worker.execute {
             if (generation != fileIndexGeneration) return@execute
-            val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory(),
-                shouldContinue = { generation == fileIndexGeneration }) }
+            val result = runCatching {
+                val scan = FileIndex.scan(Environment.getExternalStorageDirectory(),
+                    shouldContinue = { generation == fileIndexGeneration })
+                scan to SearchResults.prepare(scan.files) { it.searchName }
+            }
             runOnUiThread(Runnable {
                 if (generation != fileIndexGeneration || isDestroyed) return@Runnable
                 indexingFiles = false
                 result.onSuccess {
-                    files = it.files
-                    fileScanSkipped = it.skippedDirectories
+                    files = it.first.files
+                    fileSearch = it.second
+                    fileScanSkipped = it.first.skippedDirectories
                     fileLoadFailed = false
                 }.onFailure {
                     files = emptyList()
+                    fileSearch = SearchResults.prepare(files) { it.searchName }
                     fileScanSkipped = 0
                     fileLoadFailed = true
                     Log.w("Grove", "Could not index shared storage", it)
@@ -770,6 +782,7 @@ class MainActivity : AppCompatActivity() {
         if (!config.search.contacts || !hasContactAccess()) {
             contactGeneration++
             contacts = emptyList()
+            contactSearch = SearchResults.prepare(contacts) { it.searchName }
             indexingContacts = false
             contactLoadFailed = false
             if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
@@ -786,16 +799,20 @@ class MainActivity : AppCompatActivity() {
         val generation = ++contactGeneration
         contactWorker.execute {
             if (generation != contactGeneration) return@execute
-            val result = runCatching { ContactIndex.load(contentResolver) { generation == contactGeneration } }
+            val result = runCatching {
+                val loaded = ContactIndex.load(contentResolver) { generation == contactGeneration }
+                loaded to SearchResults.prepare(loaded) { it.searchName }
+            }
             runOnUiThread {
                 if (isDestroyed || generation != contactGeneration || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
                 indexingContacts = false
                 result.onSuccess {
-                    contacts = it
+                    contacts = it.first
+                    contactSearch = it.second
                     lastContactRefresh = SystemClock.elapsedRealtime()
                     contactLoadFailed = false
                     if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-                    if (it.isEmpty() && !contactWarningShown) {
+                    if (it.first.isEmpty() && !contactWarningShown) {
                         contactWarningShown = true
                         infoDialog("No device contacts found",
                             "Grove can search contacts available through Android. If your contacts are kept only inside another app, enable its device contact sync.")
@@ -803,6 +820,7 @@ class MainActivity : AppCompatActivity() {
                 }
                     .onFailure {
                         contacts = emptyList()
+                        contactSearch = SearchResults.prepare(contacts) { it.searchName }
                         contactLoadFailed = true
                         if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                         Log.w("Grove", "Contacts provider unavailable", it)
@@ -849,6 +867,7 @@ class MainActivity : AppCompatActivity() {
         if (!config.search.contacts) {
             contactGeneration++
             contacts = emptyList()
+            contactSearch = SearchResults.prepare(contacts) { it.searchName }
             indexingContacts = false
             contactLoadFailed = false
             searchHandler.removeCallbacks(delayedContactRefresh)
@@ -862,6 +881,7 @@ class MainActivity : AppCompatActivity() {
         if (!config.search.files) {
             fileIndexGeneration++
             files = emptyList()
+            fileSearch = SearchResults.prepare(files) { it.searchName }
             indexingFiles = false
             fileLoadFailed = false
             fileScanSkipped = 0
@@ -911,19 +931,19 @@ class MainActivity : AppCompatActivity() {
             displaySearch(target, query, emptyList(), emptyList(), emptyList())
             return
         }
-        val appSnapshot = apps
-        val contactSnapshot = if (config.search.contacts) contacts else emptyList()
-        val fileSnapshot = if (config.search.files) files else emptyList()
+        val appSnapshot = appSearch
+        val contactSnapshot = contactSearch
+        val fileSnapshot = fileSearch
         target.removeAllViews()
         val task = Runnable {
             if (searchWorker.isShutdown) return@Runnable
             searchWorker.execute {
                 if (generation != searchGeneration) return@execute
-                val matchingApps = SearchResults.matching(appSnapshot, prepared, 12) { it.searchName }
+                val matchingApps = SearchResults.matching(appSnapshot, prepared, 12)
                 if (generation != searchGeneration) return@execute
-                val matchingContacts = SearchResults.matching(contactSnapshot, prepared, 12) { it.searchName }
+                val matchingContacts = SearchResults.matching(contactSnapshot, prepared, 12)
                 if (generation != searchGeneration) return@execute
-                val matchingFiles = SearchResults.matching(fileSnapshot, prepared, 12) { it.searchName }
+                val matchingFiles = SearchResults.matching(fileSnapshot, prepared, 12)
                 runOnUiThread {
                     if (generation != searchGeneration || !searchMode || searchResults !== target) return@runOnUiThread
                     pendingSearch = null
