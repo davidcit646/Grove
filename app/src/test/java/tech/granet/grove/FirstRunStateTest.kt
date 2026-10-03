@@ -34,7 +34,7 @@ class FirstRunStateTest {
 
     @Test fun pinLimitAndGrantedSourcesPreservedOnReplay() {
         val apps = (1..13).map { "app$it/.Main" }
-        val state = FirstRunState(Config(), apps)
+        val state = FirstRunState(Config(search = SearchSettings(contacts = true, files = true)), apps)
         apps.take(12).forEach { assertTrue(state.togglePin(it, true)) }
         assertFalse(state.togglePin(apps.last(), true))
         while (state.page < 7) state.next(true, true)
