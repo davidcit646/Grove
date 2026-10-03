@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("grove", MODE_PRIVATE) }
     private val configStore by lazy { ConfigStore(prefs) }
     private val launcher by lazy { getSystemService(LauncherApps::class.java) }
+    private val appCatalog by lazy { AppCatalog(launcher, packageManager, packageName, worker) }
     private var launcherCallbackRegistered = false
     private var coreRecoveryVisible = false
     // Widget RemoteViews must inflate with a plain framework context. An
@@ -144,10 +145,6 @@ class MainActivity : AppCompatActivity() {
             cancelChildTouch()
             settings()
         }
-    }
-    private data class App(val component: ComponentName, val label: String) {
-        val key = component.flattenToString()
-        val searchName = Search.normalize(label.take(512))
     }
 
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -562,16 +559,13 @@ class MainActivity : AppCompatActivity() {
         val generation = ++loadGeneration
         val iconSize = dp(48)
         AppIconStore.useSize(iconSize)
-        val reusable = iconCache.filterKeys { ComponentName.unflattenFromString(it)?.packageName != changedPackage }
-        worker.execute {
-            runCatching {
-                val loadedApps = launcher.getActivityList(null, android.os.Process.myUserHandle())
-                    .filter { it.componentName.packageName != packageName }
-                    .map { App(it.componentName, it.label.toString().take(512)) }
-                    .sortedBy { it.searchName }
-                val fallbackIcon = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
-                    packageManager.defaultActivityIcon.apply { setBounds(0, 0, iconSize, iconSize); draw(Canvas(bitmap)) }
-                }
+        val reusable = iconCache.filterKeys {
+            ComponentName.unflattenFromString(it)?.packageName != changedPackage
+        }
+        appCatalog.load(
+            changedPackage, iconSize, reusable,
+            current = { generation == loadGeneration && !isDestroyed },
+            onCatalog = { loadedApps, fallbackIcon ->
                 runOnUiThread {
                     if (isDestroyed || generation != loadGeneration) return@runOnUiThread
                     apps = loadedApps
@@ -594,40 +588,27 @@ class MainActivity : AppCompatActivity() {
                     if (prefs.getBoolean("setup_pending", false) && firstRunSetup == null &&
                         configStore.brokenCustomConfig == null) root.post { if (!isDestroyed) startFirstRunSetup() }
                 }
-                val batch = HashMap<String, Bitmap>(16)
-                loadedApps.forEach { app ->
-                    if (generation != loadGeneration) return@runCatching
-                    val cached = reusable[app.key]
-                    if (cached != null) return@forEach
-                    runCatching {
-                        val drawable = packageManager.getActivityIcon(app.component)
-                        Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
-                            drawable.setBounds(0, 0, iconSize, iconSize)
-                            drawable.draw(Canvas(bitmap))
-                        }
-                    }.getOrDefault(fallbackIcon).let { batch[app.key] = it }
-                    if (batch.size >= 16) {
-                        publishIcons(generation, HashMap(batch))
-                        batch.clear()
-                    }
-                }
-                if (batch.isNotEmpty()) publishIcons(generation, HashMap(batch))
+            },
+            onIcons = { batch -> publishIcons(generation, batch) },
+            onComplete = {
                 runOnUiThread {
                     if (isDestroyed || generation != loadGeneration) return@runOnUiThread
                     loadingApps = false
-                    drawerVisibleCount = loadedApps.size
+                    drawerVisibleCount = apps.size
                     if (drawer && searchField?.text.isNullOrEmpty()) renderApps("")
                 }
-            }.onFailure {
-                Log.w("Grove", "Unable to load apps", it)
-                runOnUiThread { if (!isDestroyed && generation == loadGeneration) {
+            },
+            onFailure = { error ->
+                Log.w("Grove", "Unable to load apps", error)
+                runOnUiThread {
+                    if (isDestroyed || generation != loadGeneration) return@runOnUiThread
                     loadingApps = false
                     apps = emptyList()
                     iconCache.clear()
                     showCoreRecovery("Android could not provide the installed app list. Retry, or change your Home app in Android Settings.")
-                } }
-            }
-        }
+                }
+            },
+        )
     }
 
     private fun publishIcons(generation: Int, batch: Map<String, Bitmap>) {
