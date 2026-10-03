@@ -42,6 +42,9 @@ internal class GestureSession {
         return home && !interactive
     }
 
+    val downTime: Long get() = startedAt
+    fun verticalDelta(y: Float): Float = y - startY
+
     fun longPress(): Boolean {
         if (!home || interactive) return false
         longPressed = true
