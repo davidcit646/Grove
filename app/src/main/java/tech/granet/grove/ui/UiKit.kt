@@ -35,14 +35,14 @@ fun Context.dp(n: Int): Int = (n * resources.displayMetrics.density).toInt()
 fun Context.message(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
 
 /**
- * Standard label: white text with comfortable vertical padding.
+ * Standard label: theme text with comfortable vertical padding.
  * [horizontalPaddingDp] is 0 in lists and 12 inside padded cards.
  */
 fun Context.label(text: String, size: Float = 16f, horizontalPaddingDp: Int = 0): TextView =
     TextView(this).apply {
         this.text = text
         textSize = size
-        setTextColor(Color.WHITE)
+        setTextColor(ThemeColors.icon(this@label))
         val h = dp(horizontalPaddingDp)
         setPadding(h, dp(8), h, dp(8))
     }
@@ -81,7 +81,7 @@ fun Context.iconRow(
     subtitle: String? = null,
     bitmap: Bitmap? = null,
     iconTag: Any? = null,
-    titleColor: Int? = Color.WHITE,
+    titleColor: Int? = null,
     titleSp: Float = 17f,
     subtitleSp: Float = 12f,
     minHeightDp: Int = 56,
