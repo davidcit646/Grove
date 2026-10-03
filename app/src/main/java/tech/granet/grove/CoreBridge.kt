@@ -17,16 +17,19 @@ internal object CoreBridge {
     private external fun configErrorNative(json: String): String
 
     /** Winning label indices in final order: score descending, index ascending. */
-    fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray {
+    fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray =
+        searchOrder(labels.toTypedArray(), query, limit)
+
+    fun searchOrder(labels: Array<String>, query: Search.Query, limit: Int): IntArray {
         if (labels.isEmpty() || limit <= 0) return IntArray(0)
         if (loaded) runCatching {
-            searchNative(labels.toTypedArray(), query.text, limit)
+            searchNative(labels, query.text, limit)
                 .also { order -> require(order.all { it in labels.indices }) }
         }.getOrNull()?.let { return it }
         return fallbackOrder(labels, query, limit)
     }
 
-    private fun fallbackOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray {
+    private fun fallbackOrder(labels: Array<String>, query: Search.Query, limit: Int): IntArray {
         val scores = labels.map { Search.scoreNormalized(it, query) }
         // Keep only the best few rows instead of sorting the entire file
         // index every time the user types a character.
