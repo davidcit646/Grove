@@ -124,8 +124,9 @@ object CrashReporter {
             putExtra(Intent.EXTRA_TEXT, body)
         }
         try {
+            // An email chooser only confirms that an app opened, not that mail was sent.
+            // Keep reports until the user explicitly deletes them in Grove settings.
             activity.startActivity(Intent.createChooser(intent, "Send problem report"))
-            deleteAll(activity)
         } catch (_: Exception) {
             activity.message("No email app found to send the report")
         }
