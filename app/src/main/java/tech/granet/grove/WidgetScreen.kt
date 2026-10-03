@@ -29,7 +29,8 @@ internal class WidgetScreen(
 
     fun render(body: LinearLayout) {
         ids.toList().forEach { id ->
-            val info = manager.getAppWidgetInfo(id)
+            val info = runCatching { manager.getAppWidgetInfo(id) }
+                .onFailure { Log.w("Grove", "Widget provider lookup failed for $id", it) }.getOrNull()
             if (info == null) {
                 Log.w("Grove", "Widget $id no longer has provider info")
                 body.addView(activity.label("This widget is unavailable. Long-press to remove it.", 14f, 12).apply {
