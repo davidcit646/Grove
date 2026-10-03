@@ -1267,7 +1267,7 @@ class MainActivity : AppCompatActivity() {
         bindTile(tile, app)
         tile.icon.alpha = if (drawerState.selecting) 0.35f else 1f
         tile.badge.visibility = if (drawerState.selecting) View.VISIBLE else View.GONE
-        tile.badge.setImageResource(if (app.key in drawerState.keys) R.drawable.ic_remove else R.drawable.ic_add)
+        tile.badge.setImageResource(if (drawerState.isSelected(app.key)) R.drawable.ic_remove else R.drawable.ic_add)
         tile.layout.setOnClickListener {
             if (drawerState.selecting) {
                 drawerState.toggle(app.key)
