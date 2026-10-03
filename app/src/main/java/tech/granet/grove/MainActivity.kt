@@ -91,8 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var drawerEmpty: TextView? = null
     private var drawerGrid: GridView? = null
     private var drawerVisibleCount = 0
-    private val selectedApps = linkedSetOf<String>()
-    private var selectingApps = false
+    private val drawerState = DrawerState()
     private data class DrawerDrag(val key: String)
     private val uninstallBatch = UninstallBatch()
     private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -217,7 +216,7 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (firstRunSetup != null) firstRunSetup?.back()
-                else if (drawer && selectingApps) { clearAppSelection(); refreshDrawer() }
+                else if (drawer && drawerState.selecting) { clearAppSelection(); refreshDrawer() }
                 else if (drawer || searchMode) animateDrawerClosed()
                 // Back at Home has no navigation destination. Recreating the
                 // view here would unexpectedly jump a scrolled layout to top.
@@ -289,8 +288,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() { super.onStart(); host.startListening() }
     private fun clearAppSelection() {
-        selectingApps = false
-        selectedApps.clear()
+        drawerState.clear()
     }
     override fun onResume() {
         super.onResume()
@@ -1267,18 +1265,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindDrawerApp(tile: Tile, app: App) {
         bindTile(tile, app)
-        tile.icon.alpha = if (selectingApps) 0.35f else 1f
-        tile.badge.visibility = if (selectingApps) View.VISIBLE else View.GONE
-        tile.badge.setImageResource(if (app.key in selectedApps) R.drawable.ic_remove else R.drawable.ic_add)
+        tile.icon.alpha = if (drawerState.selecting) 0.35f else 1f
+        tile.badge.visibility = if (drawerState.selecting) View.VISIBLE else View.GONE
+        tile.badge.setImageResource(if (app.key in drawerState.keys) R.drawable.ic_remove else R.drawable.ic_add)
         tile.layout.setOnClickListener {
-            if (selectingApps) {
-                if (!selectedApps.add(app.key)) selectedApps.remove(app.key)
+            if (drawerState.selecting) {
+                drawerState.toggle(app.key)
                 drawerAdapter?.notifyDataSetChanged()
             } else runCatching { launcher.startMainActivity(app.component, Process.myUserHandle(), null, null) }
                 .onFailure { message("This app is unavailable"); loadApps() }
         }
-        if (selectingApps) tile.layout.setOnLongClickListener {
-            selectedApps.add(app.key); drawerAdapter?.notifyDataSetChanged(); true
+        if (drawerState.selecting) tile.layout.setOnLongClickListener {
+            drawerState.select(app.key); drawerAdapter?.notifyDataSetChanged(); true
         } else configureDrawerDrag(tile.layout, app)
         tile.layout.setOnDragListener { view, event ->
             if (event.localState !is DrawerDrag) false else {
@@ -1327,7 +1325,7 @@ class MainActivity : AppCompatActivity() {
             Triple("Rename folder", R.drawable.ic_edit) { promptRenameFolder(name) },
             Triple("Delete folder", R.drawable.ic_delete) {
                 confirmDialog("Delete $name?", "Apps in this folder will return to All apps.", "Delete") {
-                        config = config.copy(folders = config.folders.filterNot { it.name == name }); save(); refreshDrawer()
+                        DrawerState.deleteFolder(config, name)?.let { config = it; save(); refreshDrawer() }
                     }
             },
         ))
@@ -1362,16 +1360,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun removeFromFolders(keys: Set<String>) {
-        config = config.copy(folders = config.folders.map { it.copy(apps = it.apps.filterNot(keys::contains)) })
+        config = DrawerState.removeFromFolders(config, keys)
         save()
     }
 
     private fun moveAppsToFolder(keys: Set<String>, name: String) {
-        config = config.copy(folders = config.folders.map { folder ->
-            if (folder.name == name) folder.copy(apps = (folder.apps + keys).distinct())
-            else folder.copy(apps = folder.apps.filterNot(keys::contains))
-        })
-        selectedApps.clear(); save(); refreshDrawer()
+        val next = DrawerState.moveToFolder(config, keys, name) ?: return
+        config = next
+        drawerState.clearKeys(); save(); refreshDrawer()
     }
 
     private fun promptFolderName(keys: List<String> = emptyList()) {
@@ -1380,12 +1376,13 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null).setPositiveButton("Create", null).create()
         dialog.setOnShowListener {
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val name = input.text.toString().trim()
-                if (name.isEmpty() || name.length > 40) { input.error = "Enter a name up to 40 characters"; return@setOnClickListener }
-                if (config.folders.any { it.name.equals(name, true) }) { input.error = "Folder already exists"; return@setOnClickListener }
-                val members = keys.distinct()
-                config = config.copy(folders = config.folders.map { it.copy(apps = it.apps.filterNot(members::contains)) } + AppFolder(name, members))
-                selectedApps.clear(); save(); refreshDrawer(); dialog.dismiss()
+                val next = DrawerState.createFolder(config, input.text.toString(), keys)
+                if (next == null) {
+                    input.error = "Choose a unique folder name up to 40 characters"
+                    return@setOnClickListener
+                }
+                config = next
+                drawerState.clearKeys(); save(); refreshDrawer(); dialog.dismiss()
             }
         }
         dialog.show()
@@ -1395,20 +1392,17 @@ class MainActivity : AppCompatActivity() {
         val input = EditText(this).apply { setText(name); isSingleLine = true; setPadding(dp(24), dp(16), dp(24), dp(16)) }
         MaterialAlertDialogBuilder(this).setTitle("Rename folder").setView(input)
             .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
-                val next = input.text.toString().trim()
-                if (next.length in 1..40 && config.folders.none { it.name.equals(next, true) && it.name != name }) {
-                    config = config.copy(folders = config.folders.map { if (it.name == name) it.copy(name = next) else it })
-                    save(); refreshDrawer()
-                } else message("Choose a unique folder name up to 40 characters")
+                val next = DrawerState.renameFolder(config, name, input.text.toString())
+                if (next == null) message("Choose a unique folder name up to 40 characters")
+                else { config = next; save(); refreshDrawer() }
             }.show()
     }
 
     private fun drawerOptions() {
-        val keys = selectedApps.toSet()
+        val keys = drawerState.keys
         val actions = buildList {
-            add(Triple(if (selectingApps) "Done selecting" else "Select apps", R.drawable.ic_grid) {
-                selectingApps = !selectingApps
-                if (!selectingApps) selectedApps.clear()
+            add(Triple(if (drawerState.selecting) "Done selecting" else "Select apps", R.drawable.ic_grid) {
+                drawerState.toggleMode()
                 refreshDrawer()
             })
             add(Triple("Create folder", R.drawable.ic_folder) { promptFolderName() })
@@ -1416,8 +1410,8 @@ class MainActivity : AppCompatActivity() {
                 add(Triple("Add to new folder", R.drawable.ic_folder) { promptFolderName(keys.toList()) })
                 if (config.folders.isNotEmpty()) add(Triple("Move to folder", R.drawable.ic_folder) { chooseFolder(keys) })
                 add(Triple("Pin to home screen", R.drawable.ic_home) {
-                    config = config.copy(favorites = (config.favorites + keys).distinct()); save()
-                    selectedApps.clear(); refreshDrawer(); message("Apps pinned to Home")
+                    DrawerState.pin(config, keys)?.let { config = it; save() }
+                    drawerState.clearKeys(); refreshDrawer(); message("Apps pinned to Home")
                 })
                 add(Triple("Uninstall apps", R.drawable.ic_delete) { uninstallSelected(keys) })
             }
@@ -1435,7 +1429,7 @@ class MainActivity : AppCompatActivity() {
         confirmDialog("Uninstall ${packages.size} app${if (packages.size == 1) "" else "s"}?",
             "Android will ask you to confirm each uninstall.", "Continue") {
                 launchNextUninstall(uninstallBatch.start(packages))
-                selectedApps.clear(); refreshDrawer()
+                drawerState.clearKeys(); refreshDrawer()
             }
     }
 
@@ -1597,8 +1591,7 @@ class MainActivity : AppCompatActivity() {
                         target.animate().scaleX(1f).scaleY(1f).setDuration(100L).start()
                     }
                     DragEvent.ACTION_DROP -> {
-                        config = config.copy(favorites = PinnedApps.moveTo(config.favorites, drag.key, app.key))
-                        save()
+                        DrawerState.movePin(config, drag.key, app.key)?.let { config = it; save() }
                     }
                 }
                 true
