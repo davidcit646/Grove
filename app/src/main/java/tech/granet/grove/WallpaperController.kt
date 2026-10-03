@@ -56,6 +56,20 @@ internal class WallpaperController(
             ?: WallpaperArt.create(0)
     } else WallpaperArt.create(index)
 
+    /** Decode and crop on the worker. The caller owns the returned bitmap. */
+    fun background(index: Int, width: Int, height: Int, done: (Bitmap?) -> Unit) {
+        worker.execute {
+            val prepared = runCatching {
+                val source = artwork(index)
+                try { centerCrop(source, width, height).also { if (it !== source) source.recycle() } }
+                catch (error: Throwable) { source.recycle(); throw error }
+            }.onFailure { Log.w("Grove", "Wallpaper background unavailable", it) }.getOrNull()
+            activity.runOnUiThread {
+                if (activity.isDestroyed) prepared?.recycle() else done(prepared)
+            }
+        }
+    }
+
     fun download(index: Int, done: (Boolean) -> Unit) {
         val wallpaper = WallpaperArt.commons[index - 3]
         val target = WallpaperArt.cachedFile(activity.filesDir, index)
