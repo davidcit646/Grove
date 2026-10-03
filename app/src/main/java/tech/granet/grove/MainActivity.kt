@@ -308,6 +308,7 @@ class MainActivity : AppCompatActivity() {
         contactsGranted = hasContactAccess(),
         lastContactRefreshMs = lastContactRefresh,
         indexingContacts = indexingContacts,
+        contactLoadFailed = contactLoadFailed,
         fileSearchEnabled = config.search.files,
         filesGranted = Environment.isExternalStorageManager(),
         hasFiles = files.isNotEmpty(),
