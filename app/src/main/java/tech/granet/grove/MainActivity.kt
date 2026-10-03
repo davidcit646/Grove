@@ -134,6 +134,7 @@ class MainActivity : AppCompatActivity() {
     private var backdropWidth = 0
     private var backdropHeight = 0
     private var wallpaperButtonColors: Pair<Int, Int>? = null
+    private var pendingWallpaper: Triple<Int, Int, Int>? = null
     private var gestureStartX = 0f
     private var gestureStartY = 0f
     private var gestureStartTime = 0L
@@ -652,7 +653,7 @@ class MainActivity : AppCompatActivity() {
     }
     private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
         this.text = text
-        val colors = if (config.homeScreen.useWallpaperButtonColors) {
+        val colors = if (config.homeScreen.useWallpaperButtonColors && artworkStyle == config.wallpaper && artwork != null) {
             wallpaperButtonColors ?: ThemeColors.wallpaperButtonColors(artwork!!).also { wallpaperButtonColors = it }
         } else ThemeColors.buttonSurface(this@MainActivity) to ThemeColors.onButtonSurface(this@MainActivity)
         backgroundTintList = ColorStateList.valueOf(colors.first)
@@ -678,20 +679,44 @@ class MainActivity : AppCompatActivity() {
         searchField = null; searchResults = null; drawerAdapter = null; drawerEmpty = null; drawerGrid = null
         root.animate().cancel(); root.translationY = 0f; root.alpha = 1f
         root.removeAllViews()
-        if (artworkStyle != config.wallpaper) {
-            artwork = wallpaperController.artwork(config.wallpaper)
-            artworkStyle = config.wallpaper
-            backdrop = null
-            wallpaperButtonColors = null
-        }
         val width = surface.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
         val height = surface.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-        if (backdrop == null || width != backdropWidth || height != backdropHeight) {
-            backdrop = WallpaperController.centerCrop(artwork!!, width, height)
-            backdropWidth = width; backdropHeight = height
-        }
+        val key = Triple(config.wallpaper, width, height)
+        if (artworkStyle != key.first || backdropWidth != width || backdropHeight != height || backdrop == null) {
+            if (pendingWallpaper != key) {
+                pendingWallpaper = key
+                wallpaperController.background(key.first, width, height) { prepared ->
+                    if (pendingWallpaper != key || config.wallpaper != key.first) {
+                        prepared?.recycle()
+                    } else {
+                        pendingWallpaper = null
+                        if (prepared == null) {
+                            message("Home wallpaper unavailable")
+                        } else {
+                            val previous = artwork
+                            artwork = prepared
+                            backdrop = prepared
+                            artworkStyle = key.first
+                            backdropWidth = width
+                            backdropHeight = height
+                            wallpaperButtonColors = null
+                            showWallpaperBackground(prepared)
+                            if (previous !== prepared) previous?.recycle()
+                            if (!drawer && !searchMode) showHome()
+                        }
+                    }
+                }
+            }
+            surface.background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xff416e60.toInt(), 0xff142f30.toInt()),
+            )
+        } else showWallpaperBackground(backdrop!!)
+    }
+
+    private fun showWallpaperBackground(image: Bitmap) {
         surface.background = LayerDrawable(arrayOf(
-            BitmapDrawable(resources, backdrop!!).apply { gravity = Gravity.FILL },
+            BitmapDrawable(resources, image).apply { gravity = Gravity.FILL },
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x66000000, 0xaa000000.toInt()))
         ))
     }
@@ -1826,6 +1851,7 @@ class MainActivity : AppCompatActivity() {
                 if (applied && which and WallpaperManager.FLAG_SYSTEM != 0) {
                     config = config.copy(wallpaper = index)
                     save()
+                    pendingWallpaper = null
                     artworkStyle = -1
                     showHome()
                 }
