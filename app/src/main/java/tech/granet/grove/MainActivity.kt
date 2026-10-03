@@ -1822,10 +1822,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun wallpapers() {
         WallpaperPicker(this, wallpaperController, config.wallpaper) { index, which ->
-            if (which and WallpaperManager.FLAG_SYSTEM != 0) {
-                config = config.copy(wallpaper = index); save(); artworkStyle = -1; showHome()
+            wallpaperController.apply(index, which) { applied ->
+                if (applied && which and WallpaperManager.FLAG_SYSTEM != 0) {
+                    config = config.copy(wallpaper = index)
+                    save()
+                    artworkStyle = -1
+                    showHome()
+                }
             }
-            wallpaperController.apply(index, which)
         }.show()
     }
 
