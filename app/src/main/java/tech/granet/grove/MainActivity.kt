@@ -586,9 +586,9 @@ class MainActivity : AppCompatActivity() {
     }
     private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
         this.text = text
-        val colors = if (config.homeScreen.useWallpaperButtonColors && artworkStyle == config.wallpaper && artwork != null) {
-            wallpaperButtonColors ?: ThemeColors.wallpaperButtonColors(artwork!!).also { wallpaperButtonColors = it }
-        } else ThemeColors.buttonSurface(this@MainActivity) to ThemeColors.onButtonSurface(this@MainActivity)
+        val colors = if (config.homeScreen.useWallpaperButtonColors && artworkStyle == config.wallpaper)
+            wallpaperButtonColors ?: (ThemeColors.buttonSurface(this) to ThemeColors.onButtonSurface(this))
+        else ThemeColors.buttonSurface(this) to ThemeColors.onButtonSurface(this)
         backgroundTintList = ColorStateList.valueOf(colors.first)
         setTextColor(colors.second)
         val iconId = when (text) {
@@ -618,7 +618,7 @@ class MainActivity : AppCompatActivity() {
         if (artworkStyle != key.first || backdropWidth != width || backdropHeight != height || backdrop == null) {
             if (pendingWallpaper != key) {
                 pendingWallpaper = key
-                wallpaperController.background(key.first, width, height) { prepared ->
+                wallpaperController.background(key.first, width, height) { prepared, colors ->
                     if (pendingWallpaper != key || config.wallpaper != key.first) {
                         prepared?.recycle()
                     } else {
@@ -632,7 +632,7 @@ class MainActivity : AppCompatActivity() {
                             artworkStyle = key.first
                             backdropWidth = width
                             backdropHeight = height
-                            wallpaperButtonColors = null
+                            wallpaperButtonColors = colors
                             showWallpaperBackground(prepared)
                             if (previous !== prepared) previous?.recycle()
                             if (!drawer && !searchMode) showHome()
