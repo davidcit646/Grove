@@ -1719,7 +1719,14 @@ class MainActivity : AppCompatActivity() {
 
     // Widget lifecycle: allocate -> bind consent -> optional configuration -> persist.
     private fun pickWidget() {
-        if (widgets.pending != -1) { message("Finish adding the current widget first"); return }
+        if (widgets.pending != -1) {
+            MaterialAlertDialogBuilder(this).setTitle("Widget setup interrupted")
+                .setMessage("Retry saving the pending widget or remove it before adding another.")
+                .setPositiveButton("Retry") { _, _ -> configureWidget() }
+                .setNegativeButton("Remove") { _, _ -> cancelWidget() }
+                .show()
+            return
+        }
         if (!prefs.getBoolean("widget_tutorial_seen", false)) {
             MaterialAlertDialogBuilder(this)
                 .setTitle("Widget controls")
