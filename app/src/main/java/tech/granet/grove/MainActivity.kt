@@ -1765,7 +1765,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureWidget() {
         val id = widgets.pending
-        val info = manager.getAppWidgetInfo(id) ?: run {
+        val info = runCatching { manager.getAppWidgetInfo(id) }
+            .onFailure { Log.w("Grove", "Widget provider lookup failed for $id", it) }.getOrNull() ?: run {
             Log.w("Grove", "No widget provider info for id $id")
             cancelWidget(); message("Couldn't add this widget"); return
         }
