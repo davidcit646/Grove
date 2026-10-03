@@ -330,7 +330,7 @@ internal class FirstRunSetup(
                             gravity = Gravity.CENTER_VERTICAL
                             setPadding(context.dp(8), context.dp(3), context.dp(8), context.dp(3))
                         }
-                        AppIconStore.icons[key]?.let { bitmap ->
+                        AppIconStore[key]?.let { bitmap ->
                             row.addView(ImageView(context).apply { setImageBitmap(bitmap) },
                                 LinearLayout.LayoutParams(context.dp(36), context.dp(36)))
                         }

@@ -83,7 +83,7 @@ class MainActivity : AppCompatActivity() {
     private val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
     // Every installed app icon is decoded during app discovery and retained for the
     // lifetime of the launcher process. Drawer rendering never decodes icons.
-    private val iconCache get() = AppIconStore.icons
+    private val iconCache get() = AppIconStore
     private var drawerAdapter: AppAdapter? = null
     private var drawerEmpty: TextView? = null
     private var drawerGrid: GridView? = null
@@ -559,9 +559,7 @@ class MainActivity : AppCompatActivity() {
         val generation = ++loadGeneration
         val iconSize = dp(48)
         AppIconStore.useSize(iconSize)
-        val reusable = iconCache.filterKeys {
-            ComponentName.unflattenFromString(it)?.packageName != changedPackage
-        }
+        val reusable = iconCache.snapshotExcluding(changedPackage)
         appCatalog.load(
             changedPackage, iconSize, reusable,
             current = { generation == loadGeneration && !isDestroyed },
@@ -571,8 +569,7 @@ class MainActivity : AppCompatActivity() {
                     apps = loadedApps
                     drawerVisibleCount = if (loadedApps.all { reusable.containsKey(it.key) })
                         loadedApps.size else minOf(24, loadedApps.size)
-                    iconCache.clear()
-                    loadedApps.forEach { iconCache[it.key] = reusable[it.key] ?: fallbackIcon }
+                    iconCache.replace(loadedApps.associate { it.key to (reusable[it.key] ?: fallbackIcon) })
                     if (!prefs.contains("initialized")) {
                         if (!prefs.getBoolean("setup_pending", false) && config.favorites.isEmpty())
                             config = config.copy(favorites = apps.take(8).map { it.key })
