@@ -2,7 +2,9 @@ package tech.granet.grove
 
 import android.webkit.MimeTypeMap
 import java.io.File
+import java.nio.file.DirectoryStream
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.ArrayDeque
 import java.util.Locale
 
@@ -14,7 +16,8 @@ data class IndexedFile(val name: String, val mime: String, val file: File, val c
 object FileIndex {
     data class ScanResult(val files: List<IndexedFile>, val skippedDirectories: Int)
 
-    fun scan(root: File, limit: Int = 15_000, shouldContinue: () -> Boolean = { true }): ScanResult {
+    fun scan(root: File, limit: Int = 15_000, shouldContinue: () -> Boolean = { true },
+             openDirectory: (Path) -> DirectoryStream<Path> = Files::newDirectoryStream): ScanResult {
         data class Raw(val name: String, val ext: String, val file: File)
         val found = ArrayList<Raw>()
         val queue = ArrayDeque<File>()
@@ -34,7 +37,7 @@ object FileIndex {
             // Iterate lazily: a single directory may have far more entries than
             // the index limit, and listFiles() allocates the entire listing.
             runCatching {
-                Files.newDirectoryStream(parent.toPath()).use { entries ->
+                openDirectory(parent.toPath()).use { entries ->
                     for (entryPath in entries) {
                         if (!shouldContinue()) break
                         if (++scannedEntries > 100_000) break
