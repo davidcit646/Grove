@@ -359,6 +359,10 @@ class MainActivity : AppCompatActivity() {
         contactWorker.shutdownNow()
         if (contactObserverRegistered) contentResolver.unregisterContentObserver(contactObserver)
         worker.shutdownNow()
+        if (::surface.isInitialized) surface.background = null
+        artwork?.recycle()
+        artwork = null
+        backdrop = null
         super.onDestroy()
     }
     override fun onSaveInstanceState(outState: Bundle) {
