@@ -1634,12 +1634,19 @@ class MainActivity : AppCompatActivity() {
         firstRunSetup = FirstRunSetup(
             this, surface, config, apps.map { it.key to it.label },
             ::hasContactAccess, { Environment.isExternalStorageManager() },
+            { SearchSourceState.resolve(true, hasContactAccess(), indexingContacts,
+                contactLoadFailed, contacts.size) },
+            { SearchSourceState.resolve(true, Environment.isExternalStorageManager(), indexingFiles,
+                fileLoadFailed, files.size, fileScanSkipped) },
             ::explainContactAccess, ::explainFileAccess,
             { next ->
                 firstRunSetup = null
                 val previousSearch = config.search
+                if (runCatching { configStore.save(next) }.onFailure {
+                    Log.e("Grove", "Could not finish setup", it)
+                    message("Could not save setup; please retry")
+                }.isFailure) return@FirstRunSetup
                 config = next
-                save()
                 applySearchSettings(previousSearch)
                 prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
                 showHome()
