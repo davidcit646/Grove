@@ -6,6 +6,7 @@ internal class DrawerState {
     var selecting = false
         private set
     val keys: Set<String> get() = selected.toSet()
+    fun isSelected(key: String): Boolean = key in selected
 
     fun clear() { selecting = false; selected.clear() }
     fun clearKeys() { selected.clear() }
