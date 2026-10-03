@@ -36,7 +36,8 @@ internal class SearchScreen(private val context: Context) {
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>, contacts: List<ContactRow>, files: List<FileRow>,
                contactState: SearchSourceState, requestContactAccess: () -> Unit,
-               fileState: SearchSourceState, requestFileAccess: () -> Unit,
+               retryContacts: () -> Unit, fileState: SearchSourceState,
+               requestFileAccess: () -> Unit, retryFiles: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
         target.removeAllViews()
@@ -56,7 +57,8 @@ internal class SearchScreen(private val context: Context) {
             SearchSourceState.PermissionRequired -> target.addView(row("Allow contact search", R.drawable.ic_contact,
                 "Allow Grove to search your contacts", action = requestContactAccess))
             SearchSourceState.Loading -> target.addView(context.label("Loading contacts…", 14f))
-            SearchSourceState.Failed -> target.addView(context.label("Contact search unavailable. Retry from settings.", 14f))
+            SearchSourceState.Failed -> target.addView(row("Retry contact search", R.drawable.ic_contact,
+                "The contacts provider could not be read", action = retryContacts))
             else -> Unit
         }
         if (fileState !is SearchSourceState.Disabled &&
@@ -70,7 +72,8 @@ internal class SearchScreen(private val context: Context) {
             SearchSourceState.PermissionRequired -> target.addView(row("Allow device file search", R.drawable.ic_folder,
                 "Allow access to shared storage", action = requestFileAccess))
             SearchSourceState.Loading -> target.addView(context.label("Searching files…", 14f))
-            SearchSourceState.Failed -> target.addView(context.label("File search unavailable. Retry from settings.", 14f))
+            SearchSourceState.Failed -> target.addView(row("Retry file search", R.drawable.ic_folder,
+                "Shared storage could not be indexed", action = retryFiles))
             is SearchSourceState.Partial -> target.addView(context.label(
                 "Some folders could not be searched (${fileState.skippedDirectories} skipped).", 14f))
             else -> Unit
