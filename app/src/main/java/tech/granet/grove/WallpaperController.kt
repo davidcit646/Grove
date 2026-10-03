@@ -126,7 +126,7 @@ internal class WallpaperController(
         }
     }
 
-    fun apply(index: Int, which: Int) {
+    fun apply(index: Int, which: Int, done: (Boolean) -> Unit) {
         worker.execute {
             runCatching {
                 val source = if (index >= 3) decode(WallpaperArt.cachedFile(activity.filesDir, index))
@@ -135,10 +135,10 @@ internal class WallpaperController(
                     activity.resources.displayMetrics.heightPixels)
                 try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which) }
                 finally { bitmap.recycle(); if (source !== bitmap) source.recycle() }
-            }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) message("Wallpaper applied") } }
+            }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) { message("Wallpaper applied"); done(true) } } }
                 .onFailure {
                     Log.w("Grove", "Could not apply wallpaper", it)
-                    activity.runOnUiThread { if (!activity.isDestroyed) message("System wallpaper could not be changed") }
+                    activity.runOnUiThread { if (!activity.isDestroyed) { message("System wallpaper could not be changed"); done(false) } }
                 }
         }
     }
