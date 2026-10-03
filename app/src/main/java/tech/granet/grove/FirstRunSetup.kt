@@ -192,7 +192,7 @@ internal class FirstRunSetup(
         when (state.page) {
             0 -> {
                 heading(content, "Welcome", "Make Home yours.",
-                    "A calmer state.home screen, set up your way. This takes just a minute.")
+                    "A calmer home screen, set up your way. This takes just a minute.")
                 card(content, true) { box ->
                     box.minimumHeight = context.dp(270)
                     box.addView(icon(R.drawable.ic_grove, onAccent, 64))
@@ -366,8 +366,13 @@ internal class FirstRunSetup(
                     state.search = state.search.copy(contacts = true)
                     render()
                     if (!hasContacts()) requestContacts()
-                } else feature(content, R.drawable.ic_contact, "Contact search enabled",
-                    "Names are ready to appear in Grove Search.", true)
+                } else {
+                    val status = contactState()
+                    feature(content, R.drawable.ic_contact,
+                        if (status == SearchSourceState.Failed) "Contact source unavailable" else "Contact permission granted",
+                        if (status == SearchSourceState.Failed) "Grove could not read contacts. Retry from Search after setup."
+                        else "Grove will refresh contact results after setup.", true)
+                }
                 if (state.search.contacts) action(content, "Don't use contact search") {
                     state.search = state.search.copy(contacts = false); render()
                 }
@@ -387,8 +392,13 @@ internal class FirstRunSetup(
                     state.search = state.search.copy(files = true)
                     render()
                     if (!hasFiles()) requestFiles()
-                } else feature(content, R.drawable.ic_document, "File search enabled",
-                    "Local file names can appear in Grove Search.", true)
+                } else {
+                    val status = fileState()
+                    feature(content, R.drawable.ic_document,
+                        if (status == SearchSourceState.Failed) "File source unavailable" else "File access granted",
+                        if (status == SearchSourceState.Failed) "Grove could not index files. Retry from Search after setup."
+                        else "Grove will scan file names after setup.", true)
+                }
                 if (state.search.files) action(content, "Don't use file search") {
                     state.search = state.search.copy(files = false); render()
                 }
