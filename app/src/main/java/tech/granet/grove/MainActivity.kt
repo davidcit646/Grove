@@ -1639,13 +1639,13 @@ class MainActivity : AppCompatActivity() {
             { SearchSourceState.resolve(true, Environment.isExternalStorageManager(), indexingFiles,
                 fileLoadFailed, files.size, fileScanSkipped) },
             ::explainContactAccess, ::explainFileAccess,
-            { next ->
+            finishSetup@{ next ->
                 firstRunSetup = null
                 val previousSearch = config.search
                 if (runCatching { configStore.save(next) }.onFailure {
                     Log.e("Grove", "Could not finish setup", it)
                     message("Could not save setup; please retry")
-                }.isFailure) return@FirstRunSetup
+                }.isFailure) return@finishSetup
                 config = next
                 applySearchSettings(previousSearch)
                 prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
