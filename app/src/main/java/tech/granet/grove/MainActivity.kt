@@ -106,8 +106,7 @@ class MainActivity : AppCompatActivity() {
     private var firstRunSetup: FirstRunSetup? = null
     private var apps = emptyList<App>()
     private var appSearch = SearchResults.prepare(apps) { it.searchName }
-    private var widgetIds = mutableListOf<Int>()
-    private var pendingWidget = -1
+    private val widgets by lazy { WidgetRegistry(host, manager, prefs) }
     private var drawer = false
     private var searchMode = false
     private var files = emptyList<IndexedFile>()
@@ -162,7 +161,7 @@ class MainActivity : AppCompatActivity() {
     }
     private val configureResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) finishWidget() else {
-            Log.w("Grove", "Widget configuration returned ${result.resultCode} for id $pendingWidget")
+            Log.w("Grove", "Widget configuration returned ${result.resultCode} for id ${widgets.pending}")
             cancelWidget()
         }
     }
@@ -182,10 +181,7 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putBoolean(if (prefs.contains("initialized")) "setup_complete" else "setup_pending", true).apply()
         }
         config = configStore.load()
-        widgetIds = prefs.getStringSet("widgets", emptySet())!!.mapNotNull { it.toIntOrNull() }.sorted().toMutableList()
-        pendingWidget = savedInstanceState?.getInt("pending", -1) ?: prefs.getInt("pending", -1)
-        // Recover orphan allocation after process death with no pending activity result.
-        if (savedInstanceState == null && pendingWidget != -1) cancelWidget()
+        widgets.restore(savedInstanceState)
         window.setDecorFitsSystemWindows(false)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -286,7 +282,11 @@ class MainActivity : AppCompatActivity() {
         root.addView(panel, LinearLayout.LayoutParams(-1, -1))
     }
 
-    override fun onStart() { super.onStart(); host.startListening() }
+    override fun onStart() {
+        super.onStart()
+        runCatching { host.startListening() }
+            .onFailure { Log.w("Grove", "Widget listening unavailable", it); message("Widgets unavailable") }
+    }
     private fun clearAppSelection() {
         drawerState.clear()
     }
@@ -325,7 +325,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         releasePinHold(); longPressHandler.removeCallbacks(longPressRunnable)
-        gestureSession.cancel(); host.stopListening()
+        gestureSession.cancel()
+        runCatching { host.stopListening() }.onFailure { Log.w("Grove", "Widget stop failed", it) }
         clearAppSelection()
         if (drawer) refreshDrawer()
         super.onStop()
@@ -352,7 +353,7 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onSaveInstanceState(outState: Bundle) {
         rememberHomeScroll()
-        outState.putInt("pending", pendingWidget)
+        outState.putInt("pending", widgets.pending)
         outState.putInt("homeScrollY", homeScrollY)
         super.onSaveInstanceState(outState)
     }
@@ -1718,7 +1719,14 @@ class MainActivity : AppCompatActivity() {
 
     // Widget lifecycle: allocate -> bind consent -> optional configuration -> persist.
     private fun pickWidget() {
-        if (pendingWidget != -1) { message("Finish adding the current widget first"); return }
+        if (widgets.pending != -1) {
+            MaterialAlertDialogBuilder(this).setTitle("Widget setup interrupted")
+                .setMessage("Retry saving the pending widget or remove it before adding another.")
+                .setPositiveButton("Retry") { _, _ -> configureWidget() }
+                .setNegativeButton("Remove") { _, _ -> cancelWidget() }
+                .show()
+            return
+        }
         if (!prefs.getBoolean("widget_tutorial_seen", false)) {
             MaterialAlertDialogBuilder(this)
                 .setTitle("Widget controls")
@@ -1734,39 +1742,52 @@ class MainActivity : AppCompatActivity() {
         showWidgetPicker()
     }
     private fun showWidgetPicker() {
-        val providers = manager.installedProviders.sortedBy { it.loadLabel(packageManager).lowercase() }
+        val providers = runCatching {
+            manager.installedProviders.sortedBy { it.loadLabel(packageManager).lowercase() }
+        }.onFailure { Log.w("Grove", "Widget providers unavailable", it) }.getOrNull()
+        if (providers.isNullOrEmpty()) { message("No widgets available"); return }
         listDialog("Add widget", providers.map { it.loadLabel(packageManager).toString() }, negative = "Cancel") { index ->
-            val provider = providers[index]
-            pendingWidget = host.allocateAppWidgetId(); prefs.edit().putInt("pending", pendingWidget).apply()
-            if (manager.bindAppWidgetIdIfAllowed(pendingWidget, provider.provider)) configureWidget()
-            else runCatching { bindWidget.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidget).putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider)) }
-                .onFailure { Log.e("Grove", "Widget bind failed for ${provider.provider}", it); cancelWidget(); message("Cannot bind this widget") }
+            val provider = providers.getOrNull(index) ?: return@listDialog
+            val id = runCatching { widgets.allocate() }
+                .onFailure { Log.e("Grove", "Widget allocation failed", it) }.getOrNull()
+                ?: run { message("Cannot allocate widget"); return@listDialog }
+            val bound = runCatching { manager.bindAppWidgetIdIfAllowed(id, provider.provider) }
+                .onFailure { Log.e("Grove", "Widget bind failed", it) }.getOrNull()
+            if (bound == true) configureWidget()
+            else if (bound == false) runCatching {
+                bindWidget.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider))
+            }.onFailure { Log.e("Grove", "Widget bind launch failed", it); cancelWidget(); message("Cannot bind this widget") }
+            else { cancelWidget(); message("Cannot bind this widget") }
         }
     }
+
     private fun configureWidget() {
-        val info = manager.getAppWidgetInfo(pendingWidget) ?: run {
-            Log.w("Grove", "No widget provider info for id $pendingWidget")
+        val id = widgets.pending
+        val info = runCatching { manager.getAppWidgetInfo(id) }
+            .onFailure { Log.w("Grove", "Widget provider lookup failed for $id", it) }.getOrNull() ?: run {
+            Log.w("Grove", "No widget provider info for id $id")
             cancelWidget(); message("Couldn't add this widget"); return
         }
         if (info.configure != null) {
-            runCatching { configureResult.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).setComponent(info.configure)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidget)) }
+            runCatching { configureResult.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+                .setComponent(info.configure).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)) }
                 .onFailure { Log.e("Grove", "Widget configuration failed to launch for ${info.configure}", it); cancelWidget(); message("Widget configuration unavailable") }
         } else finishWidget()
     }
+
     private fun finishWidget() {
-        if (pendingWidget != -1 && manager.getAppWidgetInfo(pendingWidget) != null) {
-            if (pendingWidget !in widgetIds) widgetIds.add(pendingWidget)
-            prefs.edit().putStringSet("widgets", widgetIds.map { it.toString() }.toSet()).apply()
-        } else if (pendingWidget != -1) host.deleteAppWidgetId(pendingWidget)
-        pendingWidget = -1; prefs.edit().remove("pending").apply(); showHome()
+        if (widgets.finish()) showHome()
+        else message("Couldn't save this widget; retry or remove it")
     }
+
     private fun cancelWidget() {
-        if (pendingWidget != -1) host.deleteAppWidgetId(pendingWidget)
-        pendingWidget = -1; prefs.edit().remove("pending").apply()
+        if (!widgets.cancel()) message("Couldn't release widget; retry")
     }
-    private fun renderWidgets(target: LinearLayout) = WidgetScreen(this, manager, host, prefs, widgetIds) { showHome() }.render(target)
+
+    private fun renderWidgets(target: LinearLayout) =
+        WidgetScreen(this, manager, host, prefs, widgets.ids, widgets::remove) { showHome() }.render(target)
 
     private fun wallpapers() {
         WallpaperPicker(this, wallpaperController, config.wallpaper) { index, which ->
