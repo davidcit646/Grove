@@ -22,7 +22,8 @@ internal class WidgetScreen(
     private val manager: AppWidgetManager,
     private val host: AppWidgetHost,
     private val prefs: SharedPreferences,
-    private val ids: MutableList<Int>,
+    private val ids: List<Int>,
+    private val remove: (Int) -> Boolean,
     private val changed: () -> Unit,
 ) {
 
@@ -33,11 +34,9 @@ internal class WidgetScreen(
                 Log.w("Grove", "Widget $id no longer has provider info")
                 body.addView(activity.label("This widget is unavailable. Long-press to remove it.", 14f, 12).apply {
                     setOnLongClickListener {
-                        host.deleteAppWidgetId(id)
-                        ids.remove(id)
-                        prefs.edit().putStringSet("widgets", ids.map { it.toString() }.toSet())
-                            .remove("height_$id").apply()
-                        changed(); true
+                        if (remove(id)) changed()
+                        else activity.infoDialog("Widget removal failed", "Try removing this widget again.")
+                        true
                     }
                 })
                 return@forEach
@@ -95,11 +94,8 @@ internal class WidgetScreen(
                 "Medium height" -> resize(id, info, 240)
                 "Tall height" -> resize(id, info, 360)
                 "Remove widget" -> {
-                    host.deleteAppWidgetId(id)
-                    ids.remove(id)
-                    prefs.edit().putStringSet("widgets", ids.map { it.toString() }.toSet())
-                        .remove("height_$id").apply()
-                    changed()
+                    if (remove(id)) changed()
+                    else activity.infoDialog("Widget removal failed", "Try removing this widget again.")
                 }
             }
         }
