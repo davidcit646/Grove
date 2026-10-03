@@ -52,8 +52,8 @@ internal class WallpaperController(
     }
 
     fun artwork(index: Int): Bitmap = if (index >= 3) {
-        WallpaperArt.cachedFile(activity.filesDir, index).takeIf { it.exists() }?.let(::decode)
-            ?: WallpaperArt.create(0)
+        decode(WallpaperArt.cachedFile(activity.filesDir, index))
+            ?: error("Selected wallpaper cache is unavailable")
     } else WallpaperArt.create(index)
 
     /** Decode and crop on the worker. The caller owns the returned bitmap. */
