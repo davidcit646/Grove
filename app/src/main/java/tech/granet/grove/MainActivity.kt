@@ -116,9 +116,10 @@ class MainActivity : AppCompatActivity() {
     private var searchResults: LinearLayout? = null
     private lateinit var surface: FrameLayout
     private lateinit var root: LinearLayout
-    private data class PinDrag(val key: String)
-    private var activePinDrag: PinDrag? = null
-    private var heldPin: View? = null
+    private val pinDragController by lazy {
+        PinDragController(this, { body.parent as? ScrollView }, { config }, ::commitConfig,
+            ::appMenu, touchRouter::cancel)
+    }
     private lateinit var body: LinearLayout
     private var homeScrollY = 0
     private var searchField: EditText? = null
@@ -187,12 +188,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(surface)
         CrashReporter.promptIfPending(this)
         root.setOnDragListener { _, event ->
-            if (event.localState !is PinDrag) false else {
+            if (event.localState !is PinDragController.Drag) false else {
                 when (event.action) {
-                    DragEvent.ACTION_DRAG_LOCATION -> scrollPinDrag(root, event)
+                    DragEvent.ACTION_DRAG_LOCATION -> pinDragController.scrollNearEdge(root, event)
                     DragEvent.ACTION_DRAG_ENDED -> {
-                        activePinDrag = null
-                        releasePinHold()
+                        pinDragController.finishDrag()
                         root.post { if (!drawer && !isDestroyed) showHome() }
                     }
                 }
@@ -347,7 +347,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        releasePinHold(); touchRouter.cancel()
+        pinDragController.releaseHold(); touchRouter.cancel()
         runCatching { host.stopListening() }.onFailure { Log.w("Grove", "Widget stop failed", it) }
         clearAppSelection()
         if (drawer) refreshDrawer()
@@ -387,7 +387,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (firstRunSetup != null) return super.dispatchTouchEvent(event)
-        if (heldPin != null || activePinDrag != null) {
+        if (pinDragController.busy) {
             touchRouter.cancel()
             return super.dispatchTouchEvent(event)
         }
@@ -446,7 +446,7 @@ class MainActivity : AppCompatActivity() {
                         showHome()
                     } else if (drawer) renderApps(searchField?.text?.toString().orEmpty())
                     else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-                    else if (activePinDrag == null && heldPin == null) showHome()
+                    else if (!pinDragController.busy) showHome()
                     if (setupPending() && firstRunSetup == null &&
                         configStore.brokenCustomConfig == null) root.post { if (!isDestroyed) startFirstRunSetup() }
                 }
@@ -1116,100 +1116,13 @@ class MainActivity : AppCompatActivity() {
         items.chunked(columns).forEach { group ->
             val row = LinearLayout(this)
             group.forEach { app ->
-                val tile = createTile(); bindTile(tile, app); configurePinDrag(tile.layout, app)
+                val tile = createTile(); bindTile(tile, app); pinDragController.attach(tile.layout, app)
                 row.addView(tile.layout, LinearLayout.LayoutParams(0, -2, 1f))
             }
             repeat(columns - group.size) { row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f)) }
             target.addView(row)
         }
     }
-    private fun scrollPinDrag(target: View, event: DragEvent) {
-        val scroll = body.parent as? ScrollView ?: return
-        val bounds = Rect(); scroll.getGlobalVisibleRect(bounds)
-        val location = IntArray(2); target.getLocationOnScreen(location)
-        val y = event.y + location[1]
-        if (y < bounds.top + dp(64)) scroll.smoothScrollBy(0, -dp(28))
-        else if (y > bounds.bottom - dp(64)) scroll.smoothScrollBy(0, dp(28))
-    }
-
-    private fun releasePinHold() {
-        heldPin?.apply {
-            scaleX = 1f; scaleY = 1f
-            parent?.requestDisallowInterceptTouchEvent(false)
-        }
-        heldPin = null
-    }
-
-    @android.annotation.SuppressLint("ClickableViewAccessibility")
-    private fun configurePinDrag(view: View, app: App) {
-        var downX = 0f
-        var downY = 0f
-        var touchActive = false
-        var touchCanceled = false
-        view.setOnLongClickListener {
-            // Accessibility long-click has no pointer to drag: open app options directly.
-            if (!touchActive) appMenu(app) else {
-                heldPin = view
-                touchRouter.cancel()
-                view.parent.requestDisallowInterceptTouchEvent(true)
-                view.scaleX = 1.08f; view.scaleY = 1.08f
-            }
-            true
-        }
-        view.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY; touchActive = true; touchCanceled = false
-                }
-                MotionEvent.ACTION_MOVE -> if (heldPin === view) {
-                    val dx = event.rawX - downX; val dy = event.rawY - downY
-                    val slop = ViewConfiguration.get(this).scaledTouchSlop
-                    if (dx * dx + dy * dy > slop * slop) {
-                        val drag = PinDrag(app.key)
-                        activePinDrag = drag
-                        val started = view.startDragAndDrop(null, View.DragShadowBuilder(view), drag, 0)
-                        releasePinHold()
-                        if (!started) activePinDrag = null
-                    }
-                    return@setOnTouchListener true
-                }
-                MotionEvent.ACTION_UP -> {
-                    touchActive = false
-                    if (touchCanceled) { view.isPressed = false; return@setOnTouchListener true }
-                    if (heldPin === view) {
-                        releasePinHold(); view.isPressed = false; appMenu(app)
-                        return@setOnTouchListener true
-                    }
-                    if (activePinDrag != null) return@setOnTouchListener true
-                }
-                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
-                    touchActive = false; touchCanceled = true
-                    view.cancelLongPress(); view.isPressed = false
-                    if (heldPin === view) releasePinHold()
-                }
-            }
-            false
-        }
-        view.setOnDragListener { target, event ->
-            val drag = event.localState as? PinDrag
-            if (drag == null) false else {
-                when (event.action) {
-                    DragEvent.ACTION_DRAG_LOCATION -> scrollPinDrag(target, event)
-                    DragEvent.ACTION_DRAG_ENTERED -> {
-                        target.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100L).start()
-                    }
-                    DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> {
-                        target.animate().scaleX(1f).scaleY(1f).setDuration(100L).start()
-                    }
-                    DragEvent.ACTION_DROP -> {
-                        DrawerState.movePin(config, drag.key, app.key)?.let { commitConfig(it) }
-                    }
-                }
-                true
-            }
-        }
-    }
-
     private fun settings() {
         showActionMenu("Grove settings", listOf(
             Triple("Launcher settings", R.drawable.ic_settings) { launcherSettings() },
