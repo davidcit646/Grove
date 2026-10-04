@@ -586,9 +586,10 @@ class MainActivity : AppCompatActivity() {
     }
     private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
         this.text = text
-        val colors = if (config.homeScreen.useWallpaperButtonColors && artworkStyle == config.wallpaper && artwork != null) {
-            wallpaperButtonColors ?: ThemeColors.wallpaperButtonColors(artwork!!).also { wallpaperButtonColors = it }
-        } else ThemeColors.buttonSurface(this@MainActivity) to ThemeColors.onButtonSurface(this@MainActivity)
+        val themeColors = ThemeColors.buttonSurface(this@MainActivity) to ThemeColors.onButtonSurface(this@MainActivity)
+        val colors = if (config.homeScreen.useWallpaperButtonColors && artworkStyle == config.wallpaper)
+            wallpaperButtonColors ?: themeColors
+        else themeColors
         backgroundTintList = ColorStateList.valueOf(colors.first)
         setTextColor(colors.second)
         val iconId = when (text) {
@@ -618,7 +619,7 @@ class MainActivity : AppCompatActivity() {
         if (artworkStyle != key.first || backdropWidth != width || backdropHeight != height || backdrop == null) {
             if (pendingWallpaper != key) {
                 pendingWallpaper = key
-                wallpaperController.background(key.first, width, height) { prepared ->
+                wallpaperController.background(key.first, width, height) { prepared, colors ->
                     if (pendingWallpaper != key || config.wallpaper != key.first) {
                         prepared?.recycle()
                     } else {
@@ -632,7 +633,7 @@ class MainActivity : AppCompatActivity() {
                             artworkStyle = key.first
                             backdropWidth = width
                             backdropHeight = height
-                            wallpaperButtonColors = null
+                            wallpaperButtonColors = colors
                             showWallpaperBackground(prepared)
                             if (previous !== prepared) previous?.recycle()
                             if (!drawer && !searchMode) showHome()
@@ -956,9 +957,10 @@ class MainActivity : AppCompatActivity() {
         if (!config.search.contacts || !hasContactAccess()) return
         contactWorker.execute {
             val details = runCatching { ContactIndex.details(contentResolver, resources, contact) }
-                .getOrElse { Log.w("Grove", "Cannot read contact details", it); ContactIndex.Details(emptyList(), emptyList()) }
+                .onFailure { Log.w("Grove", "Cannot read contact details", it) }.getOrNull()
             runOnUiThread {
                 if (isDestroyed || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
+                if (details == null) { message("Contact details unavailable; try again"); return@runOnUiThread }
                 val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
                 fun action(label: String, icon: Int, intent: () -> Intent) {
                     actions.add(Triple(label, icon) {
