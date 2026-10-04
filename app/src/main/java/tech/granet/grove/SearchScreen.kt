@@ -2,6 +2,7 @@ package tech.granet.grove
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -9,7 +10,7 @@ import android.widget.LinearLayout
 
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.iconRow
-import tech.granet.grove.ui.label
+import tech.granet.grove.ui.wallpaperLabel
 
 /** Renders only relevant inline results. The activity handles Android intents and permissions. */
 internal class SearchScreen(private val context: Context) {
@@ -20,7 +21,7 @@ internal class SearchScreen(private val context: Context) {
     private fun row(title: String, iconId: Int, subtitle: String? = null, bitmap: Bitmap? = null,
                     iconKey: String? = null, action: () -> Unit, longPress: (() -> Unit)? = null): View =
         context.iconRow(title, iconId, subtitle, bitmap, iconTag = iconKey,
-            onClick = action, onLongClick = longPress)
+            titleColor = Color.WHITE, onClick = action, onLongClick = longPress)
 
     private fun heading(title: String, iconId: Int): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -28,10 +29,10 @@ internal class SearchScreen(private val context: Context) {
         setPadding(0, context.dp(8), 0, context.dp(4))
         addView(ImageView(context).apply {
             setImageResource(iconId)
-            imageTintList = android.content.res.ColorStateList.valueOf(ThemeColors.icon(context))
+            imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(context.dp(18), context.dp(18)).apply { marginEnd = context.dp(8) })
-        addView(context.label(title, 12f))
+        addView(context.wallpaperLabel(title, 12f))
     }
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>, contacts: List<ContactRow>, files: List<FileRow>,
@@ -56,7 +57,7 @@ internal class SearchScreen(private val context: Context) {
         when (contactState) {
             SearchSourceState.PermissionRequired -> target.addView(row("Allow contact search", R.drawable.ic_contact,
                 "Allow Grove to search your contacts", action = requestContactAccess))
-            SearchSourceState.Loading -> target.addView(context.label("Loading contacts…", 14f))
+            SearchSourceState.Loading -> target.addView(context.wallpaperLabel("Loading contacts…", 14f))
             SearchSourceState.Failed -> target.addView(row("Retry contact search", R.drawable.ic_contact,
                 "The contacts provider could not be read", action = retryContacts))
             else -> Unit
@@ -71,10 +72,10 @@ internal class SearchScreen(private val context: Context) {
         when (fileState) {
             SearchSourceState.PermissionRequired -> target.addView(row("Allow device file search", R.drawable.ic_folder,
                 "Allow access to shared storage", action = requestFileAccess))
-            SearchSourceState.Loading -> target.addView(context.label("Searching files…", 14f))
+            SearchSourceState.Loading -> target.addView(context.wallpaperLabel("Searching files…", 14f))
             SearchSourceState.Failed -> target.addView(row("Retry file search", R.drawable.ic_folder,
                 "Shared storage could not be indexed", action = retryFiles))
-            is SearchSourceState.Partial -> target.addView(context.label(
+            is SearchSourceState.Partial -> target.addView(context.wallpaperLabel(
                 "Some folders could not be searched (${fileState.skippedDirectories} skipped).", 14f))
             else -> Unit
         }
