@@ -14,9 +14,11 @@ internal object ThemeColors {
     fun onButtonSurface(context: Context): Int = resolve(context, com.google.android.material.R.attr.colorOnSurface)
 
     fun wallpaperButtonColors(bitmap: Bitmap): Pair<Int, Int> {
-        val background = WallpaperColors.fromBitmap(bitmap).primaryColor.toArgb()
-        val foreground = if (Color.luminance(background) > 0.42f) Color.BLACK else Color.WHITE
-        return background to foreground
+        return runCatching {
+            val background = WallpaperColors.fromBitmap(bitmap).primaryColor.toArgb()
+            val foreground = if (Color.luminance(background) > 0.42f) Color.BLACK else Color.WHITE
+            background to foreground
+        }.getOrDefault(0xff416e60.toInt() to Color.WHITE)
     }
 
     private fun resolve(context: Context, attribute: Int): Int {

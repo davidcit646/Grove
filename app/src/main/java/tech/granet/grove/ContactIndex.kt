@@ -83,7 +83,7 @@ internal object ContactIndex {
                         channels.add(Channel(cursor.getLong(0), mime.take(256), "Messenger"))
                 }
             }
-        }
+        } ?: error("The device's contact details provider is unavailable")
         return Details(numbers.toList(), channels.toList())
     }
 }

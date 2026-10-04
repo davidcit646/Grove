@@ -88,7 +88,9 @@ internal class WidgetScreen(
             add("Tall height")
             add("Remove widget")
         }
-        activity.listDialog(info.loadLabel(activity.packageManager).toString(), actions) { which ->
+        val title = runCatching { info.loadLabel(activity.packageManager).toString() }
+            .getOrDefault("Widget")
+        activity.listDialog(title, actions) { which ->
             when (actions[which]) {
                 "Configure widget" -> configure(id, info)
                 "Compact height" -> resize(id, info, 140)
