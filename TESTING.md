@@ -1,5 +1,19 @@
 # Device acceptance checklist
 
+## Refactor verification record (2026-10-04)
+
+The stacked refactor has CI source checks, but no Android device or emulator was available in this workspace. The cases below are pending, not passed. For every execution record date, device/model, API level, build commit SHA, clean install or upgrade, exact steps, observed outcome and linked defect. Run on Android 12 and current Android. Keep signed APK update results separate from debug APK results.
+
+| Date | Device / API | Build SHA | Scenario | Outcome / issue |
+| --- | --- | --- | --- | --- |
+| Pending | Android 12 | Pending | Default Home cold/warm, reboot and recovery | Not run (#34) |
+| Pending | Current Android | Pending | Permission revoke/provider failure, widgets, gestures, wallpaper | Not run (#34) |
+| Pending | 16 KB page device/emulator | Pending | Signed APK/AAB native load and update | Not run (#33/#36) |
+| Pending | Same device before/after | Pending | Home first draw and 15,000-file search latency/allocations | Not run (#35) |
+
+See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-capability failure cases. CI passing is required but does not fill any row in this table.
+
+
 ## Wallpaper picker (0.1.28)
 
 - On a clean install, browse all ten Commons images over a working connection; verify scaled photos that redirect to `thumb.wikimedia.org` show previews. Red, orange, blue, brown, and black and white previously failed.
