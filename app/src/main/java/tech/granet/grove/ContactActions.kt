@@ -25,8 +25,8 @@ internal class ContactActions(
             val details = runCatching { ContactIndex.details(activity.contentResolver, activity.resources, contact) }
                 .onFailure { Log.w("Grove", "Cannot read contact details", it) }.getOrNull()
             activity.runOnUiThread {
-                if (activity.isDestroyed || !current().search.contacts || !hasAccess()) return@activity.runOnUiThread
-                if (details == null) { activity.message("Contact details unavailable; try again"); return@activity.runOnUiThread }
+                if (activity.isDestroyed || !current().search.contacts || !hasAccess()) return@runOnUiThread
+                if (details == null) { activity.message("Contact details unavailable; try again"); return@runOnUiThread }
                 val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
                 fun action(label: String, icon: Int, intent: () -> Intent) {
                     actions.add(Triple(label, icon) {
