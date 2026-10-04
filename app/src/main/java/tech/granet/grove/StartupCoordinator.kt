@@ -8,6 +8,8 @@ internal object StartupCoordinator {
         val contactSearchEnabled: Boolean,
         val contactsGranted: Boolean,
         val lastContactRefreshMs: Long,
+        val indexingContacts: Boolean,
+        val contactLoadFailed: Boolean,
         val fileSearchEnabled: Boolean,
         val filesGranted: Boolean,
         val hasFiles: Boolean,
@@ -29,7 +31,9 @@ internal object StartupCoordinator {
 
     fun resume(state: Snapshot, nowMs: Long): Plan = Plan(
         refreshContacts = state.contactSearchEnabled &&
-            (!state.contactsGranted || nowMs - state.lastContactRefreshMs > CONTACT_REFRESH_INTERVAL_MS),
+            (!state.contactsGranted || (!state.indexingContacts &&
+                (state.contactLoadFailed ||
+                    nowMs - state.lastContactRefreshMs > CONTACT_REFRESH_INTERVAL_MS))),
         indexFiles = state.fileSearchEnabled && state.filesGranted && !state.hasFiles && !state.indexingFiles,
         clearFiles = state.fileSearchEnabled && !state.filesGranted && (state.hasFiles || state.indexingFiles),
     )
