@@ -48,11 +48,15 @@ internal class WidgetFlow(
     }
     private fun showPicker() {
         val providers = runCatching {
-            manager.installedProviders.sortedBy { it.loadLabel(activity.packageManager).lowercase() }
+            manager.installedProviders.map { info ->
+                val label = runCatching { info.loadLabel(activity.packageManager).toString() }
+                    .getOrElse { info.provider.className }
+                info to label
+            }.sortedBy { it.second.lowercase() }
         }.onFailure { Log.w("Grove", "Widget providers unavailable", it) }.getOrNull()
         if (providers.isNullOrEmpty()) { message("No widgets available"); return }
-        activity.listDialog("Add widget", providers.map { it.loadLabel(activity.packageManager).toString() }, negative = "Cancel") { index ->
-            val provider = providers.getOrNull(index) ?: return@listDialog
+        activity.listDialog("Add widget", providers.map { it.second }, negative = "Cancel") { index ->
+            val provider = providers.getOrNull(index)?.first ?: return@listDialog
             val id = runCatching { widgets.allocate() }
                 .onFailure { Log.e("Grove", "Widget allocation failed", it) }.getOrNull()
                 ?: run { message("Cannot allocate widget"); return@listDialog }
