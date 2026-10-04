@@ -955,13 +955,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun openFile(file: IndexedFile) = fileActions.open(file)
 
-    private fun openPlayStore(query: String, install: Boolean = false) {
-        val encoded = Uri.encode(query)
-        val marketUrl = if (install) "market://search?q=$encoded&c=apps" else "market://search?q=$encoded"
-        val webUrl = if (install) "https://play.google.com/store/search?q=$encoded&c=apps" else "https://play.google.com/store/search?q=$encoded"
-        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(marketUrl))) }
-            .onFailure { openWeb(webUrl) }
-    }
+    private val searchActions by lazy { SearchActions(this, ::showActionMenu) }
+    private fun openPlayStore(query: String, install: Boolean = false) =
+        searchActions.openPlayStore(query, install)
 
     private fun appMenu(app: App) {
         val pinned = app.key in config.favorites
@@ -1006,50 +1002,14 @@ class MainActivity : AppCompatActivity() {
         ))
     }
 
-    private fun webResultMenu(query: String, provider: String) {
-        showActionMenu("$provider search", listOf(
-            Triple("Search with Google", R.drawable.ic_public) { openWeb("https://www.google.com/search?q=${Uri.encode(query)}") },
-            Triple("Ask an AI (ChatGPT)", R.drawable.ic_ai) { openWeb("https://chatgpt.com/?q=${Uri.encode(query)}") },
-            Triple("Ask an AI (Gemini)", R.drawable.ic_ai) { openWeb("https://gemini.google.com/app?q=${Uri.encode(query)}") },
-            Triple("Copy search text", R.drawable.ic_copy) {
-                getSystemService(android.content.ClipboardManager::class.java)
-                    .setPrimaryClip(android.content.ClipData.newPlainText("Search", query))
-                message("Search copied")
-            },
-            Triple("Share search", R.drawable.ic_share) {
-                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, query), "Share search"))
-            },
-        ))
-    }
-
-    private fun playStoreMenu(query: String) {
-        showActionMenu("Play Store search", listOf(
-            Triple("Install an app", R.drawable.ic_download) { openPlayStore(query, install = true) },
-            Triple("View in Play Store", R.drawable.ic_store) { openPlayStore(query) },
-            Triple("Leave a Play Store review", R.drawable.ic_star) {
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://writeReview?package=$packageName"))) }
-                    .onFailure { openWeb("https://play.google.com/store/apps/details?id=$packageName") }
-            },
-            Triple("Copy search text", R.drawable.ic_copy) {
-                getSystemService(android.content.ClipboardManager::class.java)
-                    .setPrimaryClip(android.content.ClipData.newPlainText("Search", query))
-                message("Search copied")
-            },
-        ))
-    }
+    private fun webResultMenu(query: String, provider: String) = searchActions.webResultMenu(query, provider)
+    private fun playStoreMenu(query: String) = searchActions.playStoreMenu(query)
 
     private fun showActionMenu(title: String, actions: List<Triple<String, Int, () -> Unit>>) {
         menuDialog(title, actions.map { (name, icon, action) -> MenuRow(name, icon, action) })
     }
 
-    private fun openWeb(url: String) {
-        runCatching {
-            val uri = Uri.parse(url)
-            require(uri.scheme == "https") { "Only HTTPS links are supported" }
-            startActivity(Intent(Intent.ACTION_VIEW, uri))
-        }
-            .onFailure { message("No app can open this search") }
-    }
+    private fun openWeb(url: String) = searchActions.openWeb(url)
 
     private fun showDrawer(keyboard: Boolean, animate: Boolean = false) {
         rememberHomeScroll()
