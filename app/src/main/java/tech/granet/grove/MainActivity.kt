@@ -944,14 +944,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun sharedFileUri(file: File): Uri {
-        require(config.search.files && Environment.isExternalStorageManager()) { "File search is unavailable" }
-        val root = Environment.getExternalStorageDirectory().canonicalFile
-        val canonical = file.canonicalFile
-        require(canonical.path.startsWith("${root.path}${File.separator}") && file.exists() &&
-            !Files.isSymbolicLink(file.toPath())) { "File is outside shared storage" }
-        return FileProvider.getUriForFile(this, "$packageName.files", canonical)
-    }
+    private val fileActions by lazy { FileActions(this) { config.search.files } }
+    private fun sharedFileUri(file: File): Uri = fileActions.shareUri(file)
 
     private val contactActions by lazy {
         ContactActions(this, contactWorker, { config }, ::hasContactAccess,
@@ -959,20 +953,7 @@ class MainActivity : AppCompatActivity() {
     }
     private fun contactMenu(contact: ContactIndex.Contact) = contactActions.show(contact)
 
-    private fun openFile(file: IndexedFile) {
-        val uri = runCatching { sharedFileUri(file.file) }
-            .getOrElse { Log.w("Grove", "Cannot share indexed file", it); message("Cannot open this file"); return }
-        fun openAs(mime: String) = runCatching {
-            startActivity(Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mime)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            })
-        }.isSuccess
-        if (!openAs(file.mime) && !openAs("*/*")) {
-            Log.w("Grove", "No app handles MIME type ${file.mime}")
-            message("No app can open this file")
-        }
-    }
+    private fun openFile(file: IndexedFile) = fileActions.open(file)
 
     private fun openPlayStore(query: String, install: Boolean = false) {
         val encoded = Uri.encode(query)
