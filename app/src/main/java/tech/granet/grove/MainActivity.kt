@@ -997,6 +997,10 @@ class MainActivity : AppCompatActivity() {
         drawerAdapter?.submit(filtered)
     }
     private val drawerTiles by lazy { DrawerTiles(this, ::launchDrawerApp, ::appMenu) }
+    private val folderActions by lazy {
+        FolderActions(this, { config }, { apps }, drawerTiles, ::commitConfig,
+            drawerState::clearKeys, ::refreshDrawer, ::appMenu, ::showActionMenu)
+    }
     private fun launchDrawerApp(app: App) {
         runCatching { launcher.startMainActivity(app.component, Process.myUserHandle(), null, null) }
             .onFailure { message("This app is unavailable"); loadApps() }
@@ -1029,7 +1033,7 @@ class MainActivity : AppCompatActivity() {
                     DragEvent.ACTION_DROP -> {
                         view.alpha = 1f
                         val source = (event.localState as DrawerDragController.Drag).key
-                        if (source != app.key) promptFolderName(listOf(source, app.key))
+                        if (source != app.key) folderActions.promptCreate(listOf(source, app.key))
                     }
                 }
                 true
@@ -1045,8 +1049,8 @@ class MainActivity : AppCompatActivity() {
         tile.icon.imageTintList = ColorStateList.valueOf(ThemeColors.icon(this))
         tile.icon.alpha = 1f
         tile.badge.visibility = View.GONE
-        tile.layout.setOnClickListener { openFolder(folder.name) }
-        tile.layout.setOnLongClickListener { folderOptions(folder.name); true }
+        tile.layout.setOnClickListener { folderActions.open(folder.name) }
+        tile.layout.setOnLongClickListener { folderActions.options(folder.name); true }
         tile.layout.setOnDragListener { view, event ->
             if (event.localState !is DrawerDragController.Drag) false else {
                 when (event.action) {
@@ -1054,90 +1058,12 @@ class MainActivity : AppCompatActivity() {
                     DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> view.alpha = 1f
                     DragEvent.ACTION_DROP -> {
                         view.alpha = 1f
-                        moveAppsToFolder(setOf((event.localState as DrawerDragController.Drag).key), folder.name)
+                        folderActions.move(setOf((event.localState as DrawerDragController.Drag).key), folder.name)
                     }
                 }
                 true
             }
         }
-    }
-
-    private fun folderOptions(name: String) {
-        showActionMenu(name, listOf(
-            Triple("Open folder", R.drawable.ic_folder) { openFolder(name) },
-            Triple("Rename folder", R.drawable.ic_edit) { promptRenameFolder(name) },
-            Triple("Delete folder", R.drawable.ic_delete) {
-                confirmDialog("Delete $name?", "Apps in this folder will return to All apps.", "Delete") {
-                        DrawerState.deleteFolder(config, name)?.let { if (commitConfig(it)) refreshDrawer() }
-                    }
-            },
-        ))
-    }
-
-    private fun openFolder(name: String) {
-        val folder = config.folders.firstOrNull { it.name == name } ?: return
-        val members = folder.apps.mapNotNull { key -> apps.firstOrNull { it.key == key } }
-        val grid = GridView(this).apply {
-            numColumns = 4; verticalSpacing = dp(8)
-            adapter = object : BaseAdapter() {
-                override fun getCount() = members.size
-                override fun getItem(position: Int) = members[position]
-                override fun getItemId(position: Int) = position.toLong()
-                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                    val tile = (convertView?.tag as? DrawerTiles.Tile) ?: createTile()
-                    bindTile(tile, members[position])
-                    tile.layout.setOnLongClickListener {
-                        showActionMenu(members[position].label, listOf(
-                            Triple("Remove from folder", R.drawable.ic_delete) {
-                                removeFromFolders(setOf(members[position].key)); refreshDrawer(); openFolder(name)
-                            },
-                            Triple("App options", R.drawable.ic_settings) { appMenu(members[position]) },
-                        )); true
-                    }
-                    return tile.layout
-                }
-            }
-        }
-        grid.layoutParams = ViewGroup.LayoutParams(-1, dp(320))
-        MaterialAlertDialogBuilder(this).setTitle(name).setView(grid).setPositiveButton("Done", null).show()
-    }
-
-    private fun removeFromFolders(keys: Set<String>) {
-        commitConfig(DrawerState.removeFromFolders(config, keys))
-    }
-
-    private fun moveAppsToFolder(keys: Set<String>, name: String) {
-        val next = DrawerState.moveToFolder(config, keys, name) ?: return
-        if (commitConfig(next)) { drawerState.clearKeys(); refreshDrawer() }
-    }
-
-    private fun promptFolderName(keys: List<String> = emptyList()) {
-        val input = EditText(this).apply { hint = "Folder name"; isSingleLine = true; setPadding(dp(24), dp(16), dp(24), dp(16)) }
-        val dialog = MaterialAlertDialogBuilder(this).setTitle("Create folder").setView(input)
-            .setNegativeButton("Cancel", null).setPositiveButton("Create", null).create()
-        dialog.setOnShowListener {
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val next = DrawerState.createFolder(config, input.text.toString(), keys)
-                if (next == null) {
-                    input.error = "Choose a unique folder name up to 40 characters"
-                    return@setOnClickListener
-                }
-                if (commitConfig(next)) {
-                    drawerState.clearKeys(); refreshDrawer(); dialog.dismiss()
-                }
-            }
-        }
-        dialog.show()
-    }
-
-    private fun promptRenameFolder(name: String) {
-        val input = EditText(this).apply { setText(name); isSingleLine = true; setPadding(dp(24), dp(16), dp(24), dp(16)) }
-        MaterialAlertDialogBuilder(this).setTitle("Rename folder").setView(input)
-            .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
-                val next = DrawerState.renameFolder(config, name, input.text.toString())
-                if (next == null) message("Choose a unique folder name up to 40 characters")
-                else if (commitConfig(next)) refreshDrawer()
-            }.show()
     }
 
     private fun drawerOptions() {
@@ -1147,10 +1073,10 @@ class MainActivity : AppCompatActivity() {
                 drawerState.toggleMode()
                 refreshDrawer()
             })
-            add(Triple("Create folder", R.drawable.ic_folder) { promptFolderName() })
+            add(Triple("Create folder", R.drawable.ic_folder) { folderActions.promptCreate() })
             if (keys.isNotEmpty()) {
-                add(Triple("Add to new folder", R.drawable.ic_folder) { promptFolderName(keys.toList()) })
-                if (config.folders.isNotEmpty()) add(Triple("Move to folder", R.drawable.ic_folder) { chooseFolder(keys) })
+                add(Triple("Add to new folder", R.drawable.ic_folder) { folderActions.promptCreate(keys.toList()) })
+                if (config.folders.isNotEmpty()) add(Triple("Move to folder", R.drawable.ic_folder) { folderActions.choose(keys) })
                 add(Triple("Pin to home screen", R.drawable.ic_home) {
                     DrawerState.pin(config, keys)?.let {
                         if (commitConfig(it)) {
@@ -1163,11 +1089,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         showActionMenu("App drawer", actions)
-    }
-
-    private fun chooseFolder(keys: Set<String>) {
-        val names = config.folders.map { it.name }
-        listDialog("Move to folder", names) { index -> moveAppsToFolder(keys, names[index]) }
     }
 
     private fun uninstallSelected(keys: Set<String>) {
