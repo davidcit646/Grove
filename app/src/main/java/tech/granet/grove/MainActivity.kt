@@ -586,9 +586,10 @@ class MainActivity : AppCompatActivity() {
     }
     private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
         this.text = text
+        val themeColors = ThemeColors.buttonSurface(this@MainActivity) to ThemeColors.onButtonSurface(this@MainActivity)
         val colors = if (config.homeScreen.useWallpaperButtonColors && artworkStyle == config.wallpaper)
-            wallpaperButtonColors ?: (ThemeColors.buttonSurface(this) to ThemeColors.onButtonSurface(this))
-        else ThemeColors.buttonSurface(this) to ThemeColors.onButtonSurface(this)
+            wallpaperButtonColors ?: themeColors
+        else themeColors
         backgroundTintList = ColorStateList.valueOf(colors.first)
         setTextColor(colors.second)
         val iconId = when (text) {
