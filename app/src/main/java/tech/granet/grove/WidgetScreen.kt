@@ -13,7 +13,7 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.infoDialog
-import tech.granet.grove.ui.label
+import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.listDialog
 
 /** Displays provider-owned RemoteViews. Grove only manages size and removal. */
@@ -33,7 +33,7 @@ internal class WidgetScreen(
                 .onFailure { Log.w("Grove", "Widget provider lookup failed for $id", it) }.getOrNull()
             if (info == null) {
                 Log.w("Grove", "Widget $id no longer has provider info")
-                body.addView(activity.label("This widget is unavailable. Long-press to remove it.", 14f, 12).apply {
+                body.addView(activity.wallpaperLabel("This widget is unavailable. Long-press to remove it.", 14f, 12).apply {
                     setOnLongClickListener {
                         if (remove(id)) changed()
                         else activity.infoDialog("Widget removal failed", "Try removing this widget again.")
@@ -65,7 +65,7 @@ internal class WidgetScreen(
                 installLongPress(widget, info, id)
             } catch (error: Exception) {
                 Log.e("Grove", "Failed to create widget ${info.provider.flattenToShortString()} (id=$id)", error)
-                body.addView(activity.label("This widget could not be displayed. Long-press to remove it.", 14f, 12).apply {
+                body.addView(activity.wallpaperLabel("This widget could not be displayed. Long-press to remove it.", 14f, 12).apply {
                     setOnLongClickListener { showMenu(id, info); true }
                 })
             }
