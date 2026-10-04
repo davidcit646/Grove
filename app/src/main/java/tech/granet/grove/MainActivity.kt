@@ -94,10 +94,14 @@ class MainActivity : AppCompatActivity() {
     private val selectedApps = linkedSetOf<String>()
     private var selectingApps = false
     private data class DrawerDrag(val key: String)
-    private val pendingUninstalls = ArrayDeque<String>()
-    private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    private val uninstallBatch = UninstallBatch()
+    private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         loadApps()
-        launchNextUninstall()
+        if (result.resultCode == RESULT_OK) launchNextUninstall(uninstallBatch.accepted())
+        else {
+            val remaining = uninstallBatch.cancel()
+            if (remaining > 0) message("Remaining uninstalls canceled")
+        }
     }
     private var config = Config()
     private var firstRunSetup: FirstRunSetup? = null
@@ -1475,17 +1479,21 @@ class MainActivity : AppCompatActivity() {
         val packages = apps.filter { it.key in keys }.map { it.component.packageName }.distinct()
         confirmDialog("Uninstall ${packages.size} app${if (packages.size == 1) "" else "s"}?",
             "Android will ask you to confirm each uninstall.", "Continue") {
-                pendingUninstalls.clear()
-                pendingUninstalls.addAll(packages)
-                launchNextUninstall()
+                launchNextUninstall(uninstallBatch.start(packages))
                 selectedApps.clear(); refreshDrawer()
             }
     }
 
-    private fun launchNextUninstall() {
-        val packageName = pendingUninstalls.pollFirst() ?: return
-        runCatching { uninstallNext.launch(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))) }
-            .onFailure { message("Cannot uninstall $packageName"); launchNextUninstall() }
+    private fun launchNextUninstall(packageName: String?) {
+        if (packageName == null) return
+        try {
+            uninstallNext.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$packageName"))
+                .putExtra(Intent.EXTRA_RETURN_RESULT, true))
+        } catch (error: Exception) {
+            uninstallBatch.cancel()
+            Log.w("Grove", "Could not launch batch uninstall for $packageName", error)
+            message("Cannot uninstall $packageName")
+        }
     }
     private fun addGrid(items: List<App>, target: LinearLayout) {
         val columns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
