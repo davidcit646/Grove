@@ -9,6 +9,7 @@ import android.provider.ContactsContract
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.RejectedExecutionException
 import tech.granet.grove.ui.infoDialog
 import tech.granet.grove.ui.message
 
@@ -60,6 +61,7 @@ internal class SearchSources(
         indexingFiles = true
         fileLoadFailed = false
         redraw()
+        try {
         worker.execute {
             if (generation != fileIndexGeneration) return@execute
             val result = runCatching {
@@ -86,6 +88,13 @@ internal class SearchSources(
                 redraw()
             })
         }
+        } catch (error: RejectedExecutionException) {
+            if (generation != fileIndexGeneration || activity.isDestroyed) return
+            indexingFiles = false
+            fileLoadFailed = true
+            Log.w("Grove", "File index worker unavailable", error)
+            redraw()
+        }
     }
 
     fun refreshContacts() {
@@ -103,6 +112,7 @@ internal class SearchSources(
         contactLoadFailed = false
         redraw()
         val generation = ++contactGeneration
+        try {
         contactWorker.execute {
             if (generation != contactGeneration) return@execute
             val result = runCatching {
@@ -138,8 +148,14 @@ internal class SearchSources(
                     }
             }
         }
+        } catch (error: RejectedExecutionException) {
+            if (generation != contactGeneration || activity.isDestroyed) return
+            indexingContacts = false
+            contactLoadFailed = true
+            Log.w("Grove", "Contact index worker unavailable", error)
+            redraw()
+        }
     }
-
 
     fun clearContacts(notify: Boolean = true) {
         contactGeneration++
