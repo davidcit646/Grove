@@ -177,12 +177,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!prefs.getBoolean("setup_complete", false) && !prefs.getBoolean("setup_pending", false)) {
-            // Existing users keep their layout and can replay setup from the menu.
-            prefs.edit().putBoolean(if (prefs.contains("initialized")) "setup_complete" else "setup_pending", true).apply()
-        }
-        config = configStore.load()
-        widgets.restore(savedInstanceState)
         window.setDecorFitsSystemWindows(false)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -219,12 +213,44 @@ class MainActivity : AppCompatActivity() {
                 // view here would unexpectedly jump a scrolled layout to top.
             }
         })
+        startupState = savedInstanceState
+        runCatching {
+            if (!prefs.getBoolean("setup_complete", false) && !setupPending()) {
+                // Existing users keep their layout and can replay setup from the menu.
+                prefs.edit().putBoolean(
+                    if (prefs.contains("initialized")) "setup_complete" else "setup_pending", true
+                ).apply()
+            }
+        }.onFailure { Log.w("Grove", "Setup state unavailable", it) }
+        beginHome()
+    }
+
+    private var startupState: Bundle? = null
+
+    private fun setupPending(): Boolean = runCatching { prefs.getBoolean("setup_pending", false) }
+        .onFailure { Log.w("Grove", "Setup flag unavailable", it) }.getOrDefault(false)
+
+    private fun beginHome() {
+        val loaded = runCatching { configStore.load() }.getOrElse { error ->
+            Log.e("Grove", "Configuration unavailable", error)
+            showCoreRecovery("Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased.")
+            return
+        }
+        config = loaded
+        // Widget metadata is optional. Keep the app list and Home available if it is damaged.
+        runCatching { widgets.restore(startupState) }
+            .onFailure { Log.w("Grove", "Widget state unavailable", it) }
         if (!ensureLauncherCallback()) return
-        homeScrollY = savedInstanceState?.getInt("homeScrollY") ?: 0
-        showHome(); applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
+        coreRecoveryVisible = false
+        root.setBackgroundColor(Color.TRANSPARENT)
+        homeScrollY = startupState?.getInt("homeScrollY") ?: homeScrollY
+        startupState = null
+        showHome()
+        applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
         if (configStore.brokenCustomConfig != null) root.post { showConfigRecoveryDialog() }
         if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { settings() }
     }
+
     private fun ensureLauncherCallback(): Boolean {
         if (launcherCallbackRegistered) return true
         return try {
@@ -251,7 +277,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(24), dp(24), dp(24), dp(24))
         }
         panel.addView(TextView(this).apply {
-            text = "Grove cannot load your apps"
+            text = "Grove cannot load Home"
             textSize = 24f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -264,7 +290,7 @@ class MainActivity : AppCompatActivity() {
         })
         panel.addView(Button(this).apply {
             text = "Retry"
-            setOnClickListener { if (ensureLauncherCallback()) loadApps() }
+            setOnClickListener { beginHome() }
         })
         panel.addView(Button(this).apply {
             text = "Android Home settings"
@@ -294,6 +320,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         firstRunSetup?.refreshPermissions()
+        if (coreRecoveryVisible) return
         applyStartupPlan(StartupCoordinator.resume(startupSnapshot(), SystemClock.elapsedRealtime()))
     }
 
@@ -520,7 +547,7 @@ class MainActivity : AppCompatActivity() {
                         loadedApps.size else minOf(24, loadedApps.size)
                     iconCache.replace(loadedApps.associate { it.key to (reusable[it.key] ?: fallbackIcon) })
                     if (!prefs.contains("initialized")) {
-                        if (!prefs.getBoolean("setup_pending", false) && config.favorites.isEmpty())
+                        if (!setupPending() && config.favorites.isEmpty())
                             config = config.copy(favorites = apps.take(8).map { it.key })
                         prefs.edit().putBoolean("initialized", true).apply(); save()
                     }
@@ -531,7 +558,7 @@ class MainActivity : AppCompatActivity() {
                     } else if (drawer) renderApps(searchField?.text?.toString().orEmpty())
                     else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
                     else if (activePinDrag == null && heldPin == null) showHome()
-                    if (prefs.getBoolean("setup_pending", false) && firstRunSetup == null &&
+                    if (setupPending() && firstRunSetup == null &&
                         configStore.brokenCustomConfig == null) root.post { if (!isDestroyed) startFirstRunSetup() }
                 }
             },
@@ -1442,7 +1469,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startFirstRunSetup() {
         if (firstRunSetup != null || apps.isEmpty()) return
-        if (prefs.getBoolean("setup_pending", false))
+        if (setupPending())
             prefs.edit().remove("widget_tutorial_seen").apply()
         firstRunSetup = FirstRunSetup(
             this, surface, config, apps.map { it.key to it.label },
@@ -1476,7 +1503,7 @@ class MainActivity : AppCompatActivity() {
             },
             {
                 firstRunSetup = null
-                if (prefs.getBoolean("setup_pending", false) && config.favorites.isEmpty()) {
+                if (setupPending() && config.favorites.isEmpty()) {
                     config = config.copy(favorites = apps.take(8).map { it.key })
                     save()
                     showHome()
@@ -1499,7 +1526,7 @@ class MainActivity : AppCompatActivity() {
             { editConfig() },
             { export.launch("grove-config.json") },
             { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-            { prefs.getBoolean("setup_pending", false) },
+            { setupPending() },
             { enabled ->
                 prefs.edit().apply {
                     putBoolean("setup_complete", !enabled)
@@ -1508,8 +1535,8 @@ class MainActivity : AppCompatActivity() {
                 }.apply()
             },
             {
-                if (prefs.getBoolean("setup_pending", false)) root.post {
-                    if (!isDestroyed && prefs.getBoolean("setup_pending", false)) {
+                if (setupPending()) root.post {
+                    if (!isDestroyed && setupPending()) {
                         showHome()
                         startFirstRunSetup()
                     }
