@@ -1046,7 +1046,7 @@ class MainActivity : AppCompatActivity() {
         tile.layout.contentDescription = "Folder ${folder.name}"
         tile.name.text = folder.name
         tile.icon.setImageResource(R.drawable.ic_folder)
-        tile.icon.imageTintList = ColorStateList.valueOf(ThemeColors.icon(this))
+        tile.icon.imageTintList = ColorStateList.valueOf(Color.WHITE)
         tile.icon.alpha = 1f
         tile.badge.visibility = View.GONE
         tile.layout.setOnClickListener { folderActions.open(folder.name) }
