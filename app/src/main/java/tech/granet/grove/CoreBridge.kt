@@ -11,7 +11,7 @@ import java.util.PriorityQueue
  */
 internal object CoreBridge {
     private val failures = NativeFailureReporter { operation, error ->
-        Log.w("Grove", "Native $operation unavailable; using Kotlin fallback", error)
+        runCatching { Log.w("Grove", "Native $operation unavailable; using Kotlin fallback", error) }
     }
     private val loaded = runCatching { System.loadLibrary("grove_core"); true }
         .onFailure { failures.failed("load", it) }.getOrDefault(false)
