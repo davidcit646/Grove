@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     // Every installed app icon is decoded during app discovery and retained for the
     // lifetime of the launcher process. Drawer rendering never decodes icons.
     private val iconCache get() = AppIconStore
-    private var drawerAdapter: AppAdapter? = null
+    private var drawerAdapter: DrawerTiles.Adapter? = null
     private var drawerEmpty: TextView? = null
     private var drawerGrid: GridView? = null
     private var drawerVisibleCount = 0
@@ -1040,7 +1040,12 @@ class MainActivity : AppCompatActivity() {
             clipToPadding = false
         }
         drawerGrid = grid
-        drawerAdapter = AppAdapter()
+        drawerAdapter = drawerTiles.Adapter { tile, item ->
+            when (item) {
+                is DrawerTiles.Item.Application -> bindDrawerApp(tile, item.app)
+                is DrawerTiles.Item.Folder -> bindDrawerFolder(tile, item.folder)
+            }
+        }
         grid.adapter = drawerAdapter
         content.addView(grid, FrameLayout.LayoutParams(-1, -1))
         content.addView(empty, FrameLayout.LayoutParams(-1, -1))
@@ -1061,76 +1066,22 @@ class MainActivity : AppCompatActivity() {
         val prepared = Search.prepare(query)
         val filtered = if (prepared.text.isEmpty()) {
             val assigned = config.folders.flatMap { it.apps }.toSet()
-            config.folders.map { DrawerItem.Folder(it) } + apps.take(drawerVisibleCount)
-                .filterNot { it.key in assigned }.map { DrawerItem.Application(it) }
-        } else SearchResults.matching(apps, prepared) { it.searchName }.map { DrawerItem.Application(it) }
+            config.folders.map { DrawerTiles.Item.Folder(it) } + apps.take(drawerVisibleCount)
+                .filterNot { it.key in assigned }.map { DrawerTiles.Item.Application(it) }
+        } else SearchResults.matching(apps, prepared) { it.searchName }.map { DrawerTiles.Item.Application(it) }
         drawerAdapter?.submit(filtered)
     }
-    private sealed class DrawerItem {
-        data class Application(val app: App) : DrawerItem()
-        data class Folder(val folder: AppFolder) : DrawerItem()
+    private val drawerTiles by lazy { DrawerTiles(this, ::launchDrawerApp, ::appMenu) }
+    private fun launchDrawerApp(app: App) {
+        runCatching { launcher.startMainActivity(app.component, Process.myUserHandle(), null, null) }
+            .onFailure { message("This app is unavailable"); loadApps() }
     }
-    private class Tile(val layout: LinearLayout, val icon: ImageView, val name: TextView, val badge: ImageView)
-    private fun createTile(): Tile {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-            setPadding(dp(4), dp(10), dp(4), dp(10))
-            isFocusable = true; isClickable = true
-        }
-        val icon = ImageView(this).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
-        val name = label("", 12f).apply { gravity = Gravity.CENTER; maxLines = 2; minLines = 2 }
-        val iconFrame = FrameLayout(this)
-        iconFrame.addView(icon, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
-        val badge = ImageView(this).apply {
-            setPadding(dp(7), dp(7), dp(7), dp(7))
-            imageTintList = ColorStateList.valueOf(ThemeColors.icon(this@MainActivity))
-            background = GradientDrawable().apply {
-                setColor(ThemeColors.iconSurface(this@MainActivity))
-                cornerRadius = dp(10).toFloat()
-            }
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-        iconFrame.addView(badge, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.TOP or Gravity.END))
-        layout.addView(iconFrame, LinearLayout.LayoutParams(dp(56), dp(52)))
-        layout.addView(name)
-        return Tile(layout, icon, name, badge).also { layout.tag = it }
-    }
-    private fun bindTile(tile: Tile, app: App) {
-        tile.badge.visibility = View.GONE
-        tile.icon.alpha = 1f
-        tile.layout.contentDescription = app.label; tile.name.text = app.label; tile.icon.imageTintList = null
-        bindIcon(tile.icon, app)
-        tile.layout.setOnClickListener {
-            runCatching { launcher.startMainActivity(app.component, android.os.Process.myUserHandle(), null, null) }
-                .onFailure { message("This app is unavailable"); loadApps() }
-        }
-        tile.layout.setOnLongClickListener { appMenu(app); true }
-        tile.layout.setOnTouchListener(null)
-        tile.layout.setOnDragListener(null)
-    }
-    private fun bindIcon(view: ImageView, app: App) {
-        view.tag = app.key
-        val cached = iconCache[app.key]
-        view.setImageBitmap(cached)
-    }
-    private inner class AppAdapter : BaseAdapter() {
-        private var items = emptyList<DrawerItem>()
-        fun submit(next: List<DrawerItem>) { items = next; notifyDataSetChanged() }
-        override fun getCount() = items.size
-        override fun getItem(position: Int) = items[position]
-        override fun getItemId(position: Int) = position.toLong()
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val tile = (convertView?.tag as? Tile) ?: createTile()
-            when (val item = items[position]) {
-                is DrawerItem.Application -> bindDrawerApp(tile, item.app)
-                is DrawerItem.Folder -> bindDrawerFolder(tile, item.folder)
-            }
-            return tile.layout
-        }
-    }
+    private fun createTile() = drawerTiles.create()
+    private fun bindTile(tile: DrawerTiles.Tile, app: App) = drawerTiles.bind(tile, app)
+
     private fun refreshDrawer() { if (drawer && !searchMode) renderApps(searchField?.text?.toString().orEmpty()) }
 
-    private fun bindDrawerApp(tile: Tile, app: App) {
+    private fun bindDrawerApp(tile: DrawerTiles.Tile, app: App) {
         bindTile(tile, app)
         tile.icon.alpha = if (drawerState.selecting) 0.35f else 1f
         tile.badge.visibility = if (drawerState.selecting) View.VISIBLE else View.GONE
@@ -1161,7 +1112,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun bindDrawerFolder(tile: Tile, folder: AppFolder) {
+    private fun bindDrawerFolder(tile: DrawerTiles.Tile, folder: AppFolder) {
         tile.layout.setOnTouchListener(null)
         tile.layout.contentDescription = "Folder ${folder.name}"
         tile.name.text = folder.name
@@ -1208,7 +1159,7 @@ class MainActivity : AppCompatActivity() {
                 override fun getItem(position: Int) = members[position]
                 override fun getItemId(position: Int) = position.toLong()
                 override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                    val tile = (convertView?.tag as? Tile) ?: createTile()
+                    val tile = (convertView?.tag as? DrawerTiles.Tile) ?: createTile()
                     bindTile(tile, members[position])
                     tile.layout.setOnLongClickListener {
                         showActionMenu(members[position].label, listOf(
