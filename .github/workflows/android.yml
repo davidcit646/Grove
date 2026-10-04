@@ -1,5 +1,7 @@
 name: Android build
 on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,28 +17,34 @@ jobs:
       - run: cargo test --manifest-path rust/grove-core/Cargo.toml
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
-      - name: Build and verify signed release APK
+      - name: Missing signing secret fails before artifact checks
+        run: |
+          if env -u GROVE_SIGNING_PASSWORD bash scripts/verify-release.sh > "$RUNNER_TEMP/negative-signing.log" 2>&1; then
+            echo 'Missing signing password did not fail' >&2
+            exit 1
+          fi
+          grep -F 'GROVE_SIGNING_PASSWORD is required' "$RUNNER_TEMP/negative-signing.log"
+      - name: Build and verify signed release
         if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
         env:
           GROVE_SIGNING_PASSWORD: ${{ secrets.GROVE_SIGNING_PASSWORD }}
         run: |
-          if [ -z "$GROVE_SIGNING_PASSWORD" ]; then
-            echo 'GROVE_SIGNING_PASSWORD is not configured; signed APK unavailable'
-            exit 0
-          fi
-          ./gradlew assembleRelease
-          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
-          test -n "$apksigner"
-          "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk |
-            grep -Fi '6e34977d69ed454a5b8ac6b234cb2d2403903b33ed19a6be1c5abd044fae6397'
-          echo 'SIGNED_READY=true' >> "$GITHUB_ENV"
+          test -n "$GROVE_SIGNING_PASSWORD" || { echo 'GROVE_SIGNING_PASSWORD is required' >&2; exit 1; }
+          ./gradlew assembleRelease bundleRelease
+          bash scripts/verify-release.sh
       - uses: actions/upload-artifact@v4
         with:
           name: grove-debug-apk
+          if-no-files-found: error
           path: app/build/outputs/apk/debug/*.apk
-      - name: Upload signed release APK
-        if: ${{ env.SIGNED_READY == 'true' }}
+      - name: Upload signed release
+        if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
         uses: actions/upload-artifact@v4
         with:
-          name: grove-signed-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: grove-signed-release
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
+            release-checksums.txt
+            release-provenance.txt
