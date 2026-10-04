@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.util.Log
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.message
 import java.io.File

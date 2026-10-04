@@ -1,5 +1,21 @@
 # Device acceptance checklist
 
+## Refactor verification record (2026-10-04)
+
+The stacked refactor has CI source checks, but no Android device or emulator was available in this workspace. The cases below are pending, not passed. For every execution record date, device/model, API level, build commit SHA, clean install or upgrade, exact steps, observed outcome and linked defect. Run on Android 12 and current Android. Keep signed APK update results separate from debug APK results.
+
+| Date | Device / API | Build SHA | Scenario | Outcome / issue |
+| --- | --- | --- | --- | --- |
+| Pending | Android 12 | Pending | Default Home cold/warm, reboot and recovery | Not run (#34) |
+| Pending | Current Android | Pending | Permission revoke/provider failure, widgets, gestures, wallpaper | Not run (#34) |
+| Pending | 16 KB page device/emulator | Pending | Signed APK/AAB native load and update | Not run (#33/#36) |
+| Pending | Same device before/after | Pending | Home first draw and 15,000-file search latency/allocations | Not run (#35) |
+
+For the latest stacked build, inject a malformed preference type and a failing config commit at cold start. Verify the minimal recovery surface offers Retry and Android Home settings, preserves the saved value, and does not crash-loop as default Home. Fail widget metadata restore independently and verify apps still load. Force a save failure while pinning, renaming a folder, finishing setup, and changing launcher settings; verify no unsaved in-memory state or success message appears. Then retry with writable storage and restart to check persistence. Exercise drawer tile hold/drag/drop and pinned tile hold/drag/edge scroll with a widget under the gesture path. Record the build SHA for each result.
+
+See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-capability failure cases. CI passing is required but does not fill any row in this table.
+
+
 ## Wallpaper picker (0.1.28)
 
 - On a clean install, browse all ten Commons images over a working connection; verify scaled photos that redirect to `thumb.wikimedia.org` show previews. Red, orange, blue, brown, and black and white previously failed.

@@ -19,7 +19,6 @@ import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
-import tech.granet.grove.R
 import tech.granet.grove.ThemeColors
 
 /**
