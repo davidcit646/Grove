@@ -20,7 +20,6 @@ import android.os.Environment
 import android.provider.Settings
 import android.provider.AlarmClock
 import android.provider.ContactsContract
-import android.telephony.PhoneNumberUtils
 import android.util.Log
 import android.os.*
 import android.text.Editable
@@ -30,7 +29,6 @@ import android.view.*
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.MenuRow
@@ -43,7 +41,6 @@ import tech.granet.grove.ui.menuDialog
 import tech.granet.grove.ui.message
 import java.util.*
 import java.io.File
-import java.nio.file.Files
 import java.util.concurrent.Executors
 
 /** Root HOME activity. Owns navigation; Android owns external apps and widget providers. */
