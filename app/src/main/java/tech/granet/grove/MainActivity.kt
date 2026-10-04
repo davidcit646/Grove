@@ -547,9 +547,9 @@ class MainActivity : AppCompatActivity() {
                         loadedApps.size else minOf(24, loadedApps.size)
                     iconCache.replace(loadedApps.associate { it.key to (reusable[it.key] ?: fallbackIcon) })
                     if (!prefs.contains("initialized")) {
-                        if (!setupPending() && config.favorites.isEmpty())
-                            config = config.copy(favorites = apps.take(8).map { it.key })
-                        prefs.edit().putBoolean("initialized", true).apply(); save()
+                        val initial = if (!setupPending() && config.favorites.isEmpty())
+                            config.copy(favorites = apps.take(8).map { it.key }) else config
+                        if (commitConfig(initial)) prefs.edit().putBoolean("initialized", true).apply()
                     }
                     if (coreRecoveryVisible) {
                         coreRecoveryVisible = false
@@ -601,7 +601,16 @@ class MainActivity : AppCompatActivity() {
             else drawerAdapter?.notifyDataSetChanged()
         }
     }
-    private fun save() = configStore.save(config)
+    private fun commitConfig(next: Config): Boolean {
+        return runCatching { configStore.save(next) }.fold(
+            onSuccess = { config = next; true },
+            onFailure = {
+                Log.e("Grove", "Could not save settings", it)
+                message("Could not save Grove settings")
+                false
+            },
+        )
+    }
     private fun activateConfig(next: Config) {
         val previousSearch = config.search
         configStore.activate(next)
@@ -987,8 +996,8 @@ class MainActivity : AppCompatActivity() {
         val pinned = app.key in config.favorites
         showActionMenu(app.label, listOf(
             Triple(if (pinned) "Unpin from home" else "Pin to home", R.drawable.ic_grid) {
-                config = config.copy(favorites = if (pinned) config.favorites - app.key else config.favorites + app.key)
-                save(); if (!drawer) showHome()
+                val next = config.copy(favorites = if (pinned) config.favorites - app.key else config.favorites + app.key)
+                if (commitConfig(next) && !drawer) showHome()
             },
             Triple("App info", R.drawable.ic_info) {
                 runCatching { launcher.startAppDetailsActivity(app.component, android.os.Process.myUserHandle(), null, null) }
@@ -1170,7 +1179,7 @@ class MainActivity : AppCompatActivity() {
             Triple("Rename folder", R.drawable.ic_edit) { promptRenameFolder(name) },
             Triple("Delete folder", R.drawable.ic_delete) {
                 confirmDialog("Delete $name?", "Apps in this folder will return to All apps.", "Delete") {
-                        DrawerState.deleteFolder(config, name)?.let { config = it; save(); refreshDrawer() }
+                        DrawerState.deleteFolder(config, name)?.let { if (commitConfig(it)) refreshDrawer() }
                     }
             },
         ))
@@ -1205,14 +1214,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun removeFromFolders(keys: Set<String>) {
-        config = DrawerState.removeFromFolders(config, keys)
-        save()
+        commitConfig(DrawerState.removeFromFolders(config, keys))
     }
 
     private fun moveAppsToFolder(keys: Set<String>, name: String) {
         val next = DrawerState.moveToFolder(config, keys, name) ?: return
-        config = next
-        drawerState.clearKeys(); save(); refreshDrawer()
+        if (commitConfig(next)) { drawerState.clearKeys(); refreshDrawer() }
     }
 
     private fun promptFolderName(keys: List<String> = emptyList()) {
@@ -1226,8 +1233,9 @@ class MainActivity : AppCompatActivity() {
                     input.error = "Choose a unique folder name up to 40 characters"
                     return@setOnClickListener
                 }
-                config = next
-                drawerState.clearKeys(); save(); refreshDrawer(); dialog.dismiss()
+                if (commitConfig(next)) {
+                    drawerState.clearKeys(); refreshDrawer(); dialog.dismiss()
+                }
             }
         }
         dialog.show()
@@ -1239,7 +1247,7 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
                 val next = DrawerState.renameFolder(config, name, input.text.toString())
                 if (next == null) message("Choose a unique folder name up to 40 characters")
-                else { config = next; save(); refreshDrawer() }
+                else if (commitConfig(next)) refreshDrawer()
             }.show()
     }
 
@@ -1255,8 +1263,11 @@ class MainActivity : AppCompatActivity() {
                 add(Triple("Add to new folder", R.drawable.ic_folder) { promptFolderName(keys.toList()) })
                 if (config.folders.isNotEmpty()) add(Triple("Move to folder", R.drawable.ic_folder) { chooseFolder(keys) })
                 add(Triple("Pin to home screen", R.drawable.ic_home) {
-                    DrawerState.pin(config, keys)?.let { config = it; save() }
-                    drawerState.clearKeys(); refreshDrawer(); message("Apps pinned to Home")
+                    DrawerState.pin(config, keys)?.let {
+                        if (commitConfig(it)) {
+                            drawerState.clearKeys(); refreshDrawer(); message("Apps pinned to Home")
+                        }
+                    }
                 })
                 add(Triple("Uninstall apps", R.drawable.ic_delete) { uninstallSelected(keys) })
             }
@@ -1436,7 +1447,7 @@ class MainActivity : AppCompatActivity() {
                         target.animate().scaleX(1f).scaleY(1f).setDuration(100L).start()
                     }
                     DragEvent.ACTION_DROP -> {
-                        DrawerState.movePin(config, drag.key, app.key)?.let { config = it; save() }
+                        DrawerState.movePin(config, drag.key, app.key)?.let { commitConfig(it) }
                     }
                 }
                 true
@@ -1482,11 +1493,7 @@ class MainActivity : AppCompatActivity() {
             finishSetup@{ next ->
                 firstRunSetup = null
                 val previousSearch = config.search
-                if (runCatching { configStore.save(next) }.onFailure {
-                    Log.e("Grove", "Could not finish setup", it)
-                    message("Could not save setup; please retry")
-                }.isFailure) return@finishSetup
-                config = next
+                if (!commitConfig(next)) return@finishSetup
                 applySearchSettings(previousSearch)
                 prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
                 showHome()
@@ -1501,11 +1508,11 @@ class MainActivity : AppCompatActivity() {
                         }.show()
                 }
             },
-            {
+            skipSetup@{
                 firstRunSetup = null
                 if (setupPending() && config.favorites.isEmpty()) {
-                    config = config.copy(favorites = apps.take(8).map { it.key })
-                    save()
+                    if (!commitConfig(config.copy(favorites = apps.take(8).map { it.key })))
+                        return@skipSetup
                     showHome()
                 }
                 prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
@@ -1518,10 +1525,10 @@ class MainActivity : AppCompatActivity() {
             this, { config },
             { next ->
                 val previousSearch = config.search
-                config = next
-                save()
-                if (previousSearch != next.search) applySearchSettings(previousSearch)
-                if (!drawer) showHome()
+                if (commitConfig(next)) {
+                    if (previousSearch != next.search) applySearchSettings(previousSearch)
+                    if (!drawer) showHome()
+                }
             },
             { editConfig() },
             { export.launch("grove-config.json") },
@@ -1644,10 +1651,10 @@ class MainActivity : AppCompatActivity() {
         WallpaperPicker(this, wallpaperController, config.wallpaper) { index, which ->
             wallpaperController.apply(index, which) { applied ->
                 if (applied && which and WallpaperManager.FLAG_SYSTEM != 0) {
-                    config = config.copy(wallpaper = index)
-                    save()
-                    pendingWallpaper = null
-                    artworkStyle = -1
+                    if (commitConfig(config.copy(wallpaper = index))) {
+                        pendingWallpaper = null
+                        artworkStyle = -1
+                    }
                     showHome()
                 }
             }
