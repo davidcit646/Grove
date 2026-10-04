@@ -27,6 +27,7 @@ import android.text.InputFilter
 import android.text.TextWatcher
 import android.view.*
 import android.widget.*
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
@@ -105,7 +106,7 @@ class MainActivity : AppCompatActivity() {
     private var apps = emptyList<App>()
     private var appSearch = SearchResults.prepare(apps) { it.searchName }
     private val widgets by lazy { WidgetRegistry(host, manager, prefs) }
-    private val widgetFlow by lazy {
+    private val widgetFlow: WidgetFlow by lazy {
         WidgetFlow(this, manager, host, prefs, widgets,
             { bindWidget.launch(it) }, { configureResult.launch(it) }, { showHome() }, this::message)
     }
@@ -151,10 +152,10 @@ class MainActivity : AppCompatActivity() {
                 .onFailure { error -> message(error.message ?: "Could not save configuration") }
         }.onFailure { message(it.message ?: "Invalid configuration") }
     }
-    private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    private val bindWidget: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) widgetFlow.configure() else widgetFlow.cancel()
     }
-    private val configureResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    private val configureResult: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) widgetFlow.finish() else {
             Log.w("Grove", "Widget configuration returned ${result.resultCode} for id ${widgets.pending}")
             widgetFlow.cancel()
