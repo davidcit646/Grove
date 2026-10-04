@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
     private var drawerGrid: GridView? = null
     private var drawerVisibleCount = 0
     private val drawerState = DrawerState()
-    private data class DrawerDrag(val key: String)
+    private val drawerDragController by lazy { DrawerDragController(::appMenu) }
     private val uninstallBatch = UninstallBatch()
     private val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         loadApps()
@@ -1020,15 +1020,15 @@ class MainActivity : AppCompatActivity() {
         }
         if (drawerState.selecting) tile.layout.setOnLongClickListener {
             drawerState.select(app.key); drawerAdapter?.notifyDataSetChanged(); true
-        } else configureDrawerDrag(tile.layout, app)
+        } else drawerDragController.attach(tile.layout, app)
         tile.layout.setOnDragListener { view, event ->
-            if (event.localState !is DrawerDrag) false else {
+            if (event.localState !is DrawerDragController.Drag) false else {
                 when (event.action) {
                     DragEvent.ACTION_DRAG_ENTERED -> view.alpha = 0.55f
                     DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> view.alpha = 1f
                     DragEvent.ACTION_DROP -> {
                         view.alpha = 1f
-                        val source = (event.localState as DrawerDrag).key
+                        val source = (event.localState as DrawerDragController.Drag).key
                         if (source != app.key) promptFolderName(listOf(source, app.key))
                     }
                 }
@@ -1048,13 +1048,13 @@ class MainActivity : AppCompatActivity() {
         tile.layout.setOnClickListener { openFolder(folder.name) }
         tile.layout.setOnLongClickListener { folderOptions(folder.name); true }
         tile.layout.setOnDragListener { view, event ->
-            if (event.localState !is DrawerDrag) false else {
+            if (event.localState !is DrawerDragController.Drag) false else {
                 when (event.action) {
                     DragEvent.ACTION_DRAG_ENTERED -> view.alpha = 0.55f
                     DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> view.alpha = 1f
                     DragEvent.ACTION_DROP -> {
                         view.alpha = 1f
-                        moveAppsToFolder(setOf((event.localState as DrawerDrag).key), folder.name)
+                        moveAppsToFolder(setOf((event.localState as DrawerDragController.Drag).key), folder.name)
                     }
                 }
                 true
@@ -1217,61 +1217,6 @@ class MainActivity : AppCompatActivity() {
             parent?.requestDisallowInterceptTouchEvent(false)
         }
         heldPin = null
-    }
-
-    @android.annotation.SuppressLint("ClickableViewAccessibility")
-    private fun configureDrawerDrag(view: View, app: App) {
-        var downX = 0f
-        var downY = 0f
-        var touchActive = false
-        var dragArmed = false
-        var dragging = false
-        fun release() {
-            dragArmed = false
-            view.scaleX = 1f; view.scaleY = 1f
-            view.parent?.requestDisallowInterceptTouchEvent(false)
-        }
-        view.setOnLongClickListener {
-            // A stationary hold opens actions on release. Moving after the
-            // hold starts a drag, so either gesture can be used on one app.
-            if (!touchActive) appMenu(app) else {
-                dragArmed = true
-                view.parent?.requestDisallowInterceptTouchEvent(true)
-                view.scaleX = 1.08f; view.scaleY = 1.08f
-            }
-            true
-        }
-        view.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY
-                    touchActive = true; dragging = false
-                }
-                MotionEvent.ACTION_MOVE -> if (dragArmed) {
-                    val dx = event.rawX - downX; val dy = event.rawY - downY
-                    val slop = ViewConfiguration.get(this).scaledTouchSlop
-                    if (dx * dx + dy * dy > slop * slop) {
-                        dragging = view.startDragAndDrop(null, View.DragShadowBuilder(view), DrawerDrag(app.key), 0)
-                        release()
-                    }
-                    return@setOnTouchListener true
-                }
-                MotionEvent.ACTION_UP -> {
-                    touchActive = false
-                    if (dragArmed) {
-                        release(); view.isPressed = false; appMenu(app)
-                        return@setOnTouchListener true
-                    }
-                    if (dragging) { dragging = false; return@setOnTouchListener true }
-                }
-                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
-                    touchActive = false; dragging = false
-                    view.cancelLongPress(); view.isPressed = false
-                    if (dragArmed) release()
-                }
-            }
-            false
-        }
     }
 
     @android.annotation.SuppressLint("ClickableViewAccessibility")
