@@ -227,7 +227,7 @@ class MainActivity : AppCompatActivity() {
         })
         launcher.registerCallback(changes, Handler(Looper.getMainLooper()))
         homeScrollY = savedInstanceState?.getInt("homeScrollY") ?: 0
-        showHome(); loadApps(); indexFiles(); refreshContacts()
+        showHome(); applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
         if (configStore.brokenCustomConfig != null) root.post { showConfigRecoveryDialog() }
         if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { settings() }
     }
@@ -239,9 +239,31 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         firstRunSetup?.refreshPermissions()
-        if (config.search.files && Environment.isExternalStorageManager() && files.isEmpty() && !indexingFiles) indexFiles()
-        if (config.search.contacts && (!hasContactAccess() || SystemClock.elapsedRealtime() - lastContactRefresh > 15 * 60_000L)) refreshContacts()
+        applyStartupPlan(StartupCoordinator.resume(startupSnapshot(), SystemClock.elapsedRealtime()))
     }
+
+    private fun startupSnapshot() = StartupCoordinator.Snapshot(
+        contactSearchEnabled = config.search.contacts,
+        contactsGranted = hasContactAccess(),
+        lastContactRefreshMs = lastContactRefresh,
+        fileSearchEnabled = config.search.files,
+        filesGranted = Environment.isExternalStorageManager(),
+        hasFiles = files.isNotEmpty(),
+        indexingFiles = indexingFiles,
+    )
+
+    private fun applyStartupPlan(plan: StartupCoordinator.Plan) {
+        if (plan.clearFiles) {
+            fileIndexGeneration++
+            files = emptyList()
+            indexingFiles = false
+            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+        }
+        if (plan.loadApps) loadApps()
+        if (plan.indexFiles) indexFiles()
+        if (plan.refreshContacts) refreshContacts()
+    }
+
     override fun onStop() {
         releasePinHold(); longPressHandler.removeCallbacks(longPressRunnable)
         gestureTracking = false; host.stopListening()
