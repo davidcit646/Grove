@@ -145,16 +145,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) runCatching { contentResolver.openOutputStream(uri)?.use { it.write(config.json().toByteArray()) } ?: error("Cannot open file") }
-            .onFailure { message("Could not export configuration") }
+        if (uri != null) runCatching {
+            contentResolver.openOutputStream(uri)?.use { ConfigDocuments.write(config, it) }
+                ?: error("Cannot open file")
+        }.onFailure { message("Could not export configuration") }
     }
     private val importConfig = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) runCatching {
-            val bytes = contentResolver.openInputStream(uri)?.use { input -> val buffer = java.io.ByteArrayOutputStream(); val chunk = ByteArray(4096); while (buffer.size() <= 65536) { val count = input.read(chunk, 0, minOf(chunk.size, 65537 - buffer.size())); if (count < 0) break; buffer.write(chunk, 0, count) }; buffer.toByteArray() } ?: error("Cannot open file")
-            require(bytes.size <= 65536) { "Configuration exceeds 64 KB" }
-            ConfigStore.parse(bytes.toString(Charsets.UTF_8))
-        }.onSuccess { activateConfig(it); showHome(); message("Configuration imported") }
-            .onFailure { message(it.message ?: "Invalid configuration") }
+            contentResolver.openInputStream(uri)?.use(ConfigDocuments::read)
+                ?: error("Cannot open file")
+        }.onSuccess {
+            runCatching { activateConfig(it) }
+                .onSuccess { showHome(); message("Configuration imported") }
+                .onFailure { error -> message(error.message ?: "Could not save configuration") }
+        }.onFailure { message(it.message ?: "Invalid configuration") }
     }
     private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) configureWidget() else cancelWidget()
@@ -576,8 +580,8 @@ class MainActivity : AppCompatActivity() {
     private fun save() = configStore.save(config)
     private fun activateConfig(next: Config) {
         val previousSearch = config.search
+        configStore.activate(next)
         config = next
-        configStore.activate(config)
         if (previousSearch != next.search) applySearchSettings(previousSearch)
     }
     private fun button(text: String, action: () -> Unit) = MaterialButton(this).apply {
