@@ -135,25 +135,12 @@ class MainActivity : AppCompatActivity() {
     private var backdropHeight = 0
     private var wallpaperButtonColors: Pair<Int, Int>? = null
     private var pendingWallpaper: Triple<Int, Int, Int>? = null
-    private var gestureStartX = 0f
-    private var gestureStartY = 0f
-    private var gestureStartTime = 0L
-    private var gestureTracking = false
-    private var gestureBlocked = false
-    private var contextMenuBlocked = false
-    private var longPressTriggered = false
-    private var touchMoved = false
-    private var swipeCaptured = false
-    private var drawerSwipeTracking = false
-    private var drawerSwipeCaptured = false
-    private var drawerStartedAtTop = false
+    private val gestureSession = GestureSession()
     private var touchedScroll: ScrollView? = null
     private var loadingApps = true
     private val longPressHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
-        if (gestureTracking && !drawer && !contextMenuBlocked && config.gestures.longPressHomeContextMenu) {
-            longPressTriggered = true
-            gestureTracking = false
+        if (config.gestures.longPressHomeContextMenu && gestureSession.longPress()) {
             cancelChildTouch()
             settings()
         }
@@ -340,7 +327,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         releasePinHold(); longPressHandler.removeCallbacks(longPressRunnable)
-        gestureTracking = false; host.stopListening()
+        gestureSession.cancel(); host.stopListening()
         clearAppSelection()
         if (drawer) refreshDrawer()
         super.onStop()
@@ -378,13 +365,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun cancelChildTouch() {
-        val cancel = MotionEvent.obtain(gestureStartTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
-        super.dispatchTouchEvent(cancel); cancel.recycle()
+        val cancel = MotionEvent.obtain(gestureSession.downTime, SystemClock.uptimeMillis(),
+            MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+        super.dispatchTouchEvent(cancel)
+        cancel.recycle()
     }
+
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (firstRunSetup != null) return super.dispatchTouchEvent(event)
         if (heldPin != null || activePinDrag != null) {
-            gestureTracking = false
+            gestureSession.cancel()
             return super.dispatchTouchEvent(event)
         }
         when (event.actionMasked) {
@@ -392,112 +382,48 @@ class MainActivity : AppCompatActivity() {
                 root.animate().cancel()
                 root.translationY = 0f
                 root.alpha = 1f
-                gestureStartX = event.rawX; gestureStartY = event.rawY; gestureStartTime = event.eventTime
-                longPressTriggered = false; touchMoved = false; swipeCaptured = false
-                drawerSwipeCaptured = false
                 longPressHandler.removeCallbacks(longPressRunnable)
-
-                if (drawer || searchMode) {
-                    val grid = drawerGrid
-                    drawerStartedAtTop = grid != null && !grid.canScrollVertically(-1) && pointInside(grid, event.rawX, event.rawY)
-                    drawerSwipeTracking = drawerStartedAtTop
-                    gestureTracking = false
-                    return super.dispatchTouchEvent(event)
-                }
-
-                drawerSwipeTracking = false
-                gestureTracking = ::root.isInitialized
-                gestureBlocked = gestureTracking && touchInsideWidget(root, event.rawX, event.rawY)
-                contextMenuBlocked = gestureTracking && touchInsideInteractive(root, event.rawX, event.rawY)
-                touchedScroll = if (gestureTracking) scrollAt(root, event.rawX, event.rawY) else null
-                if (gestureTracking && !contextMenuBlocked && config.gestures.longPressHomeContextMenu) {
+                val inDrawer = drawer || searchMode
+                val grid = drawerGrid
+                val atTop = inDrawer && grid != null && !grid.canScrollVertically(-1) &&
+                    pointInside(grid, event.rawX, event.rawY)
+                val widget = !inDrawer && touchInsideWidget(root, event.rawX, event.rawY)
+                val interactive = !inDrawer && touchInsideInteractive(root, event.rawX, event.rawY)
+                touchedScroll = if (!inDrawer) scrollAt(root, event.rawX, event.rawY) else null
+                val schedule = gestureSession.begin(event.rawX, event.rawY, event.eventTime,
+                    inDrawer, atTop, ::root.isInitialized, widget, interactive)
+                if (schedule && config.gestures.longPressHomeContextMenu) {
                     longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
                 }
             }
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> {
                 longPressHandler.removeCallbacks(longPressRunnable)
-                gestureTracking = false
-                drawerSwipeTracking = false
+                val consume = gestureSession.cancel()
                 settleSwipeFeedback()
-                if (swipeCaptured || drawerSwipeCaptured || longPressTriggered) {
-                    swipeCaptured = false; drawerSwipeCaptured = false; longPressTriggered = false
-                    return true
-                }
+                if (consume) return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (drawerSwipeTracking) {
-                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
-                    val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
-                    if (!drawerSwipeCaptured && dy > slop && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.1f) {
-                        drawerSwipeCaptured = true
-                        cancelChildTouch()
-                    }
-                    if (drawerSwipeCaptured) {
-                        val offset = dy.coerceAtLeast(0f) * 0.72f
-                        root.translationY = offset
-                        return true
-                    }
-                }
-
-                if (longPressTriggered) return true
-                if (gestureTracking) {
-                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
-                    val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
-                    if (dx * dx + dy * dy > slop * slop) {
-                        touchMoved = true; longPressHandler.removeCallbacks(longPressRunnable)
-                        if (!swipeCaptured && touchedScroll?.canScrollVertically(if (dy > 0) -1 else 1) == true) gestureBlocked = true
-                    }
-                    if (!gestureBlocked && !contextMenuBlocked) {
-                        val preview = (dy * 0.10f).coerceIn(-dp(24).toFloat(), dp(24).toFloat())
-                        root.translationY = preview
-                    }
-                    if (!gestureBlocked && !swipeCaptured && Gestures.resolve(dx, dy, event.eventTime - gestureStartTime,
-                            dp(72).toFloat(), config.gestures) != HomeGesture.NONE) {
-                        swipeCaptured = true; cancelChildTouch()
-                    }
-                    if (swipeCaptured) return true
-                }
+                val dy = gestureSession.verticalDelta(event.rawY)
+                val scrollCanMove = touchedScroll?.canScrollVertically(if (dy > 0) -1 else 1) == true
+                val step = gestureSession.move(event.rawX, event.rawY, event.eventTime,
+                    ViewConfiguration.get(this).scaledTouchSlop.toFloat(), dp(72).toFloat(),
+                    config.gestures, scrollCanMove, dp(24).toFloat())
+                if (step.moved) longPressHandler.removeCallbacks(longPressRunnable)
+                if (step.cancelChildren) cancelChildTouch()
+                step.offset?.let { root.translationY = it }
+                if (step.consume) return true
             }
             MotionEvent.ACTION_UP -> {
                 longPressHandler.removeCallbacks(longPressRunnable)
-
-                if (drawerSwipeTracking || drawerSwipeCaptured) {
-                    drawerSwipeTracking = false
-                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
-                    val close = drawerSwipeCaptured && Gestures.drawerClose(
-                        dx, dy, event.eventTime - gestureStartTime, dp(88).toFloat(), drawerStartedAtTop
-                    )
-                    drawerSwipeCaptured = false
-                    if (close) {
-                        animateDrawerClosed()
-                        return true
-                    }
-                    settleSwipeFeedback()
-                    if (drawerStartedAtTop && dy > ViewConfiguration.get(this).scaledTouchSlop) return true
-                }
-
-                if (longPressTriggered) {
-                    longPressTriggered = false; gestureTracking = false; settleSwipeFeedback(); return true
-                }
-                if (gestureTracking) {
-                    gestureTracking = false
-                    val dx = event.rawX - gestureStartX; val dy = event.rawY - gestureStartY
-                    val gesture = if (!gestureBlocked) Gestures.resolve(dx, dy, event.eventTime - gestureStartTime,
-                        dp(72).toFloat(), config.gestures) else HomeGesture.NONE
-                    if (gesture != HomeGesture.NONE) {
-                        if (!swipeCaptured) cancelChildTouch()
-                        swipeCaptured = false
-                        animateHomeGesture(gesture)
-                        return true
-                    }
-                    settleSwipeFeedback()
-                    if (swipeCaptured) { swipeCaptured = false; return true }
-                    val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
-                    val tap = !touchMoved && dx * dx + dy * dy <= slop * slop && event.eventTime - gestureStartTime <= 350L
-                    if (!contextMenuBlocked && tap && config.gestures.tapHomeContextMenu) {
-                        cancelChildTouch(); settings(); return true
-                    }
-                }
+                val step = gestureSession.release(event.rawX, event.rawY, event.eventTime,
+                    ViewConfiguration.get(this).scaledTouchSlop.toFloat(), dp(72).toFloat(),
+                    dp(88).toFloat(), config.gestures, config.gestures.tapHomeContextMenu)
+                if (step.cancelChildren) cancelChildTouch()
+                if (step.closeDrawer) animateDrawerClosed()
+                else if (step.gesture != HomeGesture.NONE) animateHomeGesture(step.gesture)
+                else if (step.contextMenu) settings()
+                else if (step.settle) settleSwipeFeedback()
+                if (step.consume) return true
             }
         }
         return super.dispatchTouchEvent(event)
@@ -1618,7 +1544,7 @@ class MainActivity : AppCompatActivity() {
             // Accessibility long-click has no pointer to drag: open app options directly.
             if (!touchActive) appMenu(app) else {
                 heldPin = view
-                gestureTracking = false
+                gestureSession.cancel()
                 longPressHandler.removeCallbacks(longPressRunnable)
                 view.parent.requestDisallowInterceptTouchEvent(true)
                 view.scaleX = 1.08f; view.scaleY = 1.08f
