@@ -130,16 +130,11 @@ class MainActivity : AppCompatActivity() {
     private var backdropHeight = 0
     private var wallpaperButtonColors: Pair<Int, Int>? = null
     private var pendingWallpaper: Triple<Int, Int, Int>? = null
-    private val gestureSession = GestureSession()
-    private var touchedScroll: ScrollView? = null
-    private var loadingApps = true
-    private val longPressHandler = Handler(Looper.getMainLooper())
-    private val longPressRunnable = Runnable {
-        if (config.gestures.longPressHomeContextMenu && gestureSession.longPress()) {
-            cancelChildTouch()
-            settings()
-        }
+    private val touchRouter by lazy {
+        HomeTouchRouter(this, { root }, { drawerGrid }, { drawer || searchMode },
+            { config.gestures }, ::settings, ::animateHomeGesture, ::animateDrawerClosed)
     }
+    private var loadingApps = true
 
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) runCatching {
@@ -352,8 +347,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        releasePinHold(); longPressHandler.removeCallbacks(longPressRunnable)
-        gestureSession.cancel()
+        releasePinHold(); touchRouter.cancel()
         runCatching { host.stopListening() }.onFailure { Log.w("Grove", "Widget stop failed", it) }
         clearAppSelection()
         if (drawer) refreshDrawer()
@@ -365,7 +359,7 @@ class MainActivity : AppCompatActivity() {
             catch (error: Exception) { Log.w("Grove", "Could not unregister launcher callback", error) }
             launcherCallbackRegistered = false
         }
-        longPressHandler.removeCallbacks(longPressRunnable)
+        touchRouter.cancel()
         pendingSearch?.let(searchHandler::removeCallbacks)
         searchHandler.removeCallbacks(delayedContactRefresh)
         searchGeneration++
@@ -391,76 +385,13 @@ class MainActivity : AppCompatActivity() {
         if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { settings() }
     }
 
-    private fun cancelChildTouch() {
-        val cancel = MotionEvent.obtain(gestureSession.downTime, SystemClock.uptimeMillis(),
-            MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
-        super.dispatchTouchEvent(cancel)
-        cancel.recycle()
-    }
-
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (firstRunSetup != null) return super.dispatchTouchEvent(event)
         if (heldPin != null || activePinDrag != null) {
-            gestureSession.cancel()
+            touchRouter.cancel()
             return super.dispatchTouchEvent(event)
         }
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                root.animate().cancel()
-                root.translationY = 0f
-                root.alpha = 1f
-                longPressHandler.removeCallbacks(longPressRunnable)
-                val inDrawer = drawer || searchMode
-                val grid = drawerGrid
-                val atTop = inDrawer && grid != null && !grid.canScrollVertically(-1) &&
-                    pointInside(grid, event.rawX, event.rawY)
-                val widget = !inDrawer && touchInsideWidget(root, event.rawX, event.rawY)
-                val interactive = !inDrawer && touchInsideInteractive(root, event.rawX, event.rawY)
-                touchedScroll = if (!inDrawer) scrollAt(root, event.rawX, event.rawY) else null
-                val schedule = gestureSession.begin(event.rawX, event.rawY, event.eventTime,
-                    inDrawer, atTop, ::root.isInitialized, widget, interactive)
-                if (schedule && config.gestures.longPressHomeContextMenu) {
-                    longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
-                }
-            }
-            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> {
-                longPressHandler.removeCallbacks(longPressRunnable)
-                val consume = gestureSession.cancel()
-                settleSwipeFeedback()
-                if (consume) return true
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val dy = gestureSession.verticalDelta(event.rawY)
-                val scrollCanMove = touchedScroll?.canScrollVertically(if (dy > 0) -1 else 1) == true
-                val step = gestureSession.move(event.rawX, event.rawY, event.eventTime,
-                    ViewConfiguration.get(this).scaledTouchSlop.toFloat(), dp(72).toFloat(),
-                    config.gestures, scrollCanMove, dp(24).toFloat())
-                if (step.moved) longPressHandler.removeCallbacks(longPressRunnable)
-                if (step.cancelChildren) cancelChildTouch()
-                step.offset?.let { root.translationY = it }
-                if (step.consume) return true
-            }
-            MotionEvent.ACTION_UP -> {
-                longPressHandler.removeCallbacks(longPressRunnable)
-                val step = gestureSession.release(event.rawX, event.rawY, event.eventTime,
-                    ViewConfiguration.get(this).scaledTouchSlop.toFloat(), dp(72).toFloat(),
-                    dp(88).toFloat(), config.gestures, config.gestures.tapHomeContextMenu)
-                if (step.cancelChildren) cancelChildTouch()
-                if (step.closeDrawer) animateDrawerClosed()
-                else if (step.gesture != HomeGesture.NONE) animateHomeGesture(step.gesture)
-                else if (step.contextMenu) settings()
-                else if (step.settle) settleSwipeFeedback()
-                if (step.consume) return true
-            }
-        }
-        return super.dispatchTouchEvent(event)
-    }
-
-    private fun pointInside(view: View, rawX: Float, rawY: Float): Boolean {
-        val location = IntArray(2)
-        view.getLocationOnScreen(location)
-        return rawX >= location[0] && rawX < location[0] + view.width &&
-            rawY >= location[1] && rawY < location[1] + view.height
+        return touchRouter.dispatch(event) { super.dispatchTouchEvent(it) }
     }
 
     private fun settleSwipeFeedback() {
@@ -486,48 +417,6 @@ class MainActivity : AppCompatActivity() {
             enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
         }.start()
     }
-    private fun scrollAt(view: View, x: Float, y: Float): ScrollView? {
-        val bounds = Rect()
-        if (!view.getGlobalVisibleRect(bounds) || !bounds.contains(x.toInt(), y.toInt())) return null
-        if (view is ScrollView) return view
-        if (view is ViewGroup) for (index in 0 until view.childCount) {
-            scrollAt(view.getChildAt(index), x, y)?.let { return it }
-        }
-        return null
-    }
-
-    private fun touchInsideWidget(view: View, rawX: Float, rawY: Float): Boolean {
-        if (view.visibility != View.VISIBLE) return false
-        if (view is AppWidgetHostView) {
-            val location = IntArray(2)
-            view.getLocationOnScreen(location)
-            return rawX >= location[0] && rawX < location[0] + view.width &&
-                rawY >= location[1] && rawY < location[1] + view.height
-        }
-        if (view is ViewGroup) {
-            for (index in 0 until view.childCount) {
-                if (touchInsideWidget(view.getChildAt(index), rawX, rawY)) return true
-            }
-        }
-        return false
-    }
-
-    private fun touchInsideInteractive(view: View, rawX: Float, rawY: Float): Boolean {
-        if (view.visibility != View.VISIBLE) return false
-        if (view !== root && (view.isClickable || view.isLongClickable || view is EditText || view is AppWidgetHostView)) {
-            val location = IntArray(2)
-            view.getLocationOnScreen(location)
-            if (rawX >= location[0] && rawX < location[0] + view.width &&
-                rawY >= location[1] && rawY < location[1] + view.height) return true
-        }
-        if (view is ViewGroup) {
-            for (index in 0 until view.childCount) {
-                if (touchInsideInteractive(view.getChildAt(index), rawX, rawY)) return true
-            }
-        }
-        return false
-    }
-
     private fun loadApps(changedPackage: String? = null) {
         if (isDestroyed || worker.isShutdown) return
         val generation = ++loadGeneration
@@ -1394,8 +1283,7 @@ class MainActivity : AppCompatActivity() {
             // Accessibility long-click has no pointer to drag: open app options directly.
             if (!touchActive) appMenu(app) else {
                 heldPin = view
-                gestureSession.cancel()
-                longPressHandler.removeCallbacks(longPressRunnable)
+                touchRouter.cancel()
                 view.parent.requestDisallowInterceptTouchEvent(true)
                 view.scaleX = 1.08f; view.scaleY = 1.08f
             }
