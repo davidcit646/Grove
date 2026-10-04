@@ -1,6 +1,6 @@
 # Grove build verification
 
-The 0.1.29 alpha onboarding redesign has not yet been installed on a device. The previous 0.1.28 alpha build passed GitHub Actions; the workflow builds and tests source on pushes to `main`.
+The 0.1.30 alpha source at baseline commit `181c4ab` passed Android debug build, unit tests, lint and Rust tests. That run did not produce a signed release artifact because the signing secret was unavailable. The refactor is under stacked draft PRs; their passing CI runs are source checks, not device validation. The 0.1.29 onboarding and current refactor have not been installed on a device in this work.
 
 The source now targets API 36 for the current Google Play submission requirement. The optional broad file-search permission still requires a Play policy decision and declaration before a Play release; see [PLAY-READINESS.md](PLAY-READINESS.md).
 

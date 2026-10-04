@@ -1,6 +1,6 @@
 # Grove Launcher
 
-An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.29 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
+An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.30 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
 
 ## 0.1.29 changes
 
