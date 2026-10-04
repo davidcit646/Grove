@@ -31,10 +31,7 @@ internal object CoreBridge {
     fun searchOrder(labels: Array<String>, query: Search.Query, limit: Int): IntArray {
         if (labels.isEmpty() || limit <= 0) return IntArray(0)
         if (loaded) native("search") {
-            searchNative(labels, query.text, limit).also { order ->
-                require(order.size <= limit && order.distinct().size == order.size &&
-                    order.all { it in labels.indices }) { "Malformed native search order" }
-            }
+            NativeResults.search(searchNative(labels, query.text, limit), labels.size, limit)
         }?.let { return it }
         return fallbackOrder(labels, query, limit)
     }
@@ -66,15 +63,7 @@ internal object CoreBridge {
         if (extensions.isEmpty()) return emptyList()
         val fallback = extensions.map(::extensionOverride)
         if (loaded) native("mime") {
-            classifyNative(extensions.toTypedArray()).map { packed ->
-                if (packed.isEmpty()) null
-                else packed.split('|').let { parts ->
-                    require(parts.size == 2 && parts[0].contains('/') && parts[1].isNotBlank()) {
-                        "Malformed native MIME result"
-                    }
-                    parts[0] to parts[1]
-                }
-            }.also { require(it == fallback) { "Native MIME table differs from Kotlin" } }
+            NativeResults.mime(classifyNative(extensions.toTypedArray()), fallback)
         }?.let { return it }
         return fallback
     }
@@ -92,8 +81,7 @@ internal object CoreBridge {
     fun renderWallpaper(style: Int, width: Int, height: Int): IntArray? {
         if (!loaded || width <= 0 || height <= 0 || width.toLong() * height > 16_000_000) return null
         return native("wallpaper") {
-            renderWallpaperNative(style, width, height)
-                .also { require(it.size.toLong() == width.toLong() * height) { "Malformed native wallpaper" } }
+            NativeResults.wallpaper(renderWallpaperNative(style, width, height), width, height)
         }
     }
 
