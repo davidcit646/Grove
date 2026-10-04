@@ -46,6 +46,10 @@ fun Context.label(text: String, size: Float = 16f, horizontalPaddingDp: Int = 0)
         setPadding(h, dp(8), h, dp(8))
     }
 
+/** Text on Grove's dark wallpaper scrim stays legible in either system theme. */
+fun Context.wallpaperLabel(text: String, size: Float = 16f): TextView =
+    label(text, size).apply { setTextColor(Color.WHITE) }
+
 /** Section title: bold, in the theme's icon color. */
 fun Context.titleText(text: String, topPaddingDp: Int = 0): TextView = TextView(this).apply {
     this.text = text
