@@ -1268,6 +1268,7 @@ class MainActivity : AppCompatActivity() {
                             drawerState.clearKeys(); refreshDrawer(); message("Apps pinned to Home")
                         }
                     }
+                    Unit
                 })
                 add(Triple("Uninstall apps", R.drawable.ic_delete) { uninstallSelected(keys) })
             }
