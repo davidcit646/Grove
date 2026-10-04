@@ -8,6 +8,7 @@ android {
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("rustJniLibs"))
     defaultConfig {
         applicationId = "tech.granet.grove"
+        manifestPlaceholders["appLabel"] = "Grove Launcher"
         minSdk = 31
         targetSdk = 36
         versionCode = 31
@@ -26,6 +27,10 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".test"
+            manifestPlaceholders["appLabel"] = "Grove Test"
+        }
         getByName("release") { signingConfig = signingConfigs.getByName("groveRelease") }
     }
 }

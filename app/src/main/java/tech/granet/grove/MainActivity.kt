@@ -35,7 +35,7 @@ import tech.granet.grove.ui.MenuRow
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.infoDialog
-import tech.granet.grove.ui.label
+import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.listDialog
 import tech.granet.grove.ui.menuDialog
 import tech.granet.grove.ui.message
@@ -619,12 +619,12 @@ class MainActivity : AppCompatActivity() {
     private fun renderPinnedApps(target: LinearLayout) {
         if (config.homeScreen.showPinnedAppsHint) {
             val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            heading.addView(label("PINNED APPS", 12f), LinearLayout.LayoutParams(0, -2, 1f))
+            heading.addView(wallpaperLabel("PINNED APPS", 12f), LinearLayout.LayoutParams(0, -2, 1f))
             target.addView(heading)
-            target.addView(label("Hold and drag to move. Hold and release for options.", 12f))
+            target.addView(wallpaperLabel("Hold and drag to move. Hold and release for options.", 12f))
         }
         addGrid(apps.filter { it.key in config.favorites }.sortedBy { config.favorites.indexOf(it.key) }, target)
-        if (config.favorites.isEmpty()) target.addView(label("Long-press an app in the drawer to pin it here."))
+        if (config.favorites.isEmpty()) target.addView(wallpaperLabel("Long-press an app in the drawer to pin it here."))
     }
 
     private fun indexFiles() {
@@ -780,7 +780,7 @@ class MainActivity : AppCompatActivity() {
         rememberHomeScroll()
         clearAppSelection()
         drawer = false; searchMode = true; base()
-        root.addView(label("Search", 30f))
+        root.addView(wallpaperLabel("Search", 30f))
         val field = EditText(this).apply {
             hint = "Apps, contacts, files, web, and Play Store"
             filters = arrayOf(InputFilter.LengthFilter(256))
@@ -939,10 +939,10 @@ class MainActivity : AppCompatActivity() {
         drawer = true; searchMode = false; base()
         root.requestFocus()
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        header.addView(label("All apps", 30f), LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(wallpaperLabel("All apps", 30f), LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(ImageView(this).apply {
             setImageResource(R.drawable.ic_settings)
-            imageTintList = ColorStateList.valueOf(ThemeColors.icon(this@MainActivity))
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
             contentDescription = "App drawer options"
             setPadding(dp(12), dp(12), dp(12), dp(12))
             isClickable = true; isFocusable = true
@@ -956,7 +956,7 @@ class MainActivity : AppCompatActivity() {
         }
         searchField = field; root.addView(field)
         val content = FrameLayout(this)
-        val empty = label(if (loadingApps) "Preparing apps and icons…" else "No matching apps").apply { gravity = Gravity.CENTER }
+        val empty = wallpaperLabel(if (loadingApps) "Preparing apps and icons…" else "No matching apps").apply { gravity = Gravity.CENTER }
         drawerEmpty = empty
         val grid = GridView(this).apply {
             numColumns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
@@ -1046,7 +1046,7 @@ class MainActivity : AppCompatActivity() {
         tile.layout.contentDescription = "Folder ${folder.name}"
         tile.name.text = folder.name
         tile.icon.setImageResource(R.drawable.ic_folder)
-        tile.icon.imageTintList = ColorStateList.valueOf(ThemeColors.icon(this))
+        tile.icon.imageTintList = ColorStateList.valueOf(Color.WHITE)
         tile.icon.alpha = 1f
         tile.badge.visibility = View.GONE
         tile.layout.setOnClickListener { folderActions.open(folder.name) }

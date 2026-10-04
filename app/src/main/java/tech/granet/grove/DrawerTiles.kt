@@ -12,7 +12,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import tech.granet.grove.ui.dp
-import tech.granet.grove.ui.label
+import tech.granet.grove.ui.wallpaperLabel
 
 /** Shared tile structure and list adapter; Activity supplies launch and interaction actions. */
 internal class DrawerTiles(
@@ -36,7 +36,7 @@ internal class DrawerTiles(
             isClickable = true
         }
         val icon = ImageView(activity).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
-        val name = activity.label("", 12f).apply { gravity = Gravity.CENTER; maxLines = 2; minLines = 2 }
+        val name = activity.wallpaperLabel("", 12f).apply { gravity = Gravity.CENTER; maxLines = 2; minLines = 2 }
         val frame = FrameLayout(activity)
         frame.addView(icon, FrameLayout.LayoutParams(activity.dp(48), activity.dp(48), Gravity.CENTER))
         val badge = ImageView(activity).apply {
