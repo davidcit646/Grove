@@ -28,7 +28,9 @@ for abi in arm64-v8a armeabi-v7a x86_64; do
   unzip -p "$apk" "lib/$abi/libgrove_core.so" > "$temporary/$abi.so"
   test -s "$temporary/$abi.so"
   "$readelf" -lW "$temporary/$abi.so" |
-    awk '$1 == "LOAD" { if (strtonum($NF) < 16384) exit 1; found = 1 } END { if (!found) exit 1 }'
+    awk '$1 == "LOAD" { print $NF }' > "$temporary/alignments"
+  test -s "$temporary/alignments"
+  while read -r alignment; do test "$((alignment))" -ge 16384; done < "$temporary/alignments"
 done
 sha256sum "$apk" "$aab" > release-checksums.txt
 {
