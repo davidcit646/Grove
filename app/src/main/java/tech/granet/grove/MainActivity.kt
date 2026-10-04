@@ -953,89 +953,11 @@ class MainActivity : AppCompatActivity() {
         return FileProvider.getUriForFile(this, "$packageName.files", canonical)
     }
 
-    private fun contactMenu(contact: ContactIndex.Contact) {
-        if (!config.search.contacts || !hasContactAccess()) return
-        contactWorker.execute {
-            val details = runCatching { ContactIndex.details(contentResolver, resources, contact) }
-                .onFailure { Log.w("Grove", "Cannot read contact details", it) }.getOrNull()
-            runOnUiThread {
-                if (isDestroyed || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
-                if (details == null) { message("Contact details unavailable; try again"); return@runOnUiThread }
-                val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
-                fun action(label: String, icon: Int, intent: () -> Intent) {
-                    actions.add(Triple(label, icon) {
-                        runCatching { startActivity(intent()) }.onFailure { message("No compatible app is available") }
-                    })
-                }
-                val waTargets = ContactIndex.whatsAppTargets(details.channels) { pkg ->
-                    apps.any { it.component.packageName == pkg }
-                }
-                val numbers = details.numbers
-                fun callRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_call) {
-                    runCatching {
-                        startActivity(Intent.createChooser(
-                            Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number.value, null)), "Call with"))
-                    }.onFailure { message("No compatible app is available") }
-                    Unit
-                }
-                fun textRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_message) {
-                    runCatching {
-                        startActivity(Intent.createChooser(
-                            Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number.value, null)), "Message with"))
-                    }.onFailure { message("No compatible app is available") }
-                    Unit
-                }
-                // One Call row and one Text row per contact. Tapping always asks which app
-                // (Phone, Google Voice, Linphone, …) should place it. A number picker only
-                // appears when the contact genuinely has several different numbers.
-                when {
-                    numbers.size == 1 -> {
-                        actions.add(callRow(numbers[0]))
-                        actions.add(textRow(numbers[0]))
-                    }
-                    numbers.size > 1 -> {
-                        actions.add(Triple("Call", R.drawable.ic_call) {
-                            showActionMenu("Call ${contact.name}", numbers.map(::callRow))
-                            Unit
-                        })
-                        actions.add(Triple("Text", R.drawable.ic_message) {
-                            showActionMenu("Text ${contact.name}", numbers.map(::textRow))
-                            Unit
-                        })
-                    }
-                }
-                numbers.forEach { number ->
-                    val international = PhoneNumberUtils.formatNumberToE164(number.value, Locale.getDefault().country)
-                    if (international != null && international.startsWith('+') && international.length in 9..16) {
-                        val digits = international.drop(1)
-                        waTargets.forEach { target ->
-                            action("Message ${number.label} via ${target.label}", R.drawable.ic_message) {
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits")).setPackage(target.packageName)
-                            }
-                        }
-                    }
-                }
-                ContactIndex.collapseChannels(details.channels).forEach { channel ->
-                    val packageName = when (channel.label) {
-                        "WhatsApp" -> if (channel.mime.contains("w4b")) "com.whatsapp.w4b" else "com.whatsapp"
-                        "Messenger" -> "com.facebook.orca"
-                        else -> null
-                    }
-                    if (packageName != null && apps.any { it.component.packageName == packageName }) {
-                        action("Open in ${channel.label}", R.drawable.ic_message) {
-                            Intent(Intent.ACTION_VIEW, channel.uri).setPackage(packageName)
-                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    }
-                }
-                action("View contact card", R.drawable.ic_contact) { Intent(Intent.ACTION_VIEW, contact.uri) }
-                action("Edit contact", R.drawable.ic_edit) {
-                    Intent(Intent.ACTION_EDIT).setDataAndType(contact.uri, ContactsContract.Contacts.CONTENT_ITEM_TYPE)
-                }
-                showActionMenu(contact.name, actions)
-            }
-        }
+    private val contactActions by lazy {
+        ContactActions(this, contactWorker, { config }, ::hasContactAccess,
+            { packageName -> apps.any { it.component.packageName == packageName } }, ::showActionMenu)
     }
+    private fun contactMenu(contact: ContactIndex.Contact) = contactActions.show(contact)
 
     private fun openFile(file: IndexedFile) {
         val uri = runCatching { sharedFileUri(file.file) }
