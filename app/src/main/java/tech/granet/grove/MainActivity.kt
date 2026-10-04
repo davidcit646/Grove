@@ -27,6 +27,7 @@ import android.text.InputFilter
 import android.text.TextWatcher
 import android.view.*
 import android.widget.*
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
@@ -62,20 +63,21 @@ class MainActivity : AppCompatActivity() {
     private val searchHandler = Handler(Looper.getMainLooper())
     @Volatile private var searchGeneration = 0
     private var pendingSearch: Runnable? = null
-    private var contacts = emptyList<ContactIndex.Contact>()
-    private var contactSearch = SearchResults.prepare(contacts) { it.searchName }
-    private var contactObserverRegistered = false
-    private var contactWarningShown = false
-    private var lastContactRefresh = 0L
-    private var indexingContacts = false
-    private var contactLoadFailed = false
-    private val delayedContactRefresh = Runnable { refreshContacts() }
-    private val contactObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) {
-            searchHandler.removeCallbacks(delayedContactRefresh)
-            searchHandler.postDelayed(delayedContactRefresh, 400L)
+    private val sources by lazy {
+        SearchSources(this, worker, contactWorker, { config.search }, ::hasContactAccess) {
+            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         }
     }
+    private val contacts get() = sources.contacts
+    private val contactSearch get() = sources.contactSearch
+    private val files get() = sources.files
+    private val fileSearch get() = sources.fileSearch
+    private val indexingContacts get() = sources.indexingContacts
+    private val contactLoadFailed get() = sources.contactLoadFailed
+    private val lastContactRefresh get() = sources.lastContactRefresh
+    private val indexingFiles get() = sources.indexingFiles
+    private val fileLoadFailed get() = sources.fileLoadFailed
+    private val fileScanSkipped get() = sources.fileScanSkipped
     private val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) refreshContacts() else if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         firstRunSetup?.refreshPermissions()
@@ -104,15 +106,12 @@ class MainActivity : AppCompatActivity() {
     private var apps = emptyList<App>()
     private var appSearch = SearchResults.prepare(apps) { it.searchName }
     private val widgets by lazy { WidgetRegistry(host, manager, prefs) }
+    private val widgetFlow: WidgetFlow by lazy {
+        WidgetFlow(this, manager, host, prefs, widgets,
+            { bindWidget.launch(it) }, { configureResult.launch(it) }, { showHome() }, this::message)
+    }
     private var drawer = false
     private var searchMode = false
-    private var files = emptyList<IndexedFile>()
-    private var fileSearch = SearchResults.prepare(files) { it.searchName }
-    private var indexingFiles = false
-    private var fileLoadFailed = false
-    private var fileScanSkipped = 0
-    @Volatile private var fileIndexGeneration = 0
-    @Volatile private var contactGeneration = 0
     private var searchResults: LinearLayout? = null
     private lateinit var surface: FrameLayout
     private lateinit var root: LinearLayout
@@ -153,13 +152,13 @@ class MainActivity : AppCompatActivity() {
                 .onFailure { error -> message(error.message ?: "Could not save configuration") }
         }.onFailure { message(it.message ?: "Invalid configuration") }
     }
-    private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) configureWidget() else cancelWidget()
+    private val bindWidget: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) widgetFlow.configure() else widgetFlow.cancel()
     }
-    private val configureResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) finishWidget() else {
+    private val configureResult: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) widgetFlow.finish() else {
             Log.w("Grove", "Widget configuration returned ${result.resultCode} for id ${widgets.pending}")
-            cancelWidget()
+            widgetFlow.cancel()
         }
     }
     private val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
@@ -332,15 +331,7 @@ class MainActivity : AppCompatActivity() {
     )
 
     private fun applyStartupPlan(plan: StartupCoordinator.Plan) {
-        if (plan.clearFiles) {
-            fileIndexGeneration++
-            files = emptyList()
-            fileSearch = SearchResults.prepare(files) { it.searchName }
-            indexingFiles = false
-            fileLoadFailed = false
-            fileScanSkipped = 0
-            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-        }
+        if (plan.clearFiles) sources.clearFiles()
         if (plan.loadApps) loadApps()
         if (plan.indexFiles) indexFiles()
         if (plan.refreshContacts) refreshContacts()
@@ -361,11 +352,9 @@ class MainActivity : AppCompatActivity() {
         }
         touchRouter.cancel()
         pendingSearch?.let(searchHandler::removeCallbacks)
-        searchHandler.removeCallbacks(delayedContactRefresh)
         searchGeneration++
         searchWorker.shutdownNow()
-        contactWorker.shutdownNow()
-        if (contactObserverRegistered) contentResolver.unregisterContentObserver(contactObserver)
+        sources.shutdown()
         worker.shutdownNow()
         if (::surface.isInitialized) surface.background = null
         artwork?.recycle()
@@ -603,7 +592,7 @@ class MainActivity : AppCompatActivity() {
         drawer = false; searchMode = false; base()
         body = HomeScreen(this).render(root, config.homeScreen, ::button,
             ::openSearch, ::openAppDrawer, ::openClock, ::openCalendar,
-            ::renderPinnedApps, ::renderWidgets)
+            ::renderPinnedApps, widgetFlow::render)
         (body.parent as ScrollView).apply {
             val restored = homeScrollY
             post { if (body.parent === this) scrollTo(0, restored) }
@@ -627,97 +616,10 @@ class MainActivity : AppCompatActivity() {
         if (config.favorites.isEmpty()) target.addView(wallpaperLabel("Long-press an app in the drawer to pin it here."))
     }
 
-    private fun indexFiles() {
-        if (!config.search.files || !Environment.isExternalStorageManager() || indexingFiles) return
-        val generation = ++fileIndexGeneration
-        indexingFiles = true
-        fileLoadFailed = false
-        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-        worker.execute {
-            if (generation != fileIndexGeneration) return@execute
-            val result = runCatching {
-                val scan = FileIndex.scan(Environment.getExternalStorageDirectory(),
-                    shouldContinue = { generation == fileIndexGeneration })
-                scan to SearchResults.prepare(scan.files) { it.searchName }
-            }
-            runOnUiThread(Runnable {
-                if (generation != fileIndexGeneration || isDestroyed) return@Runnable
-                indexingFiles = false
-                result.onSuccess {
-                    files = it.first.files
-                    fileSearch = it.second
-                    fileScanSkipped = it.first.skippedDirectories
-                    fileLoadFailed = false
-                }.onFailure {
-                    files = emptyList()
-                    fileSearch = SearchResults.prepare(files) { it.searchName }
-                    fileScanSkipped = 0
-                    fileLoadFailed = true
-                    Log.w("Grove", "Could not index shared storage", it)
-                    message("Could not index shared storage")
-                }
-                if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-            })
-        }
-    }
-
-    private fun hasContactAccess() = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
-
-    private fun refreshContacts() {
-        if (!config.search.contacts || !hasContactAccess()) {
-            contactGeneration++
-            contacts = emptyList()
-            contactSearch = SearchResults.prepare(contacts) { it.searchName }
-            indexingContacts = false
-            contactLoadFailed = false
-            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-            return
-        }
-        if (!contactObserverRegistered) {
-            runCatching { contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI,
-                true, contactObserver); contactObserverRegistered = true }
-        }
-        if (contactWorker.isShutdown) return
-        indexingContacts = true
-        contactLoadFailed = false
-        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-        val generation = ++contactGeneration
-        contactWorker.execute {
-            if (generation != contactGeneration) return@execute
-            val result = runCatching {
-                val loaded = ContactIndex.load(contentResolver) { generation == contactGeneration }
-                loaded to SearchResults.prepare(loaded) { it.searchName }
-            }
-            runOnUiThread {
-                if (isDestroyed || generation != contactGeneration || !config.search.contacts || !hasContactAccess()) return@runOnUiThread
-                indexingContacts = false
-                result.onSuccess {
-                    contacts = it.first
-                    contactSearch = it.second
-                    lastContactRefresh = SystemClock.elapsedRealtime()
-                    contactLoadFailed = false
-                    if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-                    if (it.first.isEmpty() && !contactWarningShown) {
-                        contactWarningShown = true
-                        infoDialog("No device contacts found",
-                            "Grove can search contacts available through Android. If your contacts are kept only inside another app, enable its device contact sync.")
-                    }
-                }
-                    .onFailure {
-                        contacts = emptyList()
-                        contactSearch = SearchResults.prepare(contacts) { it.searchName }
-                        contactLoadFailed = true
-                        if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
-                        Log.w("Grove", "Contacts provider unavailable", it)
-                        if (!contactWarningShown) {
-                            contactWarningShown = true
-                            infoDialog("Contact search unavailable",
-                                "Grove couldn't read the device's contacts provider. Check that a contacts app is enabled and contact access is allowed.")
-                        }
-                    }
-            }
-        }
-    }
+    private fun indexFiles() = sources.indexFiles()
+    private fun refreshContacts() = sources.refreshContacts()
+    private fun hasContactAccess() =
+        checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
     private fun requestContactAccess() { requestContacts.launch(Manifest.permission.READ_CONTACTS) }
 
@@ -749,28 +651,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applySearchSettings(previous: SearchSettings) {
-        if (!config.search.contacts) {
-            contactGeneration++
-            contacts = emptyList()
-            contactSearch = SearchResults.prepare(contacts) { it.searchName }
-            indexingContacts = false
-            contactLoadFailed = false
-            searchHandler.removeCallbacks(delayedContactRefresh)
-            if (contactObserverRegistered) {
-                contentResolver.unregisterContentObserver(contactObserver)
-                contactObserverRegistered = false
-            }
-        } else if (!previous.contacts) {
+        if (!config.search.contacts) sources.clearContacts()
+        else if (!previous.contacts) {
             if (hasContactAccess()) refreshContacts() else explainContactAccess()
         }
-        if (!config.search.files) {
-            fileIndexGeneration++
-            files = emptyList()
-            fileSearch = SearchResults.prepare(files) { it.searchName }
-            indexingFiles = false
-            fileLoadFailed = false
-            fileScanSkipped = 0
-        } else if (!previous.files) {
+        if (!config.search.files) sources.clearFiles()
+        else if (!previous.files) {
             if (Environment.isExternalStorageManager()) indexFiles() else explainFileAccess()
         }
         if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
@@ -1132,7 +1018,7 @@ class MainActivity : AppCompatActivity() {
                 if (role.isRoleAvailable(RoleManager.ROLE_HOME))
                     chooseHome.launch(role.createRequestRoleIntent(RoleManager.ROLE_HOME))
             },
-            Triple("Add widget", R.drawable.ic_widget) { pickWidget() },
+            Triple("Add widget", R.drawable.ic_widget) { widgetFlow.pick() },
             Triple("Wallpapers", R.drawable.ic_wallpaper) { wallpapers() },
             Triple("Privacy policy", R.drawable.ic_info) {
                 startActivity(Intent(Intent.ACTION_VIEW,
@@ -1242,78 +1128,6 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Load defaults") { _, _ -> activateConfig(Config()); showHome(); message("Default configuration loaded") }
             .show()
     }
-
-    // Widget lifecycle: allocate -> bind consent -> optional configuration -> persist.
-    private fun pickWidget() {
-        if (widgets.pending != -1) {
-            MaterialAlertDialogBuilder(this).setTitle("Widget setup interrupted")
-                .setMessage("Retry saving the pending widget or remove it before adding another.")
-                .setPositiveButton("Retry") { _, _ -> configureWidget() }
-                .setNegativeButton("Remove") { _, _ -> cancelWidget() }
-                .show()
-            return
-        }
-        if (!prefs.getBoolean("widget_tutorial_seen", false)) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Widget controls")
-                .setMessage("Once a widget is on your Home screen, tap and hold it for options such as resizing, configuring, or removing it.")
-                .setPositiveButton("Got It!") { _, _ ->
-                    prefs.edit().putBoolean("widget_tutorial_seen", true).apply()
-                    showWidgetPicker()
-                }
-                .setNegativeButton("Not now", null)
-                .show()
-            return
-        }
-        showWidgetPicker()
-    }
-    private fun showWidgetPicker() {
-        val providers = runCatching {
-            manager.installedProviders.sortedBy { it.loadLabel(packageManager).lowercase() }
-        }.onFailure { Log.w("Grove", "Widget providers unavailable", it) }.getOrNull()
-        if (providers.isNullOrEmpty()) { message("No widgets available"); return }
-        listDialog("Add widget", providers.map { it.loadLabel(packageManager).toString() }, negative = "Cancel") { index ->
-            val provider = providers.getOrNull(index) ?: return@listDialog
-            val id = runCatching { widgets.allocate() }
-                .onFailure { Log.e("Grove", "Widget allocation failed", it) }.getOrNull()
-                ?: run { message("Cannot allocate widget"); return@listDialog }
-            val bound = runCatching { manager.bindAppWidgetIdIfAllowed(id, provider.provider) }
-                .onFailure { Log.e("Grove", "Widget bind failed", it) }.getOrNull()
-            if (bound == true) configureWidget()
-            else if (bound == false) runCatching {
-                bindWidget.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider))
-            }.onFailure { Log.e("Grove", "Widget bind launch failed", it); cancelWidget(); message("Cannot bind this widget") }
-            else { cancelWidget(); message("Cannot bind this widget") }
-        }
-    }
-
-    private fun configureWidget() {
-        val id = widgets.pending
-        val info = runCatching { manager.getAppWidgetInfo(id) }
-            .onFailure { Log.w("Grove", "Widget provider lookup failed for $id", it) }.getOrNull() ?: run {
-            Log.w("Grove", "No widget provider info for id $id")
-            cancelWidget(); message("Couldn't add this widget"); return
-        }
-        if (info.configure != null) {
-            runCatching { configureResult.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
-                .setComponent(info.configure).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)) }
-                .onFailure { Log.e("Grove", "Widget configuration failed to launch for ${info.configure}", it); cancelWidget(); message("Widget configuration unavailable") }
-        } else finishWidget()
-    }
-
-    private fun finishWidget() {
-        if (widgets.finish()) showHome()
-        else message("Couldn't save this widget; retry or remove it")
-    }
-
-    private fun cancelWidget() {
-        if (!widgets.cancel()) message("Couldn't release widget; retry")
-    }
-
-    private fun renderWidgets(target: LinearLayout) =
-        WidgetScreen(this, manager, host, prefs, widgets.ids, widgets::remove) { showHome() }.render(target)
 
     private fun wallpapers() {
         WallpaperPicker(this, wallpaperController, config.wallpaper) { index, which ->
