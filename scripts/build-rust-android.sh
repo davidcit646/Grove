@@ -14,6 +14,11 @@ toolchain="$ndk_dir/toolchains/llvm/prebuilt/linux-x86_64/bin"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$toolchain/aarch64-linux-android31-clang"
 export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$toolchain/armv7a-linux-androideabi31-clang"
 export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$toolchain/x86_64-linux-android31-clang"
+# NDK r27 needs explicit ELF alignment on 16 KB page-size devices.
+page_flags="-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384"
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="$page_flags"
+export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_RUSTFLAGS="$page_flags"
+export CARGO_TARGET_X86_64_LINUX_ANDROID_RUSTFLAGS="$page_flags"
 
 cd "$project_dir/rust/grove-core"
 for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
