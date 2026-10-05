@@ -58,7 +58,7 @@ internal class DrawerController(private val activity: MainActivity) {
             }
             searchController.searchField = field; root.addView(field)
             val content = FrameLayout(this)
-            val empty = wallpaperLabel(if (catalogController.loadingApps) "Preparing apps and icons…" else "No matching apps").apply { gravity = Gravity.CENTER }
+            val empty = wallpaperLabel(if (catalogController.state is CatalogState.Loading) "Preparing apps and icons…" else "No matching apps").apply { gravity = Gravity.CENTER }
             drawerEmpty = empty
             val grid = GridView(this).apply {
                 numColumns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
@@ -92,7 +92,7 @@ internal class DrawerController(private val activity: MainActivity) {
 
     fun renderApps(query: String) {
         with(activity) {
-            drawerEmpty?.text = if (catalogController.loadingApps) "Preparing apps and icons…" else "No matching apps"
+            drawerEmpty?.text = if (catalogController.state is CatalogState.Loading) "Preparing apps and icons…" else "No matching apps"
             val prepared = Search.prepare(query)
             val filtered = if (prepared.text.isEmpty()) {
                 val assigned = configController.config.folders.flatMap { it.apps }.toSet()
