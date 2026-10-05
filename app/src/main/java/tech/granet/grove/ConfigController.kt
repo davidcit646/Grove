@@ -22,7 +22,7 @@ internal class ConfigController(private val activity: MainActivity) {
         with(activity) {
             return ConfigTransaction.commit(next, configStore::save, { config = it }) { error ->
                 Log.e("Grove", "Could not save settings", error)
-                message("Could not save Grove settings")
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST)
             }
         }
     }
@@ -82,7 +82,9 @@ internal class ConfigController(private val activity: MainActivity) {
         runCatching {
             contentResolver.openOutputStream(uri)?.use(workflow::export)
                 ?: error("Cannot open file")
-        }.onFailure { message("Could not export configuration") }
+        }.onFailure {
+            GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_EXPORT) { export.launch("grove-config.json") }
+        }
         Unit
     }
 
@@ -95,7 +97,11 @@ internal class ConfigController(private val activity: MainActivity) {
                 homeController.showHome()
                 message("Configuration imported")
             }
-        }.onFailure { message(it.message ?: "Invalid configuration") }
+        }.onFailure {
+            GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_IMPORT) {
+                importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+            }
+        }
         Unit
     }
 }
