@@ -1,6 +1,6 @@
 # Google Play readiness
 
-This is a development checklist, not a claim of Google Play approval. [GROVE-STATUS.md](GROVE-STATUS.md) is the operating contract. PR #83 implements durable indexes, user-selected/solid-black wallpaper sources and the Grove error-report workflow; source CI is green, while Android device proof and signed release validation remain open.
+This is a development checklist, not a claim of Google Play approval. [GROVE-STATUS.md](GROVE-STATUS.md) is the operating contract. PR #83 implements durable indexes, bounded configuration document/recovery flow, single-request tutorial replay, packaged/user/solid-black wallpaper sources with stable v9 IDs, and the Grove error-report workflow. Production/test source at `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567; Android device proof, Play review for broad file access, and positive signed release validation remain open.
 
 - The Android app targets API 36 and builds arm64, ARMv7 and x86-64 native code. Draft refactor CI checks source; signed artifact and device validation remain pending.
 - First-run and Settings present independent contact/file search and indexing choices. Neither permission is required to use Home. Verify setup and update screenshots on a device. The user chooses Grove as the Home app through Android's system role request.
