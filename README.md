@@ -4,6 +4,14 @@ An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1
 
 [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its [implementation status](GROVE-STATUS.md#implementation-status-on-main) distinguishes shipped code from proposals, including separate live search/indexing, durable index caches, custom/black wallpaper choices, theme modes, and error codes. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
 
+## 0.1.30 changes
+
+- Search and background indexing are independent for contacts and shared-storage files; durable private caches can rebuild without making permission or user-setting decisions for themselves.
+- Configuration import/export/recovery uses bounded document I/O outside Activity UI. Schema v9 persists wallpapers by stable source ID while remaining compatible with legacy v1–v8 documents.
+- Launcher settings → Tutorials owns a single replay request. Existing completed setup remains completed while replay is queued, and replay Skip preserves the current launcher configuration.
+- The wallpaper library is fully local for built-ins: three generated designs, ten packaged Commons images with offline credits, a true solid-black option, and a bounded user-selected image copy. Built-ins no longer require runtime Wikimedia downloads.
+- Grove errors use reserved numeric ranges plus assigned wallpaper GWS diagnostics, Degrade/Recover/Stop routing, privacy-bounded reports addressed to `support@granet.tech`, and a copy fallback when no mail app handles the draft.
+
 ## 0.1.29 changes
 
 - Reworked first-run setup with larger type, progress, visual cards, app icons in the pin picker, and readable permission disclosures. The setup colors follow the Android light or dark theme.
@@ -18,7 +26,7 @@ An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1
 
 - Fresh installs get a guided full-screen setup for home gestures and controls, a swipe practice area, an installed-app pin picker, and independent Contact search and whole-device File search switches. Each permission request has a separate disclosure and can be declined.
 - Launcher settings has separate Search and Background indexing switches for contacts and files. Search can query permitted Android data live when its index is off; indexing saves a private, rebuildable metadata cache. Android permissions remain controlled in system settings.
-- Setup offers Android's default Home-app chooser after the user finishes. It can be replayed from Grove settings; existing installations keep their layout and settings.
+- Setup offers Android's default Home-app chooser after the user finishes. It can be replayed from Launcher settings → Tutorials; existing installations keep their layout and settings until a replay is successfully finished.
 
 ## 0.1.25 changes (Nova: Rust migration, uncompiled — needs build + test)
 
@@ -72,16 +80,16 @@ Gradle builds the Rust core before packaging the APK. Choose Grove in Android's 
 - Customizable app drawer with app folders, bulk selection, pinning, and Android's uninstall confirmation.
 - Dedicated search with ranked app, contact, and optional file matches, followed by Google and Play Store actions. Long press a result for its context actions.
 - Optional shared storage indexing. Android's all files access is requested only when file search is enabled; private app data and system partitions remain inaccessible. The index is bounded and never reads file contents.
-- Procedural wallpapers and ten Wikimedia Commons color selections. Selected Commons files are downloaded on demand and cached privately; credits and license links are in [NOTICE](NOTICE).
+- Procedural wallpapers, ten packaged Wikimedia Commons selections, a true solid-black option, and a user-selected local image. Built-in previews/apply work offline; author/source/license details are available in the picker and [NOTICE](NOTICE).
 - Settings with recoverable JSON configuration import/export under Advanced. Widget IDs remain local and are excluded from exports.
 
-There is no account or telemetry. Internet access is used for the chosen Commons wallpaper; Google and Play Store searches open external apps or web pages.
+There is no account or telemetry. Built-in wallpapers do not make runtime network requests. Google and Play Store searches open external apps or web pages.
 
 ## Architecture and security
 
 Android views, storage permissions, widgets, intents, and wallpaper APIs remain in Kotlin. Rust handles batched search scoring, MIME categories, and bounded configuration preflight through JNI. Kotlin ranking remains a fallback if the native library is unavailable, and Kotlin validates the final configuration. See [ARCHITECTURE.md](ARCHITECTURE.md) and [TESTING.md](TESTING.md).
 
-File sharing uses read only, per intent content URI grants. The provider is not exported. Configuration input and wallpaper downloads have size limits; wallpaper redirects stay on the expected HTTPS hosts. Android's broad storage access remains necessary for device wide file search and requires Play policy review and approval before distribution; see [PLAY-READINESS.md](PLAY-READINESS.md) and [PRIVACY.md](PRIVACY.md).
+File sharing uses read only, per-intent content URI grants. The provider is not exported. Configuration documents and custom wallpaper images are size/dimension bounded before activation or expensive decode. Android's broad storage access remains necessary for device-wide file search and requires Play policy review and approval before distribution; see [PLAY-READINESS.md](PLAY-READINESS.md) and [PRIVACY.md](PRIVACY.md).
 
 The APK under `app/build` is a development build, not a release signed distribution. Release signing and Play distribution are separate work.
 
