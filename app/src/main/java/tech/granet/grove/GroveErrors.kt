@@ -26,7 +26,12 @@ internal data class GroveError(
     val feature: String,
     val severity: ErrorSeverity,
     val summary: String,
-)
+) {
+    fun codeLine(): String = buildString {
+        append("Code ").append(code)
+        gws?.let { append(" · ").append(it) }
+    }
+}
 
 internal object GroveErrorRegistry {
     val CONFIG_IMPORT = GroveError(110, GroveErrorOwner.CONFIGURATION, null, "Configuration import", ErrorSeverity.DEGRADE,
@@ -97,11 +102,7 @@ internal object GroveErrorRouting {
 
 internal object GroveErrorPresenter {
     fun show(activity: Activity, error: GroveError, retry: (() -> Unit)? = null) {
-        val codeLine = buildString {
-            append("Code ").append(error.code)
-            error.gws?.let { append(" · ").append(it) }
-        }
-        val body = "${error.feature} · ${error.severity.label}\n$codeLine\n\n${error.summary}"
+        val body = "${error.feature} · ${error.severity.label}\n${error.codeLine()}\n\n${error.summary}"
         val route = GroveErrorRouting.route(error, retry != null)
         val builder = MaterialAlertDialogBuilder(activity)
             .setTitle("Grove problem")
