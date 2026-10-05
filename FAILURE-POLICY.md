@@ -58,7 +58,7 @@ Persistent state changes use validate -> perform -> confirm -> commit, or a reco
 
 ## Verification gate
 
-For every row in [FAILURE-BOUNDARY-AUDIT.md](FAILURE-BOUNDARY-AUDIT.md), record a focused automated test or a named Android device case (#32, #34). Inject failure before work, during work, and after a canceled/superseded request when relevant. Assert both the outcome and the absence of unauthorized/stale state. Measure cold/warm Home startup and search latency against the pinned baseline (#35). CI and signed release validation must fail on missing artifacts (#36). Close #19 after this contract is reviewed and accepted as the implementation target; close #17 only after code and verification conform.
+For every row in [FAILURE-BOUNDARY-AUDIT.md](FAILURE-BOUNDARY-AUDIT.md), record a focused automated test or a named Android device case (#32, #34). Inject failure before work, during work, and after a canceled/superseded request when relevant. Assert both the outcome and the absence of unauthorized/stale state. Measure cold/warm Home startup and search latency against the pinned baseline (#35). CI and signed release validation must fail on missing artifacts (#36). The umbrella #17 was closed by an explicit scope decision after limited user testing; its unrun device, performance, and signed-release checks remain in their specific open issues. Close each remaining issue only after its own implementation and verification conform.
 
 ## New target behavior not covered by the original refactor
 
