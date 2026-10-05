@@ -45,8 +45,8 @@ data class Config(
     val search: SearchSettings = SearchSettings(),
 ) {
     fun json(): String = JSONObject()
-        .put("version", 8)
-        .put("wallpaper", wallpaper)
+        .put("version", 9)
+        .put("wallpaper", WallpaperArt.source(wallpaper)?.id ?: error("Wallpaper selection is invalid"))
         .put("favorites", JSONArray(favorites))
         .put("folders", JSONArray().apply { folders.forEach { folder ->
             put(JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps)))
@@ -79,10 +79,16 @@ data class Config(
         fun parse(text: String): Config {
             val root = JSONObject(text)
             val version = root.getInt("version")
-            require(version in 1..8) { "Unsupported configuration version" }
+            require(version in 1..9) { "Unsupported configuration version" }
 
-            val wallpaper = root.getInt("wallpaper")
-            require(WallpaperArt.source(wallpaper) != null) { "Wallpaper selection is invalid" }
+            val wallpaper = if (version >= 9) {
+                val id = root.getString("wallpaper")
+                WallpaperArt.indexForId(id) ?: throw IllegalArgumentException("Wallpaper selection is invalid")
+            } else {
+                root.getInt("wallpaper").also {
+                    require(WallpaperArt.source(it) != null) { "Wallpaper selection is invalid" }
+                }
+            }
 
             val entries = root.getJSONArray("favorites")
             require(entries.length() <= 100) { "Too many favorites" }
