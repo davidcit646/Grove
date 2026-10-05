@@ -37,25 +37,27 @@ internal class WallpaperPresentationController(private val activity: MainActivit
         }
     }
 
+    private fun commitHomeSelection(index: Int): Boolean = with(activity) {
+        if (!configController.commitConfig(configController.config.copy(wallpaper = index))) return@with false
+        homeController.pendingWallpaper = null
+        homeController.artworkStyle = -1
+        true
+    }
+
     private fun applySelection(index: Int, which: Int) {
         with(activity) {
-            wallpaperController.apply(index, which) { applied ->
+            wallpaperController.apply(index, which) applyDone@{ applied ->
                 if (!applied) {
                     GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_APPLY) {
                         applySelection(index, which)
                     }
-                    return@apply
+                    return@applyDone
                 }
                 if (which and WallpaperManager.FLAG_SYSTEM != 0) {
-                    if (configController.commitConfig(configController.config.copy(wallpaper = index))) {
-                        homeController.pendingWallpaper = null
-                        homeController.artworkStyle = -1
-                    } else {
-                        GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_SYNC) {
-                            configController.commitConfig(configController.config.copy(wallpaper = index))
-                        }
+                    if (commitHomeSelection(index)) homeController.showHome()
+                    else GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_SYNC) {
+                        if (commitHomeSelection(index)) homeController.showHome()
                     }
-                    homeController.showHome()
                 }
             }
         }
