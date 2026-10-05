@@ -50,14 +50,16 @@ internal class SearchSources(
     init {
         val work = WorkManager.getInstance(activity)
         work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("contacts")).observe(activity, Observer { infos ->
-            indexingContacts = infos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
-            contactLoadFailed = infos.any { it.state == WorkInfo.State.FAILED }
-            if (infos.any { it.state == WorkInfo.State.SUCCEEDED }) loadContacts() else redraw()
+            val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "contacts") }
+            indexingContacts = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
+            contactLoadFailed = info?.state == WorkInfo.State.FAILED
+            if (info?.state == WorkInfo.State.SUCCEEDED) loadContacts() else redraw()
         })
         work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("files")).observe(activity, Observer { infos ->
-            indexingFiles = infos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
-            fileLoadFailed = infos.any { it.state == WorkInfo.State.FAILED }
-            if (infos.any { it.state == WorkInfo.State.SUCCEEDED }) loadFiles() else redraw()
+            val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "files") }
+            indexingFiles = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
+            fileLoadFailed = info?.state == WorkInfo.State.FAILED
+            if (info?.state == WorkInfo.State.SUCCEEDED) loadFiles() else redraw()
         })
     }
 
@@ -92,7 +94,7 @@ internal class SearchSources(
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         contactCorrupt = false
-                        contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt <= 15L * 60_000
+                        contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(15L * 60_000)
                         contacts = snapshot.items
                         contactSearch = prepared
                         lastContactRefresh = android.os.SystemClock.elapsedRealtime()
@@ -121,7 +123,7 @@ internal class SearchSources(
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         fileCorrupt = false
-                        fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt <= 24L * 60 * 60_000
+                        fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(24L * 60 * 60_000)
                         files = snapshot.items
                         fileSearch = prepared
                         fileScanSkipped = snapshot.skipped

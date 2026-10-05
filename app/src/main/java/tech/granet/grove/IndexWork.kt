@@ -19,6 +19,8 @@ internal object IndexWork {
     private fun prefs(context: Context) = context.getSharedPreferences("grove", Context.MODE_PRIVATE)
     fun name(kind: String) = "grove-$kind-index"
     private fun token(kind: String) = "index-token-$kind"
+    private fun workId(kind: String) = "index-work-id-$kind"
+    fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
     private fun enabled(context: Context, kind: String): Boolean = runCatching {
         val setting = ConfigStore(prefs(context)).load().search
         when (kind) { "files" -> setting.fileIndexing && Environment.isExternalStorageManager()
@@ -36,22 +38,24 @@ internal object IndexWork {
     fun enqueue(context: Context, kind: String) {
         if (!enabled(context, kind)) { cancel(context, kind); return }
         val id = UUID.randomUUID().toString()
-        if (!prefs(context).edit().putString(token(kind), id).commit()) return
         val request = OneTimeWorkRequestBuilder<IndexWorker>()
             .setInputData(androidx.work.workDataOf("kind" to kind, "token" to id))
             .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build())
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
+        if (!prefs(context).edit().putString(token(kind), id)
+                .putString(workId(kind), request.id.toString()).commit()) return
         WorkManager.getInstance(context).enqueueUniqueWork(name(kind), ExistingWorkPolicy.REPLACE, request)
     }
 
     fun cancel(context: Context, kind: String) {
         // Invalidate before cancellation/clearing: a worker already finishing must fail closed.
         val active = prefs(context).contains(token(kind))
+        val tracked = prefs(context).contains(workId(kind))
         val cache = java.io.File(context.filesDir, "grove-$kind-index.json").exists()
-        if (!active && !cache) return
-        if (active) {
-            prefs(context).edit().remove(token(kind)).commit()
+        if (!active && !tracked && !cache) return
+        if (active || tracked) {
+            prefs(context).edit().remove(token(kind)).remove(workId(kind)).commit()
             WorkManager.getInstance(context).cancelUniqueWork(name(kind))
         }
         if (cache) IndexCache.clear(context, kind)
@@ -61,7 +65,8 @@ internal object IndexWork {
         if (!enabled(context, kind)) { cancel(context, kind); return }
         // Reschedule only absent/stale caches; events and explicit Retry enqueue directly.
         val file = java.io.File(context.filesDir, "grove-$kind-index.json")
-        val stale = !file.exists() || System.currentTimeMillis() - file.lastModified() >
+        val age = System.currentTimeMillis() - file.lastModified()
+        val stale = !file.exists() || age < 0 || age >
             (if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000)
         if (stale && prefs(context).getString(token(kind), null) == null) enqueue(context, kind)
     }
@@ -79,6 +84,7 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
         if (kind != "contacts" && kind != "files") return Result.failure()
         val context = applicationContext
         val allowed = { !isStopped && IndexWork.allowed(context, kind, token) }
+        if (isStopped) return Result.retry()
         if (!allowed()) {
             IndexWork.finished(context, kind, token)
             return Result.success()
@@ -95,7 +101,10 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
             if (saved) Result.success() else Result.success() // Superseded is cancellation, not failure.
         } catch (error: Exception) {
             Log.w("Grove", "Background $kind index unavailable: ${error.javaClass.simpleName}")
-            if (!allowed()) Result.success() else if (runAttemptCount < 2) {
+            if (isStopped) {
+                retry = true
+                Result.retry()
+            } else if (!allowed()) Result.success() else if (runAttemptCount < 2) {
                 retry = true
                 Result.retry()
             } else Result.failure()

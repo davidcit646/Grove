@@ -174,8 +174,8 @@ internal class SearchController(private val activity: MainActivity) {
             val contactSnapshot = contactSearch
             val fileSnapshot = fileSearch
             val config = configController.config.search
-            val contactLive = config.contacts && (!config.contactIndexing || !sources.contactCacheReady) && hasContactAccess()
-            val fileLive = config.files && (!config.fileIndexing || !sources.fileCacheReady) && Environment.isExternalStorageManager()
+            val contactLive = config.contacts && (!config.contactIndexing || !sources.contactCacheReady || sources.contactLoadFailed) && hasContactAccess()
+            val fileLive = config.files && (!config.fileIndexing || !sources.fileCacheReady || sources.fileLoadFailed) && Environment.isExternalStorageManager()
             if (contactLive) liveContactState = SearchSourceState.Loading
             if (fileLive) liveFileState = SearchSourceState.Loading
             target.removeAllViews()
@@ -215,7 +215,7 @@ internal class SearchController(private val activity: MainActivity) {
             }, cancellation).let { SearchResults.matching(it, prepared, 12) { contact -> contact.searchName } } }
             activity.runOnUiThread {
                 if (generation != searchGeneration || !activity.searchMode || !activity.configController.config.search.contacts ||
-                    (activity.configController.config.search.contactIndexing && sources.contactCacheReady) || !hasContactAccess()) return@runOnUiThread
+                    (activity.configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed) || !hasContactAccess()) return@runOnUiThread
                 result.onSuccess {
                     liveContacts = it
                     liveContactState = SearchSourceState.Ready(liveContacts.size)
@@ -234,7 +234,7 @@ internal class SearchController(private val activity: MainActivity) {
             }, maxDurationMs = 2500L).let { scan -> scan to SearchResults.matching(scan.files, prepared, 12) { file -> file.searchName } } }
             activity.runOnUiThread {
                 if (generation != searchGeneration || !activity.searchMode || !activity.configController.config.search.files ||
-                    (activity.configController.config.search.fileIndexing && sources.fileCacheReady) || !Environment.isExternalStorageManager()) return@runOnUiThread
+                    (activity.configController.config.search.fileIndexing && sources.fileCacheReady && !sources.fileLoadFailed) || !Environment.isExternalStorageManager()) return@runOnUiThread
                 result.onSuccess {
                     liveFiles = it.second
                     liveFileState = if (it.first.truncated || it.first.skippedDirectories > 0)
@@ -263,10 +263,10 @@ internal class SearchController(private val activity: MainActivity) {
                             .onFailure { message("This app is unavailable"); catalogController.loadApps() }
                     }, menu = { actionController.appMenu(app) }) },
                 (if (configController.config.search.contacts && hasContactAccess()) {
-                    if (configController.config.search.contactIndexing && sources.contactCacheReady) matchingContacts else liveContacts
+                    if (configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed) matchingContacts else liveContacts
                 } else emptyList()).map { contact -> SearchScreen.ContactRow(contact.name) { actionController.contactMenu(contact) } },
                 (if (configController.config.search.files && Environment.isExternalStorageManager()) {
-                    if (configController.config.search.fileIndexing && sources.fileCacheReady) matchingFiles else liveFiles
+                    if (configController.config.search.fileIndexing && sources.fileCacheReady && !sources.fileLoadFailed) matchingFiles else liveFiles
                 } else emptyList()).map { file -> SearchScreen.FileRow(file,
                     open = { actionController.openFile(file) }, menu = { actionController.searchItemMenu(file) }) },
                 (if (configController.config.search.contacts && hasContactAccess()) liveContactState else null) ?: SearchSourceState.resolve(configController.config.search.contacts, hasContactAccess(),
