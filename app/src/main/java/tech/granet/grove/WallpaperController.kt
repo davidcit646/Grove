@@ -138,10 +138,7 @@ internal class WallpaperController(
             }.onFailure {
                 Log.w("Grove", "Could not apply wallpaper", it)
                 activity.runOnUiThread {
-                    if (!activity.isDestroyed) {
-                        GroveErrorPresenter.show(activity, GroveErrorRegistry.WALLPAPER_APPLY)
-                        done(false)
-                    }
+                    if (!activity.isDestroyed) done(false)
                 }
             }
         }
