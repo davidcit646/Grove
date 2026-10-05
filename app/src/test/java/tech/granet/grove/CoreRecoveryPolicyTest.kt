@@ -14,9 +14,12 @@ class CoreRecoveryPolicyTest {
         }
     }
 
-    @Test fun appCatalogFailureExplainsInstalledAppFailure() {
+    @Test fun appCatalogFailureUsesRegisteredRecoveryIdentity() {
         val state = CoreRecoveryPolicy.forReason(CoreRecoveryReason.APP_CATALOG)
-        assertTrue(state.detail.contains("installed app list"))
+        val error = GroveErrorRegistry.APP_CATALOG
+        assertTrue(state.detail.contains("Code ${error.code}"))
+        assertTrue(state.detail.contains(error.gws))
+        assertTrue(state.detail.contains(error.summary))
     }
 
     @Test fun configFailurePromisesSavedSettingsAreNotErased() {
