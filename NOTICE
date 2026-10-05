@@ -1,5 +1,39 @@
 Grove Launcher
 Copyright 2026 Citare Holdings LLC / GraNet IT Solutions
 
-Original source code, launcher icon, and wallpaper drawing instructions are licensed under Apache License 2.0.
+Original Grove source code, launcher icon, generated wallpaper artwork, and the solid-black wallpaper option are licensed under Apache License 2.0.
 Android, AndroidX, Kotlin, and Material Components are governed by their respective licenses.
+
+Bundled Wikimedia Commons wallpapers
+------------------------------------
+
+The following nine bundled images are redistributed under CC0 1.0:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+- Red · Flower — E.Prabha
+  https://commons.wikimedia.org/wiki/File:Red_Flower_red.jpg
+- Orange · Sunset landscape — www.Pixel.la Free Stock Photos
+  https://commons.wikimedia.org/wiki/File:Landscape-sunset-sun-orange_(24300255306).jpg
+- Yellow · Flower — SurendharKandasami
+  https://commons.wikimedia.org/wiki/File:Yellow_flower.png
+- Green · Hills and trees — Baap8969
+  https://commons.wikimedia.org/wiki/File:Green_Landscape_with_Hills_and_Trees.jpg
+- Blue · Flower — Iurie Nistor
+  https://commons.wikimedia.org/wiki/File:A_Blue_Flower.jpg
+- Purple · Flower — Reshmamohamed
+  https://commons.wikimedia.org/wiki/File:Purple_flower_nature.jpg
+- Pink · Paper flower — By atmika
+  https://commons.wikimedia.org/wiki/File:Pink_Paper_flower.jpg
+- Brown · Sand dunes — Gerda Arendt
+  https://commons.wikimedia.org/wiki/File:Sand_dunes_landscape_before_sunset,_Lençóis_Maranhenses.jpg
+- Gray · Granite texture — Sisters.seamless
+  https://commons.wikimedia.org/wiki/File:Grey_granite_boulder_seamless_stone_surface_texture.jpg
+
+The bundled Black & white · Abstract landscape image is licensed under CC BY 2.0:
+https://creativecommons.org/licenses/by/2.0/
+
+- Black & white · Abstract landscape — rossomoto
+  https://commons.wikimedia.org/wiki/File:Black_%5E_white_quasi-abstract_landscape_-_Flickr_-_rossomoto.jpg
+  Grove's bundled copy is resized and optimized for launcher use.
+
+Grove keeps this attribution available offline in the wallpaper picker. Bundling an image does not change the original author's copyright or license.
