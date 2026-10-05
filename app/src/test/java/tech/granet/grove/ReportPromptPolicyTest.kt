@@ -18,4 +18,10 @@ class ReportPromptPolicyTest {
         assertFalse(ReportPromptPolicy.shouldPrompt(1, true, true, false))
         assertFalse(ReportPromptPolicy.shouldPrompt(1, false, true, true))
     }
+    @Test fun mailHandoffFailsClosedWithoutAHandler() {
+        assertFalse(ReportHandoffPolicy.hasMailHandler(0))
+        assertTrue(ReportHandoffPolicy.hasMailHandler(1))
+        assertTrue(ReportHandoffPolicy.hasMailHandler(3))
+    }
+
 }
