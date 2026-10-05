@@ -86,6 +86,18 @@ class ConfigTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
+    fun invalidFileIndexingSwitchRejected() {
+        Config.parse("""{"version":8,"wallpaper":0,"favorites":[],"search":{"fileIndexing":1}}""")
+    }
+
+    @Test fun versionEightAcceptsAllSearchSwitches() {
+        val parsed = Config.parse(
+            """{"version":8,"wallpaper":0,"favorites":[],"search":{"contacts":true,"files":false,"contactIndexing":true,"fileIndexing":false}}"""
+        )
+        assertEquals(SearchSettings(contacts = true, files = false, contactIndexing = true, fileIndexing = false), parsed.search)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
     fun invalidClockActionSwitchRejected() {
         Config.parse("""{"version":7,"wallpaper":0,"favorites":[],"homeScreen":{"tapClockOpensClock":"false"}}""")
     }
