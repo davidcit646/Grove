@@ -22,7 +22,7 @@ internal class ConfigController(private val activity: MainActivity) {
         with(activity) {
             return ConfigTransaction.commit(next, configStore::save, { config = it }) { error ->
                 Log.e("Grove", "Could not save settings", error)
-                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST)
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST) { commitConfig(next) }
             }
         }
     }
@@ -32,7 +32,7 @@ internal class ConfigController(private val activity: MainActivity) {
             val previousSearch = config.search
             val committed = ConfigTransaction.commit(next, configStore::activate, { config = it }) { error ->
                 Log.e("Grove", "Could not activate settings", error)
-                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST)
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST) { activateConfig(next) }
             }
             if (committed && previousSearch != next.search) searchController.applySearchSettings(previousSearch)
             return committed
