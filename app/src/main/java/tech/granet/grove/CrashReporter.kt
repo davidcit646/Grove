@@ -80,7 +80,7 @@ object CrashReporter {
         }
     }
 
-    fun reportNonFatal(context: Context, error: GroveError, throwable: Throwable?) {
+    internal fun reportNonFatal(context: Context, error: GroveError, throwable: Throwable?) {
         try {
             if (isEnabled(context)) writeReport(context, kind = "error", error = error, throwable = throwable)
         } catch (_: Exception) {
