@@ -20,6 +20,12 @@ import java.util.*
 import java.io.File
 import java.util.concurrent.Executors
 
+internal object SearchPublicationGate {
+    fun allowed(generation: Int, currentGeneration: Int, active: Boolean,
+                enabled: Boolean, access: Boolean, cacheSupersedesLive: Boolean = false): Boolean =
+        generation == currentGeneration && active && enabled && access && !cacheSupersedesLive
+}
+
 /** Query execution and optional source state. Permissions close the affected source; stale queries cannot publish. */
 internal class SearchController(private val activity: MainActivity) {
     internal val searchWorker = Executors.newSingleThreadExecutor()
@@ -65,6 +71,15 @@ internal class SearchController(private val activity: MainActivity) {
     }
 
     fun shutdown() { liveContactWorker.shutdownNow(); liveFileWorker.shutdownNow() }
+
+    fun reconcileAccess() {
+        with(activity) {
+            val query = searchField?.text?.toString().orEmpty()
+            cancelPending()
+            sources.reconcile()
+            if (searchMode) renderSearch(query)
+        }
+    }
 
     fun indexFiles(): Unit = with(activity) { sources.indexFiles()
     }
@@ -116,12 +131,14 @@ internal class SearchController(private val activity: MainActivity) {
 
     fun applySearchSettings(previous: SearchSettings) {
         with(activity) {
+            val query = searchField?.text?.toString().orEmpty()
+            cancelPending()
             sources.reconcile()
             if (((configController.config.search.contacts && !previous.contacts) ||
                     (configController.config.search.contactIndexing && !previous.contactIndexing)) && !hasContactAccess()) explainContactAccess()
             if (((configController.config.search.files && !previous.files) ||
                     (configController.config.search.fileIndexing && !previous.fileIndexing)) && !Environment.isExternalStorageManager()) explainFileAccess()
-            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
+            if (searchMode) renderSearch(query)
         }
     }
 
@@ -214,8 +231,11 @@ internal class SearchController(private val activity: MainActivity) {
                 generation == searchGeneration && activity.configController.config.search.contacts && hasContactAccess()
             }, cancellation).let { SearchResults.matching(it, prepared, 12) { contact -> contact.searchName } } }
             activity.runOnUiThread {
-                if (generation != searchGeneration || !activity.searchMode || !activity.configController.config.search.contacts ||
-                    (activity.configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed) || !hasContactAccess()) return@runOnUiThread
+                if (!SearchPublicationGate.allowed(
+                        generation, searchGeneration, !activity.isDestroyed && activity.searchMode,
+                        activity.configController.config.search.contacts, hasContactAccess(),
+                        activity.configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed
+                    )) return@runOnUiThread
                 result.onSuccess {
                     liveContacts = it
                     liveContactState = SearchSourceState.Ready(liveContacts.size)
@@ -233,8 +253,11 @@ internal class SearchController(private val activity: MainActivity) {
                     Environment.isExternalStorageManager()
             }, maxDurationMs = 2500L).let { scan -> scan to SearchResults.matching(scan.files, prepared, 12) { file -> file.searchName } } }
             activity.runOnUiThread {
-                if (generation != searchGeneration || !activity.searchMode || !activity.configController.config.search.files ||
-                    (activity.configController.config.search.fileIndexing && sources.fileCacheReady && !sources.fileLoadFailed) || !Environment.isExternalStorageManager()) return@runOnUiThread
+                if (!SearchPublicationGate.allowed(
+                        generation, searchGeneration, !activity.isDestroyed && activity.searchMode,
+                        activity.configController.config.search.files, Environment.isExternalStorageManager(),
+                        activity.configController.config.search.fileIndexing && sources.fileCacheReady && !sources.fileLoadFailed
+                    )) return@runOnUiThread
                 result.onSuccess {
                     liveFiles = it.second
                     liveFileState = if (it.first.truncated || it.first.skippedDirectories > 0)
@@ -262,6 +285,7 @@ internal class SearchController(private val activity: MainActivity) {
                         runCatching { launcher.startMainActivity(app.component, android.os.Process.myUserHandle(), null, null) }
                             .onFailure { message("This app is unavailable"); catalogController.loadApps() }
                     }, menu = { actionController.appMenu(app) }) },
+                catalogController.state, retryApps = { catalogController.loadApps() },
                 (if (configController.config.search.contacts && hasContactAccess()) {
                     if (configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed) matchingContacts else liveContacts
                 } else emptyList()).map { contact -> SearchScreen.ContactRow(contact.name) { actionController.contactMenu(contact) } },
