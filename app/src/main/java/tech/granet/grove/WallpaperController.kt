@@ -12,6 +12,12 @@ import java.io.FileOutputStream
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 
+internal enum class WallpaperApplyOutcome {
+    APPLIED,
+    PLATFORM_FAILED,
+    LOCAL_SYNC_FAILED,
+}
+
 /** Loads, validates and applies local wallpaper sources away from launcher navigation code. */
 internal class WallpaperController(
     private val activity: AppCompatActivity,
@@ -19,16 +25,26 @@ internal class WallpaperController(
     private val message: (String) -> Unit,
 ) {
     init {
-        // Versions before #82 cached Commons downloads in private storage. Built-ins
-        // are packaged now, so those stale network-era files have no authority.
         runCatching {
-            File(activity.filesDir, "wallpapers").listFiles { file ->
+            val wallpaperDir = File(activity.filesDir, "wallpapers")
+            // Versions before #82 cached Commons downloads in private storage. Built-ins
+            // are packaged now, so those stale network-era files have no authority.
+            wallpaperDir.listFiles { file ->
                 file.isFile && file.name.startsWith("commons-")
             }?.forEach(File::delete)
-        }.onFailure { Log.w("Grove", "Could not clean legacy wallpaper cache", it) }
+
+            // Recover an interrupted custom-image promotion before Home can read it.
+            val committed = WallpaperArt.customFile(activity.filesDir)
+            val backup = WallpaperArt.customBackupFile(activity.filesDir)
+            if (!committed.exists() && backup.exists()) {
+                if (!backup.renameTo(committed)) Log.w("Grove", "Could not restore custom wallpaper backup")
+            } else if (committed.exists()) {
+                backup.delete()
+            }
+        }.onFailure { Log.w("Grove", "Could not reconcile wallpaper storage", it) }
     }
 
-    fun artwork(index: Int): Bitmap {
+    fun artwork(index: Int, preferPendingCustom: Boolean = false): Bitmap {
         val source = WallpaperArt.source(index) ?: error("Unknown wallpaper source")
         return when (source.kind) {
             WallpaperKind.GENERATED -> WallpaperArt.create(index)
@@ -36,20 +52,24 @@ internal class WallpaperController(
                 ?: error("Bundled wallpaper is unavailable")
             WallpaperKind.SOLID_BLACK ->
                 Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
-            WallpaperKind.CUSTOM -> decode(WallpaperArt.customFile(activity.filesDir))
-                ?: error("Custom wallpaper is unavailable")
+            WallpaperKind.CUSTOM -> {
+                val pending = WallpaperArt.customCandidateFile(activity.filesDir)
+                val file = if (preferPendingCustom && pending.exists()) pending
+                    else WallpaperArt.customFile(activity.filesDir)
+                decode(file) ?: error("Custom wallpaper is unavailable")
+            }
         }
     }
 
-    /** Copy a user-picked image into Grove private storage only after bounded validation. */
+    /** Stage a user-picked image. The currently committed custom wallpaper is untouched until Android applies it. */
     fun importCustom(uri: Uri, done: (Boolean) -> Unit) {
         worker.execute {
-            val target = WallpaperArt.customFile(activity.filesDir)
-            val temp = File(target.parentFile, target.name + ".tmp")
+            val candidate = WallpaperArt.customCandidateFile(activity.filesDir)
+            val temp = File(candidate.parentFile, candidate.name + ".tmp")
             val ok = runCatching {
                 val type = activity.contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
                 require(type.startsWith("image/")) { "Selected document is not an image" }
-                target.parentFile?.mkdirs()
+                candidate.parentFile?.mkdirs()
                 activity.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(temp).use { output ->
                         val buffer = ByteArray(16 * 1024)
@@ -68,8 +88,8 @@ internal class WallpaperController(
                 validateCustomImage(type, temp.length(), bounds.outWidth, bounds.outHeight)
                 val decoded = decode(temp) ?: error("Selected image is corrupt or has unsupported dimensions")
                 decoded.recycle()
-                target.delete()
-                check(temp.renameTo(target)) { "Could not save selected image" }
+                candidate.delete()
+                check(temp.renameTo(candidate)) { "Could not stage selected image" }
                 true
             }.onFailure { Log.w("Grove", "Custom wallpaper import failed", it) }.getOrDefault(false)
             if (!ok) temp.delete()
@@ -81,7 +101,8 @@ internal class WallpaperController(
     fun background(index: Int, width: Int, height: Int, done: (Bitmap?, Pair<Int, Int>?) -> Unit) {
         worker.execute {
             val prepared = runCatching {
-                val source = artwork(index)
+                // Home always reads the committed custom image, never an un-applied candidate.
+                val source = artwork(index, preferPendingCustom = false)
                 try {
                     centerCrop(source, width, height).also { if (it !== source) source.recycle() }
                 } catch (error: Throwable) {
@@ -96,11 +117,11 @@ internal class WallpaperController(
         }
     }
 
-    /** A small preview is decoded off the UI thread. The caller owns and recycles it. */
+    /** A small preview is decoded off the UI thread. Pending custom selection is allowed only inside the picker. */
     fun preview(index: Int, done: (Bitmap?) -> Unit) {
         worker.execute {
             val preview = runCatching {
-                val full = artwork(index)
+                val full = artwork(index, preferPendingCustom = true)
                 val cropped = centerCrop(full, 360, 800)
                 val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
                 if (cropped !== scaled && cropped !== full) cropped.recycle()
@@ -113,10 +134,11 @@ internal class WallpaperController(
         }
     }
 
-    fun apply(index: Int, which: Int, done: (Boolean) -> Unit) {
+    fun apply(index: Int, which: Int, done: (WallpaperApplyOutcome) -> Unit) {
         worker.execute {
-            runCatching {
-                val source = artwork(index)
+            var androidApplied = false
+            val outcome = try {
+                val source = artwork(index, preferPendingCustom = true)
                 val bitmap = centerCrop(
                     source,
                     activity.resources.displayMetrics.widthPixels,
@@ -124,21 +146,31 @@ internal class WallpaperController(
                 )
                 try {
                     WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which)
+                    androidApplied = true
                 } finally {
                     bitmap.recycle()
                     if (source !== bitmap) source.recycle()
                 }
-            }.onSuccess {
-                activity.runOnUiThread {
-                    if (!activity.isDestroyed) {
-                        message("Wallpaper applied")
-                        done(true)
-                    }
-                }
-            }.onFailure {
-                Log.w("Grove", "Could not apply wallpaper", it)
-                activity.runOnUiThread {
-                    if (!activity.isDestroyed) done(false)
+
+                val selected = WallpaperArt.source(index)
+                if (selected?.kind == WallpaperKind.CUSTOM &&
+                    which and WallpaperManager.FLAG_SYSTEM != 0 &&
+                    !promoteCandidate(
+                        WallpaperArt.customFile(activity.filesDir),
+                        WallpaperArt.customCandidateFile(activity.filesDir),
+                        WallpaperArt.customBackupFile(activity.filesDir),
+                    )
+                ) WallpaperApplyOutcome.LOCAL_SYNC_FAILED
+                else WallpaperApplyOutcome.APPLIED
+            } catch (error: Throwable) {
+                Log.w("Grove", "Could not apply wallpaper", error)
+                if (androidApplied) WallpaperApplyOutcome.LOCAL_SYNC_FAILED
+                else WallpaperApplyOutcome.PLATFORM_FAILED
+            }
+            activity.runOnUiThread {
+                if (!activity.isDestroyed) {
+                    if (outcome == WallpaperApplyOutcome.APPLIED) message("Wallpaper applied")
+                    done(outcome)
                 }
             }
         }
@@ -164,6 +196,18 @@ internal class WallpaperController(
             require(mime.lowercase(Locale.ROOT).startsWith("image/")) { "Selected document is not an image" }
             require(bytes in 1..MAX_CUSTOM_BYTES) { "Wallpaper is too large" }
             require(width in 1..8192 && height in 1..8192) { "Invalid wallpaper dimensions" }
+        }
+
+        internal fun promoteCandidate(committed: File, candidate: File, backup: File): Boolean {
+            if (!candidate.exists()) return committed.exists()
+            backup.delete()
+            if (committed.exists() && !committed.renameTo(backup)) return false
+            if (candidate.renameTo(committed)) {
+                backup.delete()
+                return true
+            }
+            if (backup.exists()) backup.renameTo(committed)
+            return false
         }
 
         fun decode(file: File): Bitmap? {
