@@ -91,6 +91,9 @@ mod tests {
         assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contacts":true,"files":true,"contactIndexing":true,"fileIndexing":false}}"#).is_ok());
         assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contactIndexing":"true"}}"#).is_err());
         assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"fileIndexing":1}}"#).is_err());
+        assert!(validate_config(r#"{"version":8,"wallpaper":13,"favorites":[]}"#).is_ok());
+        assert!(validate_config(r#"{"version":8,"wallpaper":14,"favorites":[]}"#).is_ok());
+        assert!(validate_config(r#"{"version":8,"wallpaper":15,"favorites":[]}"#).is_err());
         assert!(validate_config(r#"{"version":9,"wallpaper":0,"favorites":[]}"#).is_err());
     }
 
