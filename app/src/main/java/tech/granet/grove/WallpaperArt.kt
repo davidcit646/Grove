@@ -13,6 +13,7 @@ internal data class WallpaperSource(
     val author: String,
     val license: String,
     val sourcePage: String? = null,
+    val resourceId: Int? = null,
 )
 
 data class CommonsWallpaper(
@@ -49,9 +50,22 @@ internal object WallpaperArt {
             WallpaperSource("grove-fern", 0, WallpaperKind.GENERATED, "Fern · abstract", "Grove", "Apache 2.0"),
             WallpaperSource("grove-ember", 1, WallpaperKind.GENERATED, "Ember · mountain", "Grove", "Apache 2.0"),
             WallpaperSource("grove-dusk", 2, WallpaperKind.GENERATED, "Dusk · mountain", "Grove", "Apache 2.0"),
-        ) + commons.mapIndexed { offset, item ->
+        ) + commons.zip(
+            listOf(
+                R.drawable.wallpaper_red,
+                R.drawable.wallpaper_orange,
+                R.drawable.wallpaper_yellow,
+                R.drawable.wallpaper_green,
+                R.drawable.wallpaper_blue,
+                R.drawable.wallpaper_purple,
+                R.drawable.wallpaper_pink,
+                R.drawable.wallpaper_brown,
+                R.drawable.wallpaper_gray,
+                R.drawable.wallpaper_black_white,
+            )
+        ).mapIndexed { offset, (item, resourceId) ->
             WallpaperSource("commons-${offset}", offset + 3, WallpaperKind.COMMONS,
-                "${item.color} · ${item.title}", item.author, item.license, item.sourcePage)
+                "${item.color} · ${item.title}", item.author, item.license, item.sourcePage, resourceId)
         } + listOf(
             WallpaperSource("solid-black", 13, WallpaperKind.SOLID_BLACK, "Solid black", "Grove", "Apache 2.0"),
             WallpaperSource("custom-image", 14, WallpaperKind.CUSTOM, "Your photo or file", "You", "Local image"),
