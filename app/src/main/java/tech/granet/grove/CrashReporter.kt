@@ -40,6 +40,7 @@ object CrashReporter {
     private const val MAX_REPORTS = 10
     private const val MAX_BODY_CHARS = 60_000
     private const val DEFAULT_EMAIL = "support@granet.tech"
+    @Volatile private var prompting = false
 
     /** Install as early as possible (GroveApp.onCreate). Safe to call once. */
     fun install(app: Application) {
@@ -94,16 +95,17 @@ object CrashReporter {
         } catch (_: Exception) {
             return
         }
-        if (reports.isEmpty()) return
+        if (reports.isEmpty() || prompting) return
+        prompting = true
         val noun = if (reports.size == 1) "report" else "reports"
         activity.confirmDialog(
             title = "Grove ran into a problem",
             message = "${reports.size} $noun ${if (reports.size == 1) "was" else "were"} saved on this device. " +
-                "Email ${if (reports.size == 1) "it" else "them"} to the developer? Nothing is sent automatically.",
-            positive = "Send via email",
+                "Review an email draft to ${developerEmail(activity)}? Nothing is sent automatically.",
+            positive = "Review email draft",
         ) {
             sendReports(activity, reports)
-        }
+        }.setOnDismissListener { prompting = false }
     }
 
     fun pendingCount(context: Context): Int = try {
@@ -140,7 +142,8 @@ object CrashReporter {
         } catch (_: Exception) {
             val clipboard = activity.getSystemService(ClipboardManager::class.java)
             clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
-            activity.message("No email app found. Report copied so you can paste it manually.")
+            val e = GroveErrorRegistry.REPORT_HANDOFF
+            activity.message("Code ${e.code} · ${e.gws}. No email app found; report copied for manual paste.")
         }
     }
 
