@@ -56,13 +56,25 @@ internal class ConfigController(private val activity: MainActivity) {
 
     fun showConfigRecoveryDialog() {
         with(activity) {
-            MaterialAlertDialogBuilder(this)
+            val dialog = MaterialAlertDialogBuilder(this)
                 .setTitle("Configuration problem")
                 .setMessage("Grove couldn’t read your saved custom configuration, so a safe fallback configuration is active. Your custom configuration has been preserved. You can continue editing it and try loading it, or load defaults and start over.")
                 .setCancelable(false)
                 .setPositiveButton("Edit custom config") { _, _ -> editConfig(configStore.brokenCustomConfig) }
-                .setNegativeButton("Load defaults") { _, _ -> if (activateConfig(Config())) { homeController.showHome(); message("Default configuration loaded") } }
-                .show()
+                .setNegativeButton("Load defaults", null)
+                .create()
+            // A normal dialog button dismisses even when persistence fails. Keep
+            // recovery available until the replacement config actually commits.
+            dialog.setOnShowListener {
+                dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener {
+                    if (activateConfig(Config())) {
+                        dialog.dismiss()
+                        homeController.showHome()
+                        message("Default configuration loaded")
+                    }
+                }
+            }
+            dialog.show()
         }
     }
     fun exportDocument(uri: Uri) = with(activity) {
