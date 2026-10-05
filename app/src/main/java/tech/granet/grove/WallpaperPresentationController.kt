@@ -44,6 +44,10 @@ internal class WallpaperPresentationController(private val activity: MainActivit
                     if (configController.commitConfig(configController.config.copy(wallpaper = index))) {
                         homeController.pendingWallpaper = null
                         homeController.artworkStyle = -1
+                    } else {
+                        GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_SYNC) {
+                            applySelection(index, which)
+                        }
                     }
                     homeController.showHome()
                 }
