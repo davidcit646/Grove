@@ -73,7 +73,7 @@ object CrashReporter {
     fun reportNonFatal(context: Context, tag: String, throwable: Throwable) {
         try {
             if (isEnabled(context)) writeReport(context, kind = "error",
-                error = GroveError(500, "GWS-report-nonfatal", tag.take(80), ErrorSeverity.CONTINUE, "A caught Grove operation failed."),
+                error = GroveErrorRegistry.GENERIC_NONFATAL.copy(feature = tag.take(80)),
                 throwable = throwable)
         } catch (_: Exception) {
         }
