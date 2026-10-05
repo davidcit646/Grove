@@ -112,7 +112,7 @@ class MainActivity : AppCompatActivity() {
                     DragEvent.ACTION_DRAG_LOCATION -> pinDragController.scrollNearEdge(root, event)
                     DragEvent.ACTION_DRAG_ENDED -> {
                         pinDragController.finishDrag()
-                        root.post { if (!drawer && !isDestroyed) homeController.showHome() }
+                        root.post { if (!drawer && !isDestroyed && !startupController.coreRecoveryVisible) homeController.showHome() }
                     }
                 }
                 true
@@ -165,8 +165,7 @@ class MainActivity : AppCompatActivity() {
             startupController.launcherCallbackRegistered = false
         }
         touchRouter.cancel()
-        searchController.pendingSearch?.let(searchController.searchHandler::removeCallbacks)
-        searchController.searchGeneration++
+        searchController.cancelPending()
         searchController.searchWorker.shutdownNow()
         searchController.sources.shutdown()
         worker.shutdownNow()

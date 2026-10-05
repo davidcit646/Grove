@@ -54,9 +54,7 @@ internal class HomeController(private val activity: MainActivity) {
 
     fun base() {
         with(activity) {
-            searchController.pendingSearch?.let(searchController.searchHandler::removeCallbacks)
-            searchController.pendingSearch = null
-            searchController.searchGeneration++
+            searchController.cancelPending()
             searchController.searchField = null; searchController.searchResults = null; drawerController.drawerAdapter = null; drawerController.drawerEmpty = null; drawerController.drawerGrid = null
             root.animate().cancel(); root.translationY = 0f; root.alpha = 1f
             root.removeAllViews()
@@ -83,7 +81,7 @@ internal class HomeController(private val activity: MainActivity) {
                                 wallpaperButtonColors = colors
                                 showWallpaperBackground(prepared)
                                 if (previous !== prepared) previous?.recycle()
-                                if (!drawer && !searchMode) showHome()
+                                if (!drawer && !searchMode && !startupController.coreRecoveryVisible) showHome()
                             }
                         }
                     }

@@ -59,6 +59,9 @@ internal class StartupController(private val activity: MainActivity) {
     fun showCoreRecovery(detail: String) {
         with(activity) {
             coreRecoveryVisible = true
+            // Supersede pending catalog/search output before showing a closed core lane.
+            catalogController.loadGeneration++
+            searchController.cancelPending()
             drawer = false
             searchMode = false
             root.animate().cancel()

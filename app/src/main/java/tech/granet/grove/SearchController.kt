@@ -45,6 +45,12 @@ internal class SearchController(private val activity: MainActivity) {
     internal val fileScanSkipped get() = with(activity) { sources.fileScanSkipped }
     internal val searchScreen by lazy { with(activity) { SearchScreen(this) } }
 
+    fun cancelPending() {
+        pendingSearch?.let(searchHandler::removeCallbacks)
+        pendingSearch = null
+        searchGeneration++
+    }
+
     fun indexFiles(): Unit = with(activity) { sources.indexFiles()
     }
 
