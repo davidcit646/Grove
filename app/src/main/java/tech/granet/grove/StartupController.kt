@@ -2,7 +2,6 @@ package tech.granet.grove
 
 import android.content.*
 import android.graphics.*
-import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.os.*
@@ -10,19 +9,47 @@ import android.view.*
 import android.widget.*
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
-import java.util.*
+
+internal enum class CoreRecoveryReason {
+    CONFIG,
+    LAUNCHER_SERVICE,
+    APP_CATALOG,
+}
+
+internal data class CoreRecoveryState(
+    val reason: CoreRecoveryReason,
+    val detail: String,
+    val retryable: Boolean = true,
+    val settingsEscape: Boolean = true,
+)
+
+internal object CoreRecoveryPolicy {
+    fun forReason(reason: CoreRecoveryReason): CoreRecoveryState = CoreRecoveryState(
+        reason = reason,
+        detail = when (reason) {
+            CoreRecoveryReason.CONFIG ->
+                "Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
+            CoreRecoveryReason.LAUNCHER_SERVICE ->
+                "Grove could not connect to Android's app launcher service."
+            CoreRecoveryReason.APP_CATALOG ->
+                "Android could not provide the installed app list. Retry, or change your Home app in Android Settings."
+        },
+    )
+}
 
 /** Essential startup checks and recovery. Failed config or launcher service prevents downstream normal Home startup. */
 internal class StartupController(private val activity: MainActivity) {
     internal var startupState: Bundle? = null
-    internal var coreRecoveryVisible = false
+    internal var coreRecoveryState: CoreRecoveryState? = null
+        private set
+    internal val coreRecoveryVisible get() = coreRecoveryState != null
     internal var launcherCallbackRegistered = false
 
     fun beginHome() {
         with(activity) {
             val loaded = runCatching { configController.configStore.load() }.getOrElse { error ->
                 Log.e("Grove", "Configuration unavailable", error)
-                showCoreRecovery("Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased.")
+                showCoreRecovery(CoreRecoveryReason.CONFIG)
                 return
             }
             configController.config = loaded
@@ -30,7 +57,7 @@ internal class StartupController(private val activity: MainActivity) {
             runCatching { widgets.restore(startupState) }
                 .onFailure { Log.w("Grove", "Widget state unavailable", it) }
             if (!ensureLauncherCallback()) return
-            coreRecoveryVisible = false
+            clearCoreRecovery()
             root.setBackgroundColor(Color.TRANSPARENT)
             homeController.homeScrollY = startupState?.getInt("homeScrollY") ?: homeController.homeScrollY
             startupState = null
@@ -50,15 +77,20 @@ internal class StartupController(private val activity: MainActivity) {
                 true
             } catch (error: Exception) {
                 Log.e("Grove", "Launcher service unavailable", error)
-                showCoreRecovery("Grove could not connect to Android's app launcher service.")
+                showCoreRecovery(CoreRecoveryReason.LAUNCHER_SERVICE)
                 false
             }
         }
     }
 
-    fun showCoreRecovery(detail: String) {
+    fun clearCoreRecovery() {
+        coreRecoveryState = null
+    }
+
+    fun showCoreRecovery(reason: CoreRecoveryReason) {
         with(activity) {
-            coreRecoveryVisible = true
+            val recovery = CoreRecoveryPolicy.forReason(reason)
+            coreRecoveryState = recovery
             // Supersede pending catalog/search output before showing a closed core lane.
             catalogController.loadGeneration++
             searchController.cancelPending()
@@ -79,16 +111,16 @@ internal class StartupController(private val activity: MainActivity) {
                 gravity = Gravity.CENTER
             })
             panel.addView(TextView(this).apply {
-                text = detail
+                text = recovery.detail
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
             })
-            panel.addView(Button(this).apply {
+            if (recovery.retryable) panel.addView(Button(this).apply {
                 text = "Retry"
                 setOnClickListener { beginHome() }
             })
-            panel.addView(Button(this).apply {
+            if (recovery.settingsEscape) panel.addView(Button(this).apply {
                 text = "Android Home settings"
                 setOnClickListener {
                     try {
@@ -110,7 +142,7 @@ internal class StartupController(private val activity: MainActivity) {
         with(activity) {
             if (plan.loadApps) catalogController.loadApps()
             if (plan.reconcileIndexes) root.postDelayed({
-                if (!isDestroyed && !coreRecoveryVisible) searchController.sources.reconcile()
+                if (!isDestroyed && !coreRecoveryVisible) searchController.reconcileAccess()
             }, 150L)
         }
     }
