@@ -34,7 +34,7 @@ class ConfigTest {
         assertEquals(GestureSettings(), migrated.gestures)
         assertEquals(HomeScreenSettings(), migrated.homeScreen)
         assertTrue(migrated.homeScreen.showPinnedAppsHint)
-        assertTrue(migrated.json().contains("\"version\": 9"))
+        assertTrue(migrated.json().contains("\"version\": 10"))
         assertEquals(SearchSettings(contacts = true, files = true), migrated.search)
         assertFalse(migrated.search.contactIndexing)
         assertFalse(migrated.search.fileIndexing)
@@ -65,7 +65,7 @@ class ConfigTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun unknownVersionRejected() { Config.parse("""{"version":10,"wallpaper":"grove-fern","favorites":[]}""") }
+    fun unknownVersionRejected() { Config.parse("""{"version":11,"wallpaper":"grove-fern","favorites":[]}""") }
 
     @Test fun versionEightNumericWallpaperMigratesToStableIdOnExport() {
         val migrated = Config.parse("""{"version":8,"wallpaper":14,"favorites":[]}""")

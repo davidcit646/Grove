@@ -14,27 +14,37 @@ import java.util.*
 
 /** Active configuration and document/editor flows. Persistence must succeed before publication or completion. */
 internal class ConfigController(private val activity: MainActivity) {
+    private val documents = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var documentGeneration = 0
     internal var config = Config()
     internal val configStore by lazy { with(activity) { ConfigStore(activity.prefs) } }
     internal val workflow by lazy { ConfigWorkflow({ config }, ::activateConfig) }
 
     fun commitConfig(next: Config): Boolean {
         with(activity) {
-            return ConfigTransaction.commit(next, configStore::save, { config = it }) { error ->
+            val previous = config
+            val saved = ConfigTransaction.commit(next, configStore::save, { config = it }) { error ->
                 Log.e("Grove", "Could not save settings", error)
-                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST) { commitConfig(next) }
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST)
             }
+            if (saved) reconcile(previous, next)
+            return saved
         }
+    }
+
+    private fun reconcile(previous: Config, next: Config) = with(activity) {
+        if (previous.search != next.search) searchController.applySearchSettings(previous.search)
+        presentationController.applyTheme(next.themeMode)
     }
 
     fun activateConfig(next: Config): Boolean {
         with(activity) {
-            val previousSearch = config.search
+            val previous = config
             val committed = ConfigTransaction.commit(next, configStore::activate, { config = it }) { error ->
                 Log.e("Grove", "Could not activate settings", error)
-                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST) { activateConfig(next) }
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST)
             }
-            if (committed && previousSearch != next.search) searchController.applySearchSettings(previousSearch)
+            if (committed) reconcile(previous, next)
             return committed
         }
     }
@@ -81,30 +91,54 @@ internal class ConfigController(private val activity: MainActivity) {
             dialog.show()
         }
     }
-    fun exportDocument(uri: Uri) = with(activity) {
-        runCatching {
-            contentResolver.openOutputStream(uri)?.use(workflow::export)
-                ?: error("Cannot open file")
-        }.onFailure {
-            GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_EXPORT) { export.launch("grove-config.json") }
+    fun exportDocument(uri: Uri) {
+        val snapshot = config
+        val generation = ++documentGeneration
+        documents.execute {
+            val result = runCatching {
+                activity.contentResolver.openOutputStream(uri)?.use { ConfigDocuments.write(snapshot, it) }
+                    ?: error("Cannot open file")
+            }
+            activity.runOnUiThread {
+                if (activity.isDestroyed || generation != documentGeneration) return@runOnUiThread
+                result.onSuccess { activity.message("Configuration exported") }.onFailure {
+                    GroveErrorPresenter.show(activity, GroveErrorRegistry.CONFIG_EXPORT) { activity.export.launch("grove-config.json") }
+                }
+            }
         }
-        Unit
     }
 
-    fun importDocument(uri: Uri) = with(activity) {
-        runCatching {
-            contentResolver.openInputStream(uri)?.use(workflow::import)
-                ?: error("Cannot open file")
-        }.onSuccess { activated ->
-            if (activated) {
-                homeController.showHome()
-                message("Configuration imported")
+    fun importDocument(uri: Uri) {
+        val snapshot = config
+        val generation = ++documentGeneration
+        documents.execute {
+            val result = runCatching {
+                activity.contentResolver.openInputStream(uri)?.use(ConfigDocuments::read)
+                    ?: error("Cannot open file")
             }
-        }.onFailure {
-            GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_IMPORT) {
-                importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+            activity.runOnUiThread {
+                if (activity.isDestroyed || generation != documentGeneration) return@runOnUiThread
+                if (!ConfigDocumentGate.canActivate(snapshot, config)) {
+                    activity.message("Settings changed while importing; choose the document again")
+                    return@runOnUiThread
+                }
+                result.onSuccess { parsed ->
+                    if (activateConfig(parsed)) {
+                        activity.homeController.showHome()
+                        activity.message("Configuration imported")
+                    }
+                }.onFailure {
+                    GroveErrorPresenter.show(activity, GroveErrorRegistry.CONFIG_IMPORT) {
+                        activity.importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+                    }
+                }
             }
         }
-        Unit
     }
+
+    fun shutdown() { documentGeneration++; documents.shutdownNow() }
+}
+
+internal object ConfigDocumentGate {
+    fun canActivate(startedWith: Config, current: Config): Boolean = startedWith == current
 }

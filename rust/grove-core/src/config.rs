@@ -9,8 +9,14 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("version")
         .and_then(Value::as_i64)
         .ok_or("Missing configuration version")?;
-    if !(1..=9).contains(&version) {
+    if !(1..=10).contains(&version) {
         return Err("Unsupported configuration version");
+    }
+    if version >= 10 {
+        match root.get("themeMode").and_then(Value::as_str) {
+            Some("system" | "light" | "dark" | "wallpaper") => {},
+            _ => return Err("Unknown theme mode"),
+        }
     }
     if version >= 9 {
         let wallpaper = root

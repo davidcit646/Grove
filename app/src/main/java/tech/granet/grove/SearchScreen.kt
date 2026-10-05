@@ -16,7 +16,9 @@ import tech.granet.grove.ui.wallpaperLabel
 internal class SearchScreen(private val context: Context) {
     data class AppRow(val key: String, val label: String, val icon: Bitmap?, val open: () -> Unit, val menu: () -> Unit)
     data class FileRow(val file: IndexedFile, val open: () -> Unit, val menu: () -> Unit)
-    data class ContactRow(val name: String, val open: () -> Unit)
+    data class ContactRow(val id: Long, val name: String, val open: () -> Unit)
+
+    private val frames = SearchFrameGate()
 
     private fun row(title: String, iconId: Int, subtitle: String? = null, bitmap: Bitmap? = null,
                     iconKey: String? = null, action: () -> Unit, longPress: (() -> Unit)? = null): View =
@@ -43,6 +45,10 @@ internal class SearchScreen(private val context: Context) {
                requestFileAccess: () -> Unit, retryFiles: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
+        val fingerprint = listOf(query.trim(), appState, contactState, fileState,
+            apps.map { Triple(it.key, it.label, it.icon) },
+            contacts.map { it.id to it.name }, files.map { it.file })
+        if (!frames.shouldRender(target, fingerprint)) return
         target.removeAllViews()
         if (Search.prepare(query).text.isEmpty()) return
         if (apps.isNotEmpty() || appState is CatalogState.Loading || appState is CatalogState.Failed ||
@@ -62,13 +68,14 @@ internal class SearchScreen(private val context: Context) {
         if (contactState !is SearchSourceState.Disabled &&
             (contacts.isNotEmpty() || contactState !is SearchSourceState.Ready))
             target.addView(heading("CONTACTS", R.drawable.ic_contact))
-        if (contactState is SearchSourceState.Ready) contacts.forEach { contact ->
+        if (contactState is SearchSourceState.Ready || contactState is SearchSourceState.Partial) contacts.forEach { contact ->
             target.addView(row(contact.name, R.drawable.ic_contact, action = contact.open, longPress = contact.open))
         }
         when (contactState) {
             SearchSourceState.PermissionRequired -> target.addView(row("Allow contact search", R.drawable.ic_contact,
                 "Allow Grove to search your contacts", action = requestContactAccess))
             SearchSourceState.Loading -> target.addView(context.wallpaperLabel("Loading contacts…", 14f))
+            is SearchSourceState.Partial -> target.addView(context.wallpaperLabel("Some contacts may be missing (search bounded).", 14f))
             SearchSourceState.Failed -> target.addView(row("Retry contact search", R.drawable.ic_contact,
                 GroveErrorRegistry.CONTACT_SEARCH.codeLine(), action = retryContacts))
             else -> Unit

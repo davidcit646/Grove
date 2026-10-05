@@ -18,7 +18,7 @@ import tech.granet.grove.ui.warningText
 internal class LauncherSettingsScreen(
     private val activity: AppCompatActivity,
     private val current: () -> Config,
-    private val update: (Config) -> Unit,
+    private val update: (Config) -> Boolean,
     private val editCustom: () -> Unit,
     private val exportConfig: () -> Unit,
     private val importConfig: () -> Unit,
@@ -35,15 +35,35 @@ internal class LauncherSettingsScreen(
             setPadding(activity.dp(20), activity.dp(4), activity.dp(20), activity.dp(4))
         }
 
-        fun toggle(text: String, checked: Boolean, changed: (Boolean) -> Unit) {
-            content.addView(activity.toggleRow(text, checked, changed),
-                LinearLayout.LayoutParams(-1, -2))
+        fun toggle(text: String, checked: Boolean, changed: (Boolean) -> Boolean) {
+            val control = activity.toggleRow(text, checked) { }
+            var reverting = false
+            control.setOnCheckedChangeListener { _, value ->
+                if (!reverting && !changed(value)) {
+                    reverting = true
+                    control.isChecked = !value
+                    reverting = false
+                }
+            }
+            content.addView(control, LinearLayout.LayoutParams(-1, -2))
         }
 
-        fun commit(next: Config) {
-            update(next)
-        }
+        fun commit(next: Config): Boolean = update(next)
 
+        content.addSection("Appearance")
+        lateinit var themeButton: com.google.android.material.button.MaterialButton
+        themeButton = activity.settingsButton("Theme: ${current().themeMode.label}", R.drawable.ic_wallpaper) {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                .setTitle("Theme")
+                .setSingleChoiceItems(ThemeMode.entries.map { it.label }.toTypedArray(), current().themeMode.ordinal) { dialog, index ->
+                    if (commit(current().copy(themeMode = ThemeMode.entries[index]))) {
+                        themeButton.text = "Theme: ${current().themeMode.label}"
+                        dialog.dismiss()
+                    }
+                }.setNegativeButton("Cancel", null).show()
+        }
+        content.addView(themeButton)
+        content.addView(activity.bodyText("System follows Android. Light and Dark set Grove's interface appearance. Wallpaper colors follows Android's theme and uses the applied Home wallpaper's colors for launcher buttons; unavailable colors fall back to the theme. Android displays your actual wallpaper, including changes made outside Grove."))
         content.addSection("Gestures")
         toggle("Swipe down to search", config.gestures.swipeDownSearch) { enabled ->
             commit(current().copy(gestures = current().gestures.copy(swipeDownSearch = enabled)))
@@ -91,7 +111,7 @@ internal class LauncherSettingsScreen(
         toggle("Use wallpaper colors for buttons", config.homeScreen.useWallpaperButtonColors) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(useWallpaperButtonColors = enabled)))
         }
-        content.addView(activity.bodyText("On uses colors from your selected wallpaper for Grove’s Home, Search, and All apps buttons. Off uses Grove’s system light and dark colors."))
+        content.addView(activity.bodyText("In System mode, this uses colors from Android’s applied Home wallpaper. Light and Dark use their theme colors; Wallpaper colors mode always uses the wallpaper palette."))
         toggle("Pinned apps at bottom", config.homeScreen.pinnedAppsAtBottom) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(pinnedAppsAtBottom = enabled)))
         }
@@ -117,7 +137,9 @@ internal class LauncherSettingsScreen(
 
         content.addSection("Crash reports")
         toggle("Crash reporting", CrashReporter.isEnabled(activity)) { enabled ->
-            CrashReporter.setEnabled(activity, enabled)
+            val saved = CrashReporter.setEnabled(activity, enabled)
+            if (!saved) activity.message("Could not save crash reporting preference")
+            saved
         }
         content.addView(activity.bodyText("If Grove crashes or hits an error, a report is saved on this device only. On the next launch you'll be asked whether to email it to the developer. Nothing is ever sent automatically, and no third-party service is involved."))
         lateinit var emailButton: com.google.android.material.button.MaterialButton
@@ -131,9 +153,10 @@ internal class LauncherSettingsScreen(
                 hint = "you@example.com",
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
             ) { email ->
-                CrashReporter.setDeveloperEmail(activity, email)
-                emailButton.text = "Developer email: ${CrashReporter.developerEmail(activity)}"
-                activity.message("Developer email saved")
+                if (CrashReporter.setDeveloperEmail(activity, email)) {
+                    emailButton.text = "Developer email: ${CrashReporter.developerEmail(activity)}"
+                    activity.message("Developer email saved")
+                } else activity.message("Could not save developer email")
             }
         }
         content.addView(emailButton)
@@ -150,8 +173,9 @@ internal class LauncherSettingsScreen(
                 message = "Delete all $count saved problem ${if (count == 1) "report" else "reports"}?",
                 positive = "Delete",
             ) {
-                CrashReporter.deleteAll(activity)
-                deleteButton.text = "Delete pending reports (0)"
+                val removed = CrashReporter.deleteAll(activity)
+                deleteButton.text = "Delete pending reports (${CrashReporter.pendingCount(activity)})"
+                if (!removed) activity.message("Some reports could not be deleted")
             }
         }
         content.addView(deleteButton)

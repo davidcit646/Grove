@@ -22,6 +22,19 @@ mod tests {
     }
 
     #[test]
+    fn theme_schema_accepts_all_modes_and_rejects_invalid_values() {
+        for mode in ["system", "light", "dark", "wallpaper"] {
+            let json = format!(r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":"{}"}}"#, mode);
+            assert!(validate_config(&json).is_ok());
+        }
+        for value in ["null", "42", "\"unknown\""] {
+            let json = format!(r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":{}}}"#, value);
+            assert!(validate_config(&json).is_err());
+        }
+        assert!(validate_config(r#"{"version":10,"wallpaper":"solid-black","favorites":[]}"#).is_err());
+    }
+
+    #[test]
     fn ranking_preserves_existing_search_order() {
         assert_eq!(score("maps", "maps"), 3);
         assert_eq!(score("maps go", "maps"), 2);
@@ -99,7 +112,7 @@ mod tests {
         assert!(validate_config(r#"{"version":9,"wallpaper":"custom-image","favorites":[]}"#).is_ok());
         assert!(validate_config(r#"{"version":9,"wallpaper":"missing","favorites":[]}"#).is_err());
         assert!(validate_config(r#"{"version":9,"wallpaper":0,"favorites":[]}"#).is_err());
-        assert!(validate_config(r#"{"version":10,"wallpaper":"grove-fern","favorites":[]}"#).is_err());
+        assert!(validate_config(r#"{"version":11,"wallpaper":"grove-fern","favorites":[]}"#).is_err());
     }
 
     #[test]

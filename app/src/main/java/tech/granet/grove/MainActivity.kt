@@ -19,6 +19,7 @@ import java.util.concurrent.Executors
 
 /** Root HOME activity. Owns navigation; Android owns external apps and widget providers. */
 class MainActivity : AppCompatActivity() {
+    internal val presentationController by lazy { PresentationController(this) }
     internal val catalogController by lazy { CatalogController(this) }
     internal val configController by lazy { ConfigController(this) }
     internal val homeController by lazy { HomeController(this) }
@@ -96,6 +97,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setDecorFitsSystemWindows(false)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             // The drawer's search field must not take focus (and open the IME)
@@ -140,6 +143,7 @@ class MainActivity : AppCompatActivity() {
             }
         }.onFailure { Log.w("Grove", "Setup state unavailable", it) }
         startupController.beginHome()
+        root.post { if (!isDestroyed) presentationController.start() }
     }
 
     override fun onStart() {
@@ -149,6 +153,7 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onResume() {
         super.onResume()
+        presentationController.refresh()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
         if (searchMode) searchController.reconcileAccess()
@@ -175,9 +180,8 @@ class MainActivity : AppCompatActivity() {
         searchController.sources.shutdown()
         worker.shutdownNow()
         if (::surface.isInitialized) surface.background = null
-        homeController.artwork?.recycle()
-        homeController.artwork = null
-        homeController.backdrop = null
+        presentationController.shutdown()
+        configController.shutdown()
         super.onDestroy()
     }
     override fun onSaveInstanceState(outState: Bundle) {

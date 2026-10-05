@@ -106,7 +106,7 @@ fun Context.iconRow(
         if (bitmap != null) setImageBitmap(bitmap)
         else {
             setImageResource(iconId)
-            imageTintList = ColorStateList.valueOf(ThemeColors.icon(context))
+            imageTintList = ColorStateList.valueOf(titleColor ?: ThemeColors.icon(context))
         }
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }, LinearLayout.LayoutParams(dp(iconDp), dp(iconDp)).apply { marginEnd = dp(iconMarginEndDp) })

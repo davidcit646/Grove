@@ -74,13 +74,11 @@ internal class SetupController(private val activity: MainActivity) {
                     searchController.fileLoadFailed, searchController.files.size, searchController.fileScanSkipped) },
                 searchController::explainContactAccess, searchController::explainFileAccess,
                 finishSetup@{ next ->
-                    val previousSearch = configController.config.search
                     if (!configController.commitConfig(next)) {
                         firstRunSetup?.show()
                         return@finishSetup
                     }
                     firstRunSetup = null
-                    searchController.applySearchSettings(previousSearch)
                     prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
                     homeController.showHome()
                     val role = getSystemService(RoleManager::class.java)
@@ -117,11 +115,9 @@ internal class SetupController(private val activity: MainActivity) {
             LauncherSettingsScreen(
                 this, { configController.config },
                 { next ->
-                    val previousSearch = configController.config.search
-                    if (configController.commitConfig(next)) {
-                        if (previousSearch != next.search) searchController.applySearchSettings(previousSearch)
-                        if (!drawer) homeController.showHome()
-                    }
+                    val saved = configController.commitConfig(next)
+                    if (saved && !drawer) homeController.showHome()
+                    saved
                 },
                 { configController.editConfig() },
                 { export.launch("grove-config.json") },
