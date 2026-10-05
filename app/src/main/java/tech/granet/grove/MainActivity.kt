@@ -37,7 +37,8 @@ class MainActivity : AppCompatActivity() {
     internal val worker = Executors.newSingleThreadExecutor()
     internal val contactWorker = Executors.newSingleThreadExecutor()
     internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) searchController.refreshContacts() else if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+        searchController.sources.reconcile()
+        if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
         setupController.firstRunSetup?.refreshPermissions()
     }
     internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
@@ -83,9 +84,9 @@ class MainActivity : AppCompatActivity() {
     }
     internal val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     internal val changes = object : LauncherApps.Callback() {
-        override fun onPackageAdded(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contacts && searchController.hasContactAccess()) searchController.refreshContacts() }
-        override fun onPackageRemoved(p: String, u: UserHandle) { catalogController.loadApps(); if (configController.config.search.contacts && searchController.hasContactAccess()) searchController.refreshContacts() }
-        override fun onPackageChanged(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contacts && searchController.hasContactAccess()) searchController.refreshContacts() }
+        override fun onPackageAdded(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
+        override fun onPackageRemoved(p: String, u: UserHandle) { catalogController.loadApps(); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
+        override fun onPackageChanged(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
         override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
         override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
     }
@@ -148,7 +149,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
-        startupController.applyStartupPlan(StartupCoordinator.resume(startupController.startupSnapshot(), SystemClock.elapsedRealtime()))
+        if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+        startupController.applyStartupPlan(StartupCoordinator.resume())
     }
 
     override fun onStop() {
@@ -167,6 +169,7 @@ class MainActivity : AppCompatActivity() {
         touchRouter.cancel()
         searchController.cancelPending()
         searchController.searchWorker.shutdownNow()
+        searchController.shutdown()
         searchController.sources.shutdown()
         worker.shutdownNow()
         if (::surface.isInitialized) surface.background = null

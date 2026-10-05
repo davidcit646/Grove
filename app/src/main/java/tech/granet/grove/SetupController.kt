@@ -126,6 +126,10 @@ internal class SetupController(private val activity: MainActivity) {
                         }
                     }
                 },
+                { kind -> searchController.sources.status(kind) },
+                { kind ->
+                    if (kind == "files") searchController.indexFiles() else searchController.refreshContacts()
+                },
             ).show()
         }
     }

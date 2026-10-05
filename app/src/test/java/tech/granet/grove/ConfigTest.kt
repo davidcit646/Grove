@@ -34,8 +34,10 @@ class ConfigTest {
         assertEquals(GestureSettings(), migrated.gestures)
         assertEquals(HomeScreenSettings(), migrated.homeScreen)
         assertTrue(migrated.homeScreen.showPinnedAppsHint)
-        assertTrue(migrated.json().contains("\"version\": 7"))
+        assertTrue(migrated.json().contains("\"version\": 8"))
         assertEquals(SearchSettings(contacts = true, files = true), migrated.search)
+        assertFalse(migrated.search.contactIndexing)
+        assertFalse(migrated.search.fileIndexing)
         assertFalse(migrated.homeScreen.useWallpaperButtonColors)
     }
 
@@ -63,11 +65,24 @@ class ConfigTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun unknownVersionRejected() { Config.parse("""{"version":8,"wallpaper":0,"favorites":[]}""") }
+    fun unknownVersionRejected() { Config.parse("""{"version":9,"wallpaper":0,"favorites":[]}""") }
 
     @Test fun disabledSearchSourcesSurviveExport() {
         val config = Config(search = SearchSettings(contacts = false, files = false))
         assertEquals(config.search, Config.parse(config.json()).search)
+    }
+
+    @Test fun independentIndexingChoicesRoundTrip() {
+        val choice = SearchSettings(contacts = false, files = true, contactIndexing = true, fileIndexing = false)
+        assertEquals(choice, Config.parse(Config(search = choice).json()).search)
+        val previous = Config.parse("""{"version":7,"wallpaper":0,"favorites":[],"search":{"contacts":true,"files":true}}""")
+        assertFalse(previous.search.contactIndexing)
+        assertFalse(previous.search.fileIndexing)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun invalidIndexingSwitchRejected() {
+        Config.parse("""{"version":8,"wallpaper":0,"favorites":[],"search":{"contactIndexing":"true"}}""")
     }
 
     @Test(expected = IllegalArgumentException::class)

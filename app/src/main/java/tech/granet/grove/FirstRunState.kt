@@ -25,9 +25,9 @@ internal class FirstRunState(private val initial: Config, private val availableA
 
     /** Returns a config only on Finish. Denied permissions remove the unavailable source. */
     fun next(contactsGranted: Boolean, filesGranted: Boolean): Config? {
-        if (page == 6 && !contactsGranted) search = search.copy(contacts = false)
+        if (page == 6 && !contactsGranted) search = search.copy(contacts = false, contactIndexing = false)
         if (page == 7) {
-            if (!filesGranted) search = search.copy(files = false)
+            if (!filesGranted) search = search.copy(files = false, fileIndexing = false)
             return initial.copy(gestures = gestures, homeScreen = home, search = search,
                 favorites = availableApps.filter(pins::contains))
         }

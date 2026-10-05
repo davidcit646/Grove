@@ -35,7 +35,7 @@ internal class StartupController(private val activity: MainActivity) {
             homeController.homeScrollY = startupState?.getInt("homeScrollY") ?: homeController.homeScrollY
             startupState = null
             homeController.showHome()
-            applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
+            applyStartupPlan(StartupCoordinator.coldStart())
             if (configController.configStore.brokenCustomConfig != null) root.post { configController.showConfigRecoveryDialog() }
             if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.settings() }
         }
@@ -106,25 +106,12 @@ internal class StartupController(private val activity: MainActivity) {
         }
     }
 
-    fun startupSnapshot(): StartupCoordinator.Snapshot = with(activity) { StartupCoordinator.Snapshot(
-        contactSearchEnabled = configController.config.search.contacts,
-        contactsGranted = searchController.hasContactAccess(),
-        lastContactRefreshMs = searchController.lastContactRefresh,
-        indexingContacts = searchController.indexingContacts,
-        contactLoadFailed = searchController.contactLoadFailed,
-        fileSearchEnabled = configController.config.search.files,
-        filesGranted = Environment.isExternalStorageManager(),
-        hasFiles = searchController.files.isNotEmpty(),
-        indexingFiles = searchController.indexingFiles,
-    )
-    }
-
     fun applyStartupPlan(plan: StartupCoordinator.Plan) {
         with(activity) {
-            if (plan.clearFiles) searchController.sources.clearFiles()
             if (plan.loadApps) catalogController.loadApps()
-            if (plan.indexFiles) searchController.indexFiles()
-            if (plan.refreshContacts) searchController.refreshContacts()
+            if (plan.reconcileIndexes) root.postDelayed({
+                if (!isDestroyed && !coreRecoveryVisible) searchController.sources.reconcile()
+            }, 150L)
         }
     }
 }

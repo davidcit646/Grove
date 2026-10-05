@@ -74,9 +74,9 @@ internal class SearchScreen(private val context: Context) {
                 "Allow access to shared storage", action = requestFileAccess))
             SearchSourceState.Loading -> target.addView(context.wallpaperLabel("Searching files…", 14f))
             SearchSourceState.Failed -> target.addView(row("Retry file search", R.drawable.ic_folder,
-                "Shared storage could not be indexed", action = retryFiles))
+                "Shared storage could not be searched", action = retryFiles))
             is SearchSourceState.Partial -> target.addView(context.wallpaperLabel(
-                "Some folders could not be searched (${fileState.skippedDirectories} skipped).", 14f))
+                "Some files may be missing (${fileState.skippedDirectories} skipped or search bounded).", 14f))
             else -> Unit
         }
         target.addView(heading("GOOGLE", R.drawable.ic_public))

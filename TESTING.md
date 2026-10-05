@@ -1,5 +1,16 @@
 # Device acceptance checklist
 
+## #74/#75 indexer review gate (pending device execution)
+
+Record build SHA, device/API, and result for each case. Do not mark source review or JVM tests as Android proof.
+
+- Upgrade v7 settings with both search flags on: both indexing flags remain off, live search still returns contacts/files with current grants, and Home remains responsive. Export/import v8, including the combinations where search is off but indexing is on.
+- Grant, deny, and revoke contacts and All files access while a query and background build are running. No protected row may remain visible or be committed after revocation; restoring a grant alone must not enable a Grove switch.
+- Turn indexing off during a build and verify worker cancellation, private cache deletion and permitted live search; turn search off independently and verify no rows while explicitly enabled indexing may refresh. App search and Home must work throughout.
+- Force unavailable, empty, corrupt, oversize, stale and partially scanned caches; force provider null/throw and a failed/low-storage atomic write. Check scoped status, retry/fallback, no false Indexed result, and isolation of the other source.
+- Type quickly and leave Search during a live 15,000-file scan. Verify bounded time, cancellation, a truthful partial label, no main-thread stall, and no old query publication. Repeat after process kill/reboot, low battery, storage pressure, and contact observer registration failure.
+- Inspect app-private cache contents and privacy text: only contact name/lookup ID and file name/path/type/coverage, no phone numbers or file contents. Verify backup/device-transfer exclusion, deletion on indexing disable/revocation, and no contact/file data in logs.
+
 **Scope note (2026-10-05):** Validation-only issues #2, #5, #6, #14, #34 and #35 were closed at the user's request. Their unrun device and performance rows below remain a checklist, not passing evidence. The current test APK is a debug `.test` package from source identical to main at `7015420`; a signed production install/update remains #36.
 
 [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior, with a [current-versus-proposed matrix](GROVE-STATUS.md#implementation-status-on-main). Do not mark proposal-only cases as failures of the current release without first implementing their linked issues. The 2026-10-04 user acceptance of some integrated Grove Test conditions closed #17 by a scope decision; it was not the full dated Android 12/current-device matrix below.

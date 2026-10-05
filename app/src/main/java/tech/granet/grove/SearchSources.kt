@@ -4,16 +4,15 @@ import android.database.ContentObserver
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.provider.ContactsContract
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Observer
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.RejectedExecutionException
-import tech.granet.grove.ui.infoDialog
-import tech.granet.grove.ui.message
 
-/** Optional search sources own their indexes, cancellation, and provider failures. */
+/** UI snapshots of independent GFI/GCI caches. Android and the user's switches authorize each read. */
 internal class SearchSources(
     private val activity: AppCompatActivity,
     private val worker: ExecutorService,
@@ -22,169 +21,158 @@ internal class SearchSources(
     private val hasContactAccess: () -> Boolean,
     private val redraw: () -> Unit,
 ) {
-    var contacts = emptyList<ContactIndex.Contact>()
-        private set
-    var contactSearch = SearchResults.prepare(contacts) { it.searchName }
-        private set
-    var files = emptyList<IndexedFile>()
-        private set
-    var fileSearch = SearchResults.prepare(files) { it.searchName }
-        private set
-    var indexingContacts = false
-        private set
-    var contactLoadFailed = false
-        private set
-    var lastContactRefresh = 0L
-        private set
-    var indexingFiles = false
-        private set
-    var fileLoadFailed = false
-        private set
-    var fileScanSkipped = 0
-        private set
-    private val handler = Handler(Looper.getMainLooper())
+    var contacts = emptyList<ContactIndex.Contact>(); private set
+    var contactSearch = SearchResults.prepare(contacts) { it.searchName }; private set
+    var files = emptyList<IndexedFile>(); private set
+    var fileSearch = SearchResults.prepare(files) { it.searchName }; private set
+    var indexingContacts = false; private set
+    var contactLoadFailed = false; private set
+    var lastContactRefresh = 0L; private set
+    var indexingFiles = false; private set
+    var fileLoadFailed = false; private set
+    var fileScanSkipped = 0; private set
+    var contactCacheReady = false; private set
+    var fileCacheReady = false; private set
+    private var contactCorrupt = false
+    private var fileCorrupt = false
     @Volatile private var contactGeneration = 0
-    @Volatile private var fileIndexGeneration = 0
-    private var contactObserverRegistered = false
-    private var contactWarningShown = false
-    private val delayedContactRefresh = Runnable { refreshContacts() }
-    private val contactObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+    @Volatile private var fileGeneration = 0
+    private val handler = Handler(Looper.getMainLooper())
+    private val contactChange = Runnable { refreshContacts() }
+    private val observer = object : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean) {
-            handler.removeCallbacks(delayedContactRefresh)
-            handler.postDelayed(delayedContactRefresh, 400L)
+            handler.removeCallbacks(contactChange)
+            handler.postDelayed(contactChange, 400L)
         }
     }
+    private var observing = false
 
-    fun indexFiles() {
-        if (!settings().files || !Environment.isExternalStorageManager() || indexingFiles) return
-        val generation = ++fileIndexGeneration
-        indexingFiles = true
-        fileLoadFailed = false
-        redraw()
-        try {
-        worker.execute {
-            if (generation != fileIndexGeneration) return@execute
-            val result = runCatching {
-                val scan = FileIndex.scan(Environment.getExternalStorageDirectory(),
-                    shouldContinue = { generation == fileIndexGeneration })
-                scan to SearchResults.prepare(scan.files) { it.searchName }
-            }
-            activity.runOnUiThread(Runnable {
-                if (generation != fileIndexGeneration || activity.isDestroyed) return@Runnable
-                indexingFiles = false
-                result.onSuccess {
-                    files = it.first.files
-                    fileSearch = it.second
-                    fileScanSkipped = it.first.skippedDirectories
-                    fileLoadFailed = false
+    init {
+        val work = WorkManager.getInstance(activity)
+        work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("contacts")).observe(activity, Observer { infos ->
+            indexingContacts = infos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+            contactLoadFailed = infos.any { it.state == WorkInfo.State.FAILED }
+            if (infos.any { it.state == WorkInfo.State.SUCCEEDED }) loadContacts() else redraw()
+        })
+        work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("files")).observe(activity, Observer { infos ->
+            indexingFiles = infos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+            fileLoadFailed = infos.any { it.state == WorkInfo.State.FAILED }
+            if (infos.any { it.state == WorkInfo.State.SUCCEEDED }) loadFiles() else redraw()
+        })
+    }
+
+    fun reconcile() {
+        if (settings().contactIndexing && hasContactAccess()) {
+            if (!observing) runCatching {
+                activity.contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI, true, observer)
+                observing = true
+            }.onFailure { Log.w("Grove", "Contact observer unavailable", it) }
+            loadContacts()
+            IndexWork.reconcile(activity, "contacts")
+        } else clearContacts()
+        if (settings().fileIndexing && Environment.isExternalStorageManager()) {
+            loadFiles()
+            IndexWork.reconcile(activity, "files")
+        } else clearFiles()
+    }
+
+    fun indexFiles() { if (settings().fileIndexing && Environment.isExternalStorageManager()) IndexWork.enqueue(activity, "files") }
+    fun refreshContacts() { if (settings().contactIndexing && hasContactAccess()) IndexWork.enqueue(activity, "contacts") }
+
+    private fun loadContacts() {
+        if (!settings().contactIndexing || !hasContactAccess()) return
+        val generation = ++contactGeneration
+        contactWorker.execute {
+            val cache = runCatching { IndexCache.contacts(activity) }
+            activity.runOnUiThread {
+                if (generation != contactGeneration || activity.isDestroyed || !settings().contactIndexing || !hasContactAccess()) return@runOnUiThread
+                cache.onSuccess { snapshot ->
+                    if (snapshot != null) {
+                        contactCorrupt = false
+                        contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt <= 15L * 60_000
+                        contacts = snapshot.items
+                        contactSearch = SearchResults.prepare(contacts) { it.searchName }
+                        lastContactRefresh = android.os.SystemClock.elapsedRealtime()
+                    }
                 }.onFailure {
-                    files = emptyList()
-                    fileSearch = SearchResults.prepare(files) { it.searchName }
-                    fileScanSkipped = 0
-                    fileLoadFailed = true
-                    Log.w("Grove", "Could not index shared storage", it)
-                    activity.message("Could not index shared storage")
+                    contactLoadFailed = true
+                    contactCorrupt = true
+                    IndexCache.clear(activity, "contacts")
+                    refreshContacts()
                 }
                 redraw()
-            })
-        }
-        } catch (error: RejectedExecutionException) {
-            if (generation != fileIndexGeneration || activity.isDestroyed) return
-            indexingFiles = false
-            fileLoadFailed = true
-            Log.w("Grove", "File index worker unavailable", error)
-            redraw()
+            }
         }
     }
 
-    fun refreshContacts() {
-        if (!settings().contacts || !hasContactAccess()) {
-            clearContacts()
-            return
-        }
-        if (!contactObserverRegistered) {
-            runCatching { activity.contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI,
-                true, contactObserver); contactObserverRegistered = true }
-                .onFailure { Log.w("Grove", "Contact observer unavailable", it) }
-        }
-        if (contactWorker.isShutdown) return
-        indexingContacts = true
-        contactLoadFailed = false
-        redraw()
-        val generation = ++contactGeneration
-        try {
-        contactWorker.execute {
-            if (generation != contactGeneration) return@execute
-            val result = runCatching {
-                val loaded = ContactIndex.load(activity.contentResolver) { generation == contactGeneration }
-                loaded to SearchResults.prepare(loaded) { it.searchName }
-            }
+    private fun loadFiles() {
+        if (!settings().fileIndexing || !Environment.isExternalStorageManager()) return
+        val generation = ++fileGeneration
+        worker.execute {
+            val cache = runCatching { IndexCache.files(activity) }
             activity.runOnUiThread {
-                if (activity.isDestroyed || generation != contactGeneration || !settings().contacts || !hasContactAccess()) return@runOnUiThread
-                indexingContacts = false
-                result.onSuccess {
-                    contacts = it.first
-                    contactSearch = it.second
-                    lastContactRefresh = SystemClock.elapsedRealtime()
-                    contactLoadFailed = false
-                    redraw()
-                    if (it.first.isEmpty() && !contactWarningShown) {
-                        contactWarningShown = true
-                        activity.infoDialog("No device contacts found",
-                            "Grove can search contacts available through Android. If your contacts are kept only inside another app, enable its device contact sync.")
+                if (generation != fileGeneration || activity.isDestroyed || !settings().fileIndexing || !Environment.isExternalStorageManager()) return@runOnUiThread
+                cache.onSuccess { snapshot ->
+                    if (snapshot != null) {
+                        fileCorrupt = false
+                        fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt <= 24L * 60 * 60_000
+                        files = snapshot.items
+                        fileSearch = SearchResults.prepare(files) { it.searchName }
+                        fileScanSkipped = snapshot.skipped
                     }
+                }.onFailure {
+                    fileLoadFailed = true
+                    fileCorrupt = true
+                    IndexCache.clear(activity, "files")
+                    indexFiles()
                 }
-                    .onFailure {
-                        contacts = emptyList()
-                        contactSearch = SearchResults.prepare(contacts) { it.searchName }
-                        contactLoadFailed = true
-                        redraw()
-                        Log.w("Grove", "Contacts provider unavailable", it)
-                        if (!contactWarningShown) {
-                            contactWarningShown = true
-                            activity.infoDialog("Contact search unavailable",
-                                "Grove couldn't read the device's contacts provider. Check that a contacts app is enabled and contact access is allowed.")
-                        }
-                    }
+                redraw()
             }
-        }
-        } catch (error: RejectedExecutionException) {
-            if (generation != contactGeneration || activity.isDestroyed) return
-            indexingContacts = false
-            contactLoadFailed = true
-            Log.w("Grove", "Contact index worker unavailable", error)
-            redraw()
         }
     }
 
     fun clearContacts(notify: Boolean = true) {
         contactGeneration++
-        contacts = emptyList()
-        contactSearch = SearchResults.prepare(contacts) { it.searchName }
-        indexingContacts = false
-        contactLoadFailed = false
-        handler.removeCallbacks(delayedContactRefresh)
-        if (contactObserverRegistered) {
-            runCatching { activity.contentResolver.unregisterContentObserver(contactObserver) }
-                .onFailure { Log.w("Grove", "Could not unregister contact observer", it) }
-            contactObserverRegistered = false
-        }
+        contacts = emptyList(); contactSearch = SearchResults.prepare(contacts) { it.searchName }
+        contactCacheReady = false
+        contactCorrupt = false
+        indexingContacts = false; contactLoadFailed = false; lastContactRefresh = 0
+        handler.removeCallbacks(contactChange)
+        if (observing) runCatching { activity.contentResolver.unregisterContentObserver(observer) }
+        observing = false
+        IndexWork.cancel(activity, "contacts")
         if (notify) redraw()
     }
 
     fun clearFiles(notify: Boolean = true) {
-        fileIndexGeneration++
-        files = emptyList()
-        fileSearch = SearchResults.prepare(files) { it.searchName }
-        indexingFiles = false
-        fileLoadFailed = false
-        fileScanSkipped = 0
+        fileGeneration++
+        files = emptyList(); fileSearch = SearchResults.prepare(files) { it.searchName }
+        fileCacheReady = false
+        fileCorrupt = false
+        indexingFiles = false; fileLoadFailed = false; fileScanSkipped = 0
+        IndexWork.cancel(activity, "files")
         if (notify) redraw()
     }
 
     fun shutdown() {
-        clearContacts(notify = false)
-        clearFiles(notify = false)
+        contactGeneration++; fileGeneration++
+        handler.removeCallbacks(contactChange)
+        if (observing) runCatching { activity.contentResolver.unregisterContentObserver(observer) }
+        observing = false
         contactWorker.shutdownNow()
+        // Persistent work survives Activity destruction.
+    }
+
+    fun status(kind: String): String {
+        val files = kind == "files"
+        val enabled = if (files) settings().fileIndexing else settings().contactIndexing
+        val permitted = if (files) Environment.isExternalStorageManager() else hasContactAccess()
+        val exists = java.io.File(activity.filesDir, "grove-$kind-index.json").exists()
+        val state = IndexState.resolve(enabled, permitted, exists,
+            if (files) fileCacheReady else contactCacheReady,
+            if (files) indexingFiles else indexingContacts,
+            if (files) fileLoadFailed else contactLoadFailed,
+            if (files) fileCorrupt else contactCorrupt)
+        return if (enabled && !permitted) "Permission required" else state.label
     }
 }

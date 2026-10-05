@@ -17,7 +17,7 @@ An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1
 ## 0.1.27 changes
 
 - Fresh installs get a guided full-screen setup for home gestures and controls, a swipe practice area, an installed-app pin picker, and independent Contact search and whole-device File search switches. Each permission request has a separate disclosure and can be declined.
-- Launcher settings has a Search section. Disabled sources disappear from search, stop indexing, and clear in-memory results without revoking Android permissions.
+- Launcher settings has separate Search and Background indexing switches for contacts and files. Search can query permitted Android data live when its index is off; indexing saves a private, rebuildable metadata cache. Android permissions remain controlled in system settings.
 - Setup offers Android's default Home-app chooser after the user finishes. It can be replayed from Grove settings; existing installations keep their layout and settings.
 
 ## 0.1.25 changes (Nova: Rust migration, uncompiled — needs build + test)

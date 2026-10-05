@@ -25,6 +25,8 @@ internal class LauncherSettingsScreen(
     private val tutorialsPending: () -> Boolean,
     private val resetTutorials: (Boolean) -> Unit,
     private val onClose: () -> Unit,
+    private val indexStatus: (String) -> String,
+    private val retryIndex: (String) -> Unit,
 ) {
     fun show() {
         val config = current()
@@ -56,7 +58,17 @@ internal class LauncherSettingsScreen(
         toggle("File search (shared storage)", config.search.files) { enabled ->
             commit(current().copy(search = current().search.copy(files = enabled)))
         }
-        content.addView(activity.bodyText("Turning a search source off clears its in-memory results. Android permissions stay granted; turn the switch back on to use them again."))
+        content.addSection("Background indexing")
+        toggle("Index contacts", config.search.contactIndexing) { enabled ->
+            commit(current().copy(search = current().search.copy(contactIndexing = enabled)))
+        }
+        toggle("Index shared-storage files", config.search.fileIndexing) { enabled ->
+            commit(current().copy(search = current().search.copy(fileIndexing = enabled)))
+        }
+        content.addView(activity.bodyText("Contacts: ${indexStatus("contacts")} · Files: ${indexStatus("files")}"))
+        content.addView(activity.settingsButton("Retry contact index", R.drawable.ic_contact) { retryIndex("contacts") })
+        content.addView(activity.settingsButton("Retry file index", R.drawable.ic_folder) { retryIndex("files") })
+        content.addView(activity.bodyText("Indexes store names and file paths in Grove's private storage for faster search. They run in the background when Android permits access. Search can still work without an index, though file lookup may be slower or partial. Turning indexing off deletes that index. Android permissions stay granted until you revoke them in system settings."))
         content.addSection("Home screen")
         toggle("Show Apps button", config.homeScreen.showAppsButton) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(showAppsButton = enabled)))

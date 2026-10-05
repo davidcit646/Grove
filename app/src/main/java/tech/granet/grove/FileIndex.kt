@@ -14,7 +14,7 @@ data class IndexedFile(val name: String, val mime: String, val file: File, val c
 
 /** Scans accessible shared storage off the UI thread. Android owns access and file opening. */
 object FileIndex {
-    data class ScanResult(val files: List<IndexedFile>, val skippedDirectories: Int)
+    data class ScanResult(val files: List<IndexedFile>, val skippedDirectories: Int, val truncated: Boolean = false)
 
     fun scan(root: File, limit: Int = 15_000, shouldContinue: () -> Boolean = { true },
              openDirectory: (Path) -> DirectoryStream<Path> = Files::newDirectoryStream): ScanResult {
@@ -57,7 +57,7 @@ object FileIndex {
                 skippedDirectories++
             }
         }
-        if (!shouldContinue()) return ScanResult(emptyList(), skippedDirectories)
+        val truncated = queue.isNotEmpty() || found.size >= limit || scannedEntries >= 100_000 || !shouldContinue()
         // One native call classifies every extension Grove knows about; anything
         // unknown falls back to Android's MimeTypeMap, exactly as before.
         val table = CoreBridge.classifyTable(found.map { it.ext })
@@ -68,7 +68,7 @@ object FileIndex {
                 ?: "application/octet-stream"
             IndexedFile(item.name, mime, item.file, extra?.second ?: categoryOf(mime))
         }
-        return ScanResult(files, skippedDirectories)
+        return ScanResult(files, skippedDirectories, truncated)
     }
 
     private fun categoryOf(mime: String): String = when {
