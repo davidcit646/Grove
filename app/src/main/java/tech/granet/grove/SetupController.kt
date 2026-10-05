@@ -61,6 +61,9 @@ internal class SetupController(private val activity: MainActivity) {
                 }
                 TutorialReplayDecision.START -> Unit
             }
+            val setupPreviouslyCompleted = runCatching { prefs.getBoolean("setup_complete", false) }
+                .onFailure { Log.w("Grove", "Setup completion state unavailable", it) }
+                .getOrDefault(false)
             prefs.edit().remove("widget_tutorial_seen").apply()
             firstRunSetup = FirstRunSetup(
                 this, surface, configController.config, catalogController.apps.map { it.key to it.label },
@@ -92,7 +95,10 @@ internal class SetupController(private val activity: MainActivity) {
                     }
                 },
                 skipSetup@{
-                    if (setupPending() && configController.config.favorites.isEmpty()) {
+                    if (TutorialReplayPolicy.shouldSeedFavoritesOnSkip(
+                            setupPreviouslyCompleted,
+                            configController.config.favorites.isEmpty(),
+                        )) {
                         if (!configController.commitConfig(configController.config.copy(favorites = catalogController.apps.take(8).map { it.key }))) {
                             firstRunSetup?.show()
                             return@skipSetup
@@ -123,7 +129,6 @@ internal class SetupController(private val activity: MainActivity) {
                 { setupPending() },
                 { enabled ->
                     val saved = prefs.edit().apply {
-                        putBoolean("setup_complete", !enabled)
                         if (enabled) putBoolean("setup_pending", true)
                         else remove("setup_pending")
                     }.commit()
