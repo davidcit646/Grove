@@ -4,6 +4,8 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -36,14 +38,15 @@ object CrashReporter {
     private const val KEY_EMAIL = "developer_email"
     private const val DIR = "crash-reports"
     private const val MAX_REPORTS = 10
-    private const val MAX_BODY_CHARS = 100_000
+    private const val MAX_BODY_CHARS = 60_000
+    private const val DEFAULT_EMAIL = "support@granet.tech"
 
     /** Install as early as possible (GroveApp.onCreate). Safe to call once. */
     fun install(app: Application) {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                if (isEnabled(app)) writeReport(app, kind = "crash", tag = thread.name, throwable)
+                if (isEnabled(app)) writeReport(app, kind = "crash", error = GroveErrorRegistry.UNCAUGHT_CRASH, throwable)
             } catch (_: Exception) {
                 // Never let the reporter break the crash path.
             } finally {
@@ -60,7 +63,7 @@ object CrashReporter {
     }
 
     fun developerEmail(context: Context): String =
-        prefs(context).getString(KEY_EMAIL, "").orEmpty()
+        prefs(context).getString(KEY_EMAIL, DEFAULT_EMAIL).orEmpty().ifBlank { DEFAULT_EMAIL }
 
     fun setDeveloperEmail(context: Context, email: String) {
         prefs(context).edit().putString(KEY_EMAIL, email.trim()).apply()
@@ -69,7 +72,16 @@ object CrashReporter {
     /** File a report for a caught exception; surfaced at the next [promptIfPending]. */
     fun reportNonFatal(context: Context, tag: String, throwable: Throwable) {
         try {
-            if (isEnabled(context)) writeReport(context, kind = "error", tag = tag, throwable)
+            if (isEnabled(context)) writeReport(context, kind = "error",
+                error = GroveError(500, "GWS-report-nonfatal", tag.take(80), ErrorSeverity.CONTINUE, "A caught Grove operation failed."),
+                throwable = throwable)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun reportNonFatal(context: Context, error: GroveError, throwable: Throwable?) {
+        try {
+            if (isEnabled(context)) writeReport(context, kind = "error", error = error, throwable = throwable)
         } catch (_: Exception) {
         }
     }
@@ -123,11 +135,12 @@ object CrashReporter {
             putExtra(Intent.EXTRA_TEXT, body)
         }
         try {
-            // An email chooser only confirms that an app opened, not that mail was sent.
-            // Keep reports until the user explicitly deletes them in Grove settings.
+            // A chooser launch is not proof of delivery. Reports remain until explicit discard.
             activity.startActivity(Intent.createChooser(intent, "Send problem report"))
         } catch (_: Exception) {
-            activity.message("No email app found to send the report")
+            val clipboard = activity.getSystemService(ClipboardManager::class.java)
+            clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
+            activity.message("No email app found. Report copied so you can paste it manually.")
         }
     }
 
@@ -135,16 +148,16 @@ object CrashReporter {
         reportsDir(context).listFiles { f -> f.isFile && f.name.endsWith(".txt") }
             ?.sortedBy { it.name }.orEmpty()
 
-    private fun writeReport(context: Context, kind: String, tag: String, throwable: Throwable) {
+    private fun writeReport(context: Context, kind: String, error: GroveError, throwable: Throwable?) {
         val dir = reportsDir(context).apply { mkdirs() }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
-        File(dir, "$kind-$stamp.txt").writeText(buildBody(context, kind, tag, throwable))
+        File(dir, "$kind-$stamp.txt").writeText(buildBody(context, kind, error, throwable))
         // Keep only the newest reports.
         dir.listFiles { f -> f.isFile && f.name.endsWith(".txt") }
             ?.sortedBy { it.name }?.dropLast(MAX_REPORTS)?.forEach { it.delete() }
     }
 
-    private fun buildBody(context: Context, kind: String, tag: String, throwable: Throwable): String {
+    internal fun buildBody(context: Context, kind: String, error: GroveError, throwable: Throwable?): String {
         val version = try {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
             "${pi.versionName} (${pi.versionCode})"
@@ -157,11 +170,19 @@ object CrashReporter {
             appendLine("app: $version")
             appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine("android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("tag: $tag")
-            appendLine("---")
-            val sw = StringWriter()
-            throwable.printStackTrace(PrintWriter(sw))
-            append(sw.toString())
+            appendLine("feature: ${error.feature}")
+            appendLine("severity: ${error.severity.label}")
+            appendLine("code: ${error.code}")
+            appendLine("gws: ${error.gws}")
+            appendLine("summary: ${error.summary}")
+            if (throwable != null) {
+                appendLine("--- safe diagnostic ---")
+                appendLine("exception: ${throwable.javaClass.name}")
+                throwable.stackTrace.take(24).forEach { frame ->
+                    appendLine("at ${frame.className}.${frame.methodName}(${frame.fileName ?: "Unknown"}:${frame.lineNumber})")
+                }
+                appendLine("Caused messages, contact data, file paths, imported configuration, and exception messages are intentionally omitted.")
+            }
         }
     }
 
