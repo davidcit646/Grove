@@ -1,5 +1,7 @@
 # Grove behavior and failure rules
 
+**Current code map:** [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) records the baseline systems, invariants, data flow, dependencies and failure boundaries with pinned source lines.
+
 **Status:** Design proposal. This describes how Grove should behave; it is not a claim that every rule is implemented today. See [Open implementation checks](#open-implementation-checks) before using it as a test checklist.
 
 Grove is the phone's home screen. A broken wallpaper download or contact index should not make the user lose their launcher. Each feature owns its own failure, and protected data stays unavailable whenever Android permission or the user's Grove setting says it should.
