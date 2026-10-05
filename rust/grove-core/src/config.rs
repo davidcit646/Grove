@@ -9,7 +9,7 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("version")
         .and_then(Value::as_i64)
         .ok_or("Missing configuration version")?;
-    if !(1..=7).contains(&version) {
+    if !(1..=8).contains(&version) {
         return Err("Unsupported configuration version");
     }
     let wallpaper = root
@@ -54,7 +54,15 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
                 "useWallpaperButtonColors",
             ][..],
         ),
-        ("search", &["contacts", "files"][..]),
+        (
+            "search",
+            &[
+                "contacts",
+                "files",
+                "contactIndexing",
+                "fileIndexing",
+            ][..],
+        ),
     ] {
         if let Some(value) = root.get(section) {
             let map = value
@@ -99,4 +107,3 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
     }
     Ok(())
 }
-
