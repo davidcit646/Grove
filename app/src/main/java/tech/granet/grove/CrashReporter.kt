@@ -32,6 +32,12 @@ import java.util.Locale
  *
  * Reports never leave the device except through the email app the user picks.
  */
+internal object ReportPromptPolicy {
+    fun shouldPrompt(reportCount: Int, automaticCaptureEnabled: Boolean,
+                     alreadyPrompting: Boolean, explicitReview: Boolean): Boolean =
+        reportCount > 0 && !alreadyPrompting && (explicitReview || automaticCaptureEnabled)
+}
+
 object CrashReporter {
     private const val TAG = "Grove"
     private const val PREFS = "crash_reports"
@@ -107,13 +113,14 @@ object CrashReporter {
     }
 
     private fun prompt(activity: Activity, requireEnabled: Boolean) {
-        val reports = try {
-            if (requireEnabled && !isEnabled(activity)) return
-            pendingReports(activity)
-        } catch (_: Exception) {
-            return
-        }
-        if (reports.isEmpty() || prompting) return
+        val enabled = try { isEnabled(activity) } catch (_: Exception) { false }
+        val reports = try { pendingReports(activity) } catch (_: Exception) { return }
+        if (!ReportPromptPolicy.shouldPrompt(
+                reportCount = reports.size,
+                automaticCaptureEnabled = enabled,
+                alreadyPrompting = prompting,
+                explicitReview = !requireEnabled,
+            )) return
         prompting = true
         val noun = if (reports.size == 1) "report" else "reports"
         activity.confirmDialog(
