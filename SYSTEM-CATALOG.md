@@ -24,7 +24,7 @@ The current [MainActivity](https://github.com/davidcit646/Grove/blob/fe4ac0e4320
 | [ActionController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/ActionController.kt#L19-L127) | Current selection and Android access → external intents/uninstall results | FileActions, ContactActions, UninstallBatch → platform apps | Access rechecked; canceled uninstall ends queue. |
 | [WallpaperPresentationController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/WallpaperPresentationController.kt#L12-L28) | Picker choice → Android apply → committed Grove preference | WallpaperPicker/Controller, ConfigController → Home | Apply succeeds before preference commit; failed apply leaves old choice. |
 
-The historical 15-system inventory below remains pinned to `fbeec568`; its old MainActivity line links describe that earlier layout, not current ownership. PR #73 added the nine controllers and ConfigTransaction (56 Kotlin and 6 Rust production source files at this merge). The target-only systems remain tracked by #74–#78. Source CI passed on the PR head; device verification remains #6/#34.
+The historical 15-system inventory below remains pinned to `fbeec568`; its old MainActivity line links describe that earlier layout, not current ownership. PR #73 added the nine controllers and ConfigTransaction (56 Kotlin and 6 Rust production source files at this merge). The target-only systems remain tracked by #74–#78. Source CI passed on the PR head; #6/#34 were closed unrun by user scope decision. The historical links below retain their original issue references as provenance.
 
 ## 1. Process, lifecycle and startup
 

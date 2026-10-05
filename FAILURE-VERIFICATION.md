@@ -1,5 +1,7 @@
 # Failure-policy verification ledger
 
+**Scope note (2026-10-05):** #34 and #35 were closed unrun by user scope decision. References to them below identify historical device/performance checks, not open gates or passing results. #32, #33 and #36 still track implementation and release verification.
+
 Integrated refactor source through 2026-10-04. This records executable source checks and remaining Android-only acceptance work for #32. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior; its [implementation matrix](GROVE-STATUS.md#implementation-status-on-main) marks new proposals separately. A passing JVM/CI test does not mean the default Home app, provider, signed APK, or process death was exercised on a device.
 
 | Capability | Fail decision and visible outcome | Deterministic proof | Android-only scenario still required |
@@ -22,7 +24,7 @@ Integrated refactor source through 2026-10-04. This records executable source ch
 3. Run #35 cold/warm and 15,000-file benchmarks on the same device/build method before calling the performance work complete.
 4. Run the signed main and manual tag workflows only after the signing secret is configured; compare uploaded checksums and commit. No release is published by this refactor.
 
-These Android-only rows are outstanding work, not passing claims. They are the remaining closure criteria for #32, #34, #35 and #36.
+These Android-only rows are outstanding work, not passing claims. They remain evidence gaps; #34/#35 were closed unrun, while #32/#36 retain their own acceptance criteria.
 
 ## Proposal-only verification still to design
 

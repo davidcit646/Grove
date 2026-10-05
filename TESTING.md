@@ -1,5 +1,7 @@
 # Device acceptance checklist
 
+**Scope note (2026-10-05):** Validation-only issues #2, #5, #6, #14, #34 and #35 were closed at the user's request. Their unrun device and performance rows below remain a checklist, not passing evidence. The current test APK is a debug `.test` package from source identical to main at `7015420`; a signed production install/update remains #36.
+
 [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior, with a [current-versus-proposed matrix](GROVE-STATUS.md#implementation-status-on-main). Do not mark proposal-only cases as failures of the current release without first implementing their linked issues. The 2026-10-04 user acceptance of some integrated Grove Test conditions closed #17 by a scope decision; it was not the full dated Android 12/current-device matrix below.
 
 ## Refactor verification record (2026-10-04)
@@ -28,7 +30,7 @@ See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-cap
 | Android wallpaper reconciliation and explicit theme choices | [#77](https://github.com/davidcit646/Grove/issues/77) | External wallpaper and light/dark changes, Home/Lock/Both, restart and failed preference commit |
 | Severity/code error workflow and safe report draft | [#78](https://github.com/davidcit646/Grove/issues/78) | Each severity, no mail handler, chooser cancellation, report redaction/retention, no automatic send |
 
-Record device/API, build SHA, steps and outcome when these features exist. [#34](https://github.com/davidcit646/Grove/issues/34) and [#32](https://github.com/davidcit646/Grove/issues/32) remain the broad device and failure-injection gates.
+Record device/API, build SHA, steps and outcome when these features exist. The closed [#34](https://github.com/davidcit646/Grove/issues/34) checklist records unrun device work; [#32](https://github.com/davidcit646/Grove/issues/32) remains the failure-injection implementation gate.
 
 ## Wallpaper picker (0.1.28)
 
