@@ -82,8 +82,9 @@ data class Config(
             require(version in 1..9) { "Unsupported configuration version" }
 
             val wallpaper = if (version >= 9) {
-                val id = root.getString("wallpaper")
-                WallpaperArt.indexForId(id) ?: throw IllegalArgumentException("Wallpaper selection is invalid")
+                val value = root.get("wallpaper")
+                require(value is String) { "Wallpaper selection is invalid" }
+                WallpaperArt.indexForId(value) ?: throw IllegalArgumentException("Wallpaper selection is invalid")
             } else {
                 root.getInt("wallpaper").also {
                     require(WallpaperArt.source(it) != null) { "Wallpaper selection is invalid" }
