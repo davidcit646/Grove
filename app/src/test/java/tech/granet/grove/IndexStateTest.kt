@@ -17,5 +17,6 @@ class IndexStateTest {
         assertEquals(IndexState.CacheUnavailable, state(true, false, false))
         assertEquals(IndexState.CacheUnavailable, state(true, true, true, corrupt = true))
         assertEquals(IndexState.CacheDisabled, state(false, true, false))
+        assertEquals(IndexState.IndexingStale, IndexState.resolve(true, true, true, true, false, false, partial = true))
     }
 }

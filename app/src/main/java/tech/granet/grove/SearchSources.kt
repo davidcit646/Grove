@@ -83,15 +83,18 @@ internal class SearchSources(
         if (!settings().contactIndexing || !hasContactAccess()) return
         val generation = ++contactGeneration
         contactWorker.execute {
-            val cache = runCatching { IndexCache.contacts(activity) }
+            val cache = runCatching {
+                val snapshot = IndexCache.contacts(activity)
+                snapshot to snapshot?.let { SearchResults.prepare(it.items) { contact -> contact.searchName } }
+            }
             activity.runOnUiThread {
                 if (generation != contactGeneration || activity.isDestroyed || !settings().contactIndexing || !hasContactAccess()) return@runOnUiThread
-                cache.onSuccess { snapshot ->
-                    if (snapshot != null) {
+                cache.onSuccess { (snapshot, prepared) ->
+                    if (snapshot != null && prepared != null) {
                         contactCorrupt = false
                         contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt <= 15L * 60_000
                         contacts = snapshot.items
-                        contactSearch = SearchResults.prepare(contacts) { it.searchName }
+                        contactSearch = prepared
                         lastContactRefresh = android.os.SystemClock.elapsedRealtime()
                     }
                 }.onFailure {
@@ -109,15 +112,18 @@ internal class SearchSources(
         if (!settings().fileIndexing || !Environment.isExternalStorageManager()) return
         val generation = ++fileGeneration
         worker.execute {
-            val cache = runCatching { IndexCache.files(activity) }
+            val cache = runCatching {
+                val snapshot = IndexCache.files(activity)
+                snapshot to snapshot?.let { SearchResults.prepare(it.items) { file -> file.searchName } }
+            }
             activity.runOnUiThread {
                 if (generation != fileGeneration || activity.isDestroyed || !settings().fileIndexing || !Environment.isExternalStorageManager()) return@runOnUiThread
-                cache.onSuccess { snapshot ->
-                    if (snapshot != null) {
+                cache.onSuccess { (snapshot, prepared) ->
+                    if (snapshot != null && prepared != null) {
                         fileCorrupt = false
                         fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt <= 24L * 60 * 60_000
                         files = snapshot.items
-                        fileSearch = SearchResults.prepare(files) { it.searchName }
+                        fileSearch = prepared
                         fileScanSkipped = snapshot.skipped
                     }
                 }.onFailure {
@@ -172,7 +178,8 @@ internal class SearchSources(
             if (files) fileCacheReady else contactCacheReady,
             if (files) indexingFiles else indexingContacts,
             if (files) fileLoadFailed else contactLoadFailed,
-            if (files) fileCorrupt else contactCorrupt)
+            if (files) fileCorrupt else contactCorrupt,
+            partial = files && fileScanSkipped > 0)
         return if (enabled && !permitted) "Permission required" else state.label
     }
 }

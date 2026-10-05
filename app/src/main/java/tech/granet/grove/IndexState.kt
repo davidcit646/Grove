@@ -13,11 +13,13 @@ internal enum class IndexState(val label: String) {
 
     companion object {
         fun resolve(enabled: Boolean, permitted: Boolean, cacheExists: Boolean,
-                    cacheReady: Boolean, working: Boolean, failed: Boolean, corrupt: Boolean = false): IndexState = when {
+                    cacheReady: Boolean, working: Boolean, failed: Boolean, corrupt: Boolean = false,
+                    partial: Boolean = false): IndexState = when {
             !enabled && cacheExists -> IndexingDisabled // Deletion is pending.
             !enabled -> CacheDisabled
             !permitted || corrupt -> CacheUnavailable
             failed -> IndexingError
+            cacheReady && partial -> IndexingStale
             cacheReady -> Indexed
             cacheExists -> IndexingStale
             working -> IndexingReady

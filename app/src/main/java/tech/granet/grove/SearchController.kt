@@ -34,6 +34,7 @@ internal class SearchController(private val activity: MainActivity) {
     private var liveFiles = emptyList<IndexedFile>()
     private var liveContactState: SearchSourceState? = null
     private var liveFileState: SearchSourceState? = null
+    private var liveContactCancellation: android.os.CancellationSignal? = null
     internal val sources by lazy { with(activity) {
         SearchSources(this, worker, contactWorker, { configController.config.search }, this@SearchController::hasContactAccess) {
             if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
@@ -58,6 +59,7 @@ internal class SearchController(private val activity: MainActivity) {
         pendingSearch?.let(searchHandler::removeCallbacks)
         pendingSearch = null
         searchGeneration++
+        liveContactCancellation?.cancel(); liveContactCancellation = null
         liveContacts = emptyList(); liveFiles = emptyList()
         liveContactState = null; liveFileState = null
     }
@@ -158,6 +160,7 @@ internal class SearchController(private val activity: MainActivity) {
         with(activity) {
             val target = searchResults ?: return
             val generation = ++searchGeneration
+            liveContactCancellation?.cancel(); liveContactCancellation = null
             liveContacts = emptyList(); liveFiles = emptyList()
             liveContactState = null; liveFileState = null
             pendingSearch?.let(searchHandler::removeCallbacks)
@@ -204,10 +207,12 @@ internal class SearchController(private val activity: MainActivity) {
 
     private fun queryLiveContacts(generation: Int, query: String, prepared: Search.Query) {
         if (liveContactWorker.isShutdown) return
+        val cancellation = android.os.CancellationSignal()
+        liveContactCancellation = cancellation
         liveContactWorker.execute {
-            val result = runCatching { ContactIndex.load(activity.contentResolver) {
+            val result = runCatching { ContactIndex.load(activity.contentResolver, {
                 generation == searchGeneration && activity.configController.config.search.contacts && hasContactAccess()
-            }.let { SearchResults.matching(it, prepared, 12) { contact -> contact.searchName } } }
+            }, cancellation).let { SearchResults.matching(it, prepared, 12) { contact -> contact.searchName } } }
             activity.runOnUiThread {
                 if (generation != searchGeneration || !activity.searchMode || !activity.configController.config.search.contacts ||
                     (activity.configController.config.search.contactIndexing && sources.contactCacheReady) || !hasContactAccess()) return@runOnUiThread

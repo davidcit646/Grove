@@ -68,6 +68,11 @@ internal object IndexWork {
 }
 
 internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
+    private val contactCancellation = android.os.CancellationSignal()
+    override fun onStopped() {
+        contactCancellation.cancel()
+        super.onStopped()
+    }
     override fun doWork(): Result {
         val kind = inputData.getString("kind") ?: return Result.failure()
         val token = inputData.getString("token") ?: return Result.failure()
@@ -84,7 +89,7 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
                 val scan = FileIndex.scan(Environment.getExternalStorageDirectory(), shouldContinue = allowed)
                 allowed() && IndexCache.writeFiles(context, scan, allowed)
             } else {
-                val contacts = ContactIndex.load(context.contentResolver, allowed)
+                val contacts = ContactIndex.load(context.contentResolver, allowed, contactCancellation)
                 allowed() && IndexCache.writeContacts(context, contacts, allowed)
             }
             if (saved) Result.success() else Result.success() // Superseded is cancellation, not failure.

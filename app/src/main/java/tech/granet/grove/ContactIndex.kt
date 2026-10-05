@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.res.Resources
 import android.net.Uri
+import android.os.CancellationSignal
 import android.provider.ContactsContract
 
 /** Android's aggregate provider includes Google, OEM, and synced contact accounts. */
@@ -42,11 +43,12 @@ internal object ContactIndex {
         ).filter { (target, contactHasIt) -> contactHasIt && installed(target.packageName) }
             .map { (target, _) -> target }
 
-    fun load(resolver: ContentResolver, shouldContinue: () -> Boolean = { true }): List<Contact> {
+    fun load(resolver: ContentResolver, shouldContinue: () -> Boolean = { true },
+             cancellation: CancellationSignal? = null): List<Contact> {
         val result = ArrayList<Contact>()
         resolver.query(ContactsContract.Contacts.CONTENT_URI,
             arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY,
-                ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null)?.use { cursor ->
+                ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null, cancellation)?.use { cursor ->
             while (shouldContinue() && cursor.moveToNext() && result.size < 50_000) {
                 val name = cursor.getString(2)?.take(512)?.trim().orEmpty()
                 val key = cursor.getString(1)
