@@ -3,6 +3,18 @@ package tech.granet.grove
 import android.graphics.*
 import java.io.File
 
+internal enum class WallpaperKind { GENERATED, COMMONS, SOLID_BLACK, CUSTOM }
+
+internal data class WallpaperSource(
+    val id: String,
+    val legacyIndex: Int,
+    val kind: WallpaperKind,
+    val title: String,
+    val author: String,
+    val license: String,
+    val sourcePage: String? = null,
+)
+
 data class CommonsWallpaper(
     val color: String,
     val title: String,
@@ -32,7 +44,23 @@ object WallpaperArt {
         CommonsWallpaper("Black & white", "Abstract landscape", "Black ^ white quasi-abstract landscape - Flickr - rossomoto.jpg", "rossomoto", "CC BY 2.0"),
     )
 
+    val sources: List<WallpaperSource> =
+        listOf(
+            WallpaperSource("grove-fern", 0, WallpaperKind.GENERATED, "Fern · abstract", "Grove", "Apache 2.0"),
+            WallpaperSource("grove-ember", 1, WallpaperKind.GENERATED, "Ember · mountain", "Grove", "Apache 2.0"),
+            WallpaperSource("grove-dusk", 2, WallpaperKind.GENERATED, "Dusk · mountain", "Grove", "Apache 2.0"),
+        ) + commons.mapIndexed { offset, item ->
+            WallpaperSource("commons-${offset}", offset + 3, WallpaperKind.COMMONS,
+                "${item.color} · ${item.title}", item.author, item.license, item.sourcePage)
+        } + listOf(
+            WallpaperSource("solid-black", 13, WallpaperKind.SOLID_BLACK, "Solid black", "Grove", "Apache 2.0"),
+            WallpaperSource("custom-image", 14, WallpaperKind.CUSTOM, "Your photo or file", "You", "Local image"),
+        )
+
+    fun source(index: Int): WallpaperSource? = sources.firstOrNull { it.legacyIndex == index }
+    fun indexForId(id: String): Int? = sources.firstOrNull { it.id == id }?.legacyIndex
     fun cachedFile(filesDir: File, index: Int) = File(filesDir, "wallpapers/commons-${index - 3}.jpg")
+    fun customFile(filesDir: File) = File(filesDir, "wallpapers/custom-image")
 
     private const val ART_WIDTH = 1080
     private const val ART_HEIGHT = 2400
