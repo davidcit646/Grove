@@ -4,9 +4,12 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.message
 import java.io.File
@@ -29,6 +32,16 @@ import java.util.Locale
  *
  * Reports never leave the device except through the email app the user picks.
  */
+internal object ReportPromptPolicy {
+    fun shouldPrompt(reportCount: Int, automaticCaptureEnabled: Boolean,
+                     alreadyPrompting: Boolean, explicitReview: Boolean): Boolean =
+        reportCount > 0 && !alreadyPrompting && (explicitReview || automaticCaptureEnabled)
+}
+
+internal object ReportHandoffPolicy {
+    fun hasMailHandler(handlerCount: Int): Boolean = handlerCount > 0
+}
+
 object CrashReporter {
     private const val TAG = "Grove"
     private const val PREFS = "crash_reports"
@@ -36,14 +49,16 @@ object CrashReporter {
     private const val KEY_EMAIL = "developer_email"
     private const val DIR = "crash-reports"
     private const val MAX_REPORTS = 10
-    private const val MAX_BODY_CHARS = 100_000
+    private const val MAX_BODY_CHARS = 60_000
+    private const val DEFAULT_EMAIL = "support@granet.tech"
+    @Volatile private var prompting = false
 
     /** Install as early as possible (GroveApp.onCreate). Safe to call once. */
     fun install(app: Application) {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                if (isEnabled(app)) writeReport(app, kind = "crash", tag = thread.name, throwable)
+                if (isEnabled(app)) writeReport(app, kind = "crash", error = GroveErrorRegistry.UNCAUGHT_CRASH, throwable)
             } catch (_: Exception) {
                 // Never let the reporter break the crash path.
             } finally {
@@ -60,7 +75,7 @@ object CrashReporter {
     }
 
     fun developerEmail(context: Context): String =
-        prefs(context).getString(KEY_EMAIL, "").orEmpty()
+        prefs(context).getString(KEY_EMAIL, DEFAULT_EMAIL).orEmpty().ifBlank { DEFAULT_EMAIL }
 
     fun setDeveloperEmail(context: Context, email: String) {
         prefs(context).edit().putString(KEY_EMAIL, email.trim()).apply()
@@ -69,29 +84,57 @@ object CrashReporter {
     /** File a report for a caught exception; surfaced at the next [promptIfPending]. */
     fun reportNonFatal(context: Context, tag: String, throwable: Throwable) {
         try {
-            if (isEnabled(context)) writeReport(context, kind = "error", tag = tag, throwable)
+            if (isEnabled(context)) writeReport(context, kind = "error",
+                error = GroveErrorRegistry.GENERIC_NONFATAL,
+                throwable = throwable)
         } catch (_: Exception) {
         }
     }
 
-    /** Ask the user about unsent reports. Call from the main activity's onCreate. */
-    fun promptIfPending(activity: Activity) {
-        val reports = try {
-            if (!isEnabled(activity)) return
-            pendingReports(activity)
+    internal fun reportNonFatal(context: Context, error: GroveError, throwable: Throwable?) {
+        try {
+            if (isEnabled(context)) writeReport(context, kind = "error", error = error, throwable = throwable)
         } catch (_: Exception) {
-            return
         }
-        if (reports.isEmpty()) return
+    }
+
+    /** Explicit user report is allowed even when automatic crash/error capture is disabled. */
+    internal fun reportUserRequested(context: Context, error: GroveError, throwable: Throwable?): Boolean = try {
+        writeReport(context, kind = "user-report", error = error, throwable = throwable)
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Ask the user about automatically captured unsent reports on launch. */
+    fun promptIfPending(activity: Activity) {
+        prompt(activity, requireEnabled = true)
+    }
+
+    /** Review reports after an explicit user Report action, regardless of automatic capture preference. */
+    internal fun reviewPending(activity: Activity) {
+        prompt(activity, requireEnabled = false)
+    }
+
+    private fun prompt(activity: Activity, requireEnabled: Boolean) {
+        val enabled = try { isEnabled(activity) } catch (_: Exception) { false }
+        val reports = try { pendingReports(activity) } catch (_: Exception) { return }
+        if (!ReportPromptPolicy.shouldPrompt(
+                reportCount = reports.size,
+                automaticCaptureEnabled = enabled,
+                alreadyPrompting = prompting,
+                explicitReview = !requireEnabled,
+            )) return
+        prompting = true
         val noun = if (reports.size == 1) "report" else "reports"
         activity.confirmDialog(
             title = "Grove ran into a problem",
             message = "${reports.size} $noun ${if (reports.size == 1) "was" else "were"} saved on this device. " +
-                "Email ${if (reports.size == 1) "it" else "them"} to the developer? Nothing is sent automatically.",
-            positive = "Send via email",
+                "Review an email draft to ${developerEmail(activity)}? Nothing is sent automatically.",
+            positive = "Review email draft",
         ) {
             sendReports(activity, reports)
-        }
+        }.setOnDismissListener { prompting = false }
     }
 
     fun pendingCount(context: Context): Int = try {
@@ -122,29 +165,51 @@ object CrashReporter {
             putExtra(Intent.EXTRA_SUBJECT, "Grove Launcher problem report")
             putExtra(Intent.EXTRA_TEXT, body)
         }
+        val handlerCount = try {
+            activity.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).size
+        } catch (_: Exception) {
+            0
+        }
+        if (!ReportHandoffPolicy.hasMailHandler(handlerCount)) {
+            showCopyFallback(activity, body)
+            return
+        }
         try {
-            // An email chooser only confirms that an app opened, not that mail was sent.
-            // Keep reports until the user explicitly deletes them in Grove settings.
+            // A chooser launch is not proof of delivery. Reports remain until explicit discard.
             activity.startActivity(Intent.createChooser(intent, "Send problem report"))
         } catch (_: Exception) {
-            activity.message("No email app found to send the report")
+            showCopyFallback(activity, body)
         }
+    }
+
+    private fun showCopyFallback(activity: Activity, body: String) {
+        val e = GroveErrorRegistry.REPORT_HANDOFF
+        MaterialAlertDialogBuilder(activity)
+            .setTitle("No email app found")
+            .setMessage("${e.codeLine()}\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Copy report") { _, _ ->
+                val clipboard = activity.getSystemService(ClipboardManager::class.java)
+                clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
+                activity.message("Problem report copied")
+            }
+            .show()
     }
 
     private fun pendingReports(context: Context): List<File> =
         reportsDir(context).listFiles { f -> f.isFile && f.name.endsWith(".txt") }
             ?.sortedBy { it.name }.orEmpty()
 
-    private fun writeReport(context: Context, kind: String, tag: String, throwable: Throwable) {
+    private fun writeReport(context: Context, kind: String, error: GroveError, throwable: Throwable?) {
         val dir = reportsDir(context).apply { mkdirs() }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
-        File(dir, "$kind-$stamp.txt").writeText(buildBody(context, kind, tag, throwable))
+        File(dir, "$kind-$stamp.txt").writeText(buildBody(context, kind, error, throwable))
         // Keep only the newest reports.
         dir.listFiles { f -> f.isFile && f.name.endsWith(".txt") }
             ?.sortedBy { it.name }?.dropLast(MAX_REPORTS)?.forEach { it.delete() }
     }
 
-    private fun buildBody(context: Context, kind: String, tag: String, throwable: Throwable): String {
+    internal fun buildBody(context: Context, kind: String, error: GroveError, throwable: Throwable?): String {
         val version = try {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
             "${pi.versionName} (${pi.versionCode})"
@@ -157,11 +222,26 @@ object CrashReporter {
             appendLine("app: $version")
             appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine("android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("tag: $tag")
-            appendLine("---")
-            val sw = StringWriter()
-            throwable.printStackTrace(PrintWriter(sw))
-            append(sw.toString())
+            appendLine("feature: ${error.feature}")
+            appendLine("severity: ${error.severity.label}")
+            appendLine("code: ${error.code}")
+            error.gws?.let { appendLine("gws: $it") }
+            appendLine("summary: ${error.summary}")
+            safeDiagnostic(throwable)?.let {
+                appendLine("--- safe diagnostic ---")
+                append(it)
+            }
+        }
+    }
+
+    internal fun safeDiagnostic(throwable: Throwable?): String? {
+        if (throwable == null) return null
+        return buildString {
+            appendLine("exception: ${throwable.javaClass.name}")
+            throwable.stackTrace.take(24).forEach { frame ->
+                appendLine("at ${frame.className}.${frame.methodName}(${frame.fileName ?: "Unknown"}:${frame.lineNumber})")
+            }
+            appendLine("Exception messages, contact data, file paths, imported configuration, and sensitive values are intentionally omitted.")
         }
     }
 

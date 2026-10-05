@@ -28,7 +28,12 @@ data class HomeScreenSettings(
 data class AppFolder(val name: String, val apps: List<String>)
 
 /** Search sources can be disabled without revoking Android permissions. */
-data class SearchSettings(val contacts: Boolean = false, val files: Boolean = false)
+data class SearchSettings(
+    val contacts: Boolean = false,
+    val files: Boolean = false,
+    val contactIndexing: Boolean = false,
+    val fileIndexing: Boolean = false,
+)
 
 /** Persistent user settings. Widget IDs are device-local and deliberately excluded from exports. */
 data class Config(
@@ -40,13 +45,14 @@ data class Config(
     val search: SearchSettings = SearchSettings(),
 ) {
     fun json(): String = JSONObject()
-        .put("version", 7)
-        .put("wallpaper", wallpaper)
+        .put("version", 9)
+        .put("wallpaper", WallpaperArt.source(wallpaper)?.id ?: error("Wallpaper selection is invalid"))
         .put("favorites", JSONArray(favorites))
         .put("folders", JSONArray().apply { folders.forEach { folder ->
             put(JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps)))
         } })
-        .put("search", JSONObject().put("contacts", search.contacts).put("files", search.files))
+        .put("search", JSONObject().put("contacts", search.contacts).put("files", search.files)
+            .put("contactIndexing", search.contactIndexing).put("fileIndexing", search.fileIndexing))
         .put(
             "gestures",
             JSONObject()
@@ -73,10 +79,17 @@ data class Config(
         fun parse(text: String): Config {
             val root = JSONObject(text)
             val version = root.getInt("version")
-            require(version in 1..7) { "Unsupported configuration version" }
+            require(version in 1..9) { "Unsupported configuration version" }
 
-            val wallpaper = root.getInt("wallpaper")
-            require(wallpaper in 0..(2 + WallpaperArt.commons.size)) { "Wallpaper selection is invalid" }
+            val wallpaper = if (version >= 9) {
+                val value = root.get("wallpaper")
+                require(value is String) { "Wallpaper selection is invalid" }
+                WallpaperArt.indexForId(value) ?: throw IllegalArgumentException("Wallpaper selection is invalid")
+            } else {
+                root.getInt("wallpaper").also {
+                    require(WallpaperArt.source(it) != null) { "Wallpaper selection is invalid" }
+                }
+            }
 
             val entries = root.getJSONArray("favorites")
             require(entries.length() <= 100) { "Too many favorites" }
@@ -121,6 +134,9 @@ data class Config(
             val search = SearchSettings(
                 contacts = flag(searchJson, "contacts", version < 7),
                 files = flag(searchJson, "files", version < 7),
+                // Existing users had only search switches. Never silently opt them into durable storage.
+                contactIndexing = flag(searchJson, "contactIndexing", false),
+                fileIndexing = flag(searchJson, "fileIndexing", false),
             )
 
             val folders = if (root.has("folders")) {

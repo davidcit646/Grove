@@ -41,4 +41,5 @@ class FileIndexTest {
             Files.deleteIfExists(root)
         }
     }
+
 }

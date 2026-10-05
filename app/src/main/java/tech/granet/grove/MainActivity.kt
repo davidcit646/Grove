@@ -36,11 +36,14 @@ class MainActivity : AppCompatActivity() {
     internal val host by lazy { AppWidgetHost(applicationContext, 1024) }
     internal val worker = Executors.newSingleThreadExecutor()
     internal val contactWorker = Executors.newSingleThreadExecutor()
-    internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) searchController.refreshContacts() else if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+    internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        searchController.reconcileAccess()
         setupController.firstRunSetup?.refreshPermissions()
     }
     internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
+    internal val chooseWallpaperImage: ActivityResultLauncher<Array<String>> = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) wallpaperPresentationController.importCustom(uri)
+    }
     internal val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         catalogController.loadApps()
         if (result.resultCode == RESULT_OK) actionController.launchNextUninstall(actionController.uninstallBatch.accepted())
@@ -66,10 +69,10 @@ class MainActivity : AppCompatActivity() {
         HomeTouchRouter(this, { root }, { drawerController.drawerGrid }, { drawer || searchMode },
             { configController.config.gestures }, setupController::settings, homeController::animateHomeGesture, homeController::animateDrawerClosed)
     }
-    internal val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    internal val export: ActivityResultLauncher<String> = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) configController.exportDocument(uri)
     }
-    internal val importConfig = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    internal val importConfig: ActivityResultLauncher<Array<String>> = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) configController.importDocument(uri)
     }
     internal val bindWidget: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -83,9 +86,9 @@ class MainActivity : AppCompatActivity() {
     }
     internal val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     internal val changes = object : LauncherApps.Callback() {
-        override fun onPackageAdded(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contacts && searchController.hasContactAccess()) searchController.refreshContacts() }
-        override fun onPackageRemoved(p: String, u: UserHandle) { catalogController.loadApps(); if (configController.config.search.contacts && searchController.hasContactAccess()) searchController.refreshContacts() }
-        override fun onPackageChanged(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contacts && searchController.hasContactAccess()) searchController.refreshContacts() }
+        override fun onPackageAdded(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
+        override fun onPackageRemoved(p: String, u: UserHandle) { catalogController.loadApps(); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
+        override fun onPackageChanged(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
         override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
         override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
     }
@@ -148,7 +151,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
-        startupController.applyStartupPlan(StartupCoordinator.resume(startupController.startupSnapshot(), SystemClock.elapsedRealtime()))
+        if (searchMode) searchController.reconcileAccess()
+        startupController.applyStartupPlan(StartupCoordinator.resume())
     }
 
     override fun onStop() {
@@ -167,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         touchRouter.cancel()
         searchController.cancelPending()
         searchController.searchWorker.shutdownNow()
+        searchController.shutdown()
         searchController.sources.shutdown()
         worker.shutdownNow()
         if (::surface.isInitialized) surface.background = null

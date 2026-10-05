@@ -16,12 +16,13 @@ import java.util.*
 internal class ConfigController(private val activity: MainActivity) {
     internal var config = Config()
     internal val configStore by lazy { with(activity) { ConfigStore(activity.prefs) } }
+    internal val workflow by lazy { ConfigWorkflow({ config }, ::activateConfig) }
 
     fun commitConfig(next: Config): Boolean {
         with(activity) {
             return ConfigTransaction.commit(next, configStore::save, { config = it }) { error ->
                 Log.e("Grove", "Could not save settings", error)
-                message("Could not save Grove settings")
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST) { commitConfig(next) }
             }
         }
     }
@@ -31,7 +32,7 @@ internal class ConfigController(private val activity: MainActivity) {
             val previousSearch = config.search
             val committed = ConfigTransaction.commit(next, configStore::activate, { config = it }) { error ->
                 Log.e("Grove", "Could not activate settings", error)
-                message("Could not save Grove settings")
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST) { activateConfig(next) }
             }
             if (committed && previousSearch != next.search) searchController.applySearchSettings(previousSearch)
             return committed
@@ -48,8 +49,11 @@ internal class ConfigController(private val activity: MainActivity) {
             }
             val dialog = MaterialAlertDialogBuilder(this).setTitle("Configuration").setView(editor).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create()
             dialog.setOnShowListener { dialog.getButton(-1).setOnClickListener {
-                runCatching { require(editor.length() <= 65536); ConfigStore.parse(editor.text.toString()) }
-                    .onSuccess { if (activateConfig(it)) { dialog.dismiss(); homeController.showHome() } else editor.error = "Could not save configuration" }.onFailure { editor.error = it.message ?: "Invalid JSON" }
+                runCatching { require(editor.length() <= 65536); workflow.replaceBroken(editor.text.toString()) }
+                    .onSuccess { activated ->
+                        if (activated) { dialog.dismiss(); homeController.showHome() }
+                        else editor.error = "Could not save configuration"
+                    }.onFailure { editor.error = it.message ?: "Invalid JSON" }
             } }; dialog.show()
         }
     }
@@ -67,7 +71,7 @@ internal class ConfigController(private val activity: MainActivity) {
             // recovery available until the replacement config actually commits.
             dialog.setOnShowListener {
                 dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener {
-                    if (activateConfig(Config())) {
+                    if (workflow.replaceWithDefaults()) {
                         dialog.dismiss()
                         homeController.showHome()
                         message("Default configuration loaded")
@@ -79,22 +83,28 @@ internal class ConfigController(private val activity: MainActivity) {
     }
     fun exportDocument(uri: Uri) = with(activity) {
         runCatching {
-            contentResolver.openOutputStream(uri)?.use { ConfigDocuments.write(config, it) }
+            contentResolver.openOutputStream(uri)?.use(workflow::export)
                 ?: error("Cannot open file")
-        }.onFailure { message("Could not export configuration") }
+        }.onFailure {
+            GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_EXPORT) { export.launch("grove-config.json") }
+        }
         Unit
     }
 
     fun importDocument(uri: Uri) = with(activity) {
         runCatching {
-            contentResolver.openInputStream(uri)?.use(ConfigDocuments::read)
+            contentResolver.openInputStream(uri)?.use(workflow::import)
                 ?: error("Cannot open file")
-        }.onSuccess {
-            if (activateConfig(it)) {
+        }.onSuccess { activated ->
+            if (activated) {
                 homeController.showHome()
                 message("Configuration imported")
             }
-        }.onFailure { message(it.message ?: "Invalid configuration") }
+        }.onFailure {
+            GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_IMPORT) {
+                importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+            }
+        }
         Unit
     }
 }

@@ -21,4 +21,16 @@ class SearchSourceStateTest {
         assertEquals(SearchSourceState.Loading,
             SearchSourceState.resolve(true, true, true, false, 4, 2))
     }
+
+    @Test fun boundedFileScanMapsToPartialState() {
+        val bounded = FileIndex.ScanResult(emptyList(), skippedDirectories = 0, truncated = true)
+        assertEquals(SearchSourceState.Partial(12, 1), SearchSourceState.fromFileScan(bounded, 12))
+    }
+
+    @Test fun unreadableChildrenAndCompleteScansRemainDistinct() {
+        val partial = FileIndex.ScanResult(emptyList(), skippedDirectories = 2, truncated = false)
+        val complete = FileIndex.ScanResult(emptyList(), skippedDirectories = 0, truncated = false)
+        assertEquals(SearchSourceState.Partial(4, 2), SearchSourceState.fromFileScan(partial, 4))
+        assertEquals(SearchSourceState.Ready(0), SearchSourceState.fromFileScan(complete, 0))
+    }
 }

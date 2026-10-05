@@ -15,7 +15,7 @@ internal class CatalogController(private val activity: MainActivity) {
     internal var apps = emptyList<App>()
     internal var appSearch = SearchResults.prepare(apps) { it.searchName }
     @Volatile internal var loadGeneration = 0
-    internal var loadingApps = true
+    internal var state: CatalogState = CatalogState.Loading
     internal val iconCache get() = with(activity) { AppIconStore }
     internal val appCatalog by lazy { with(activity) { AppCatalog(launcher, packageManager, packageName, worker) } }
     internal var drawerVisibleCount = 0
@@ -24,6 +24,7 @@ internal class CatalogController(private val activity: MainActivity) {
         with(activity) {
             if (isDestroyed || worker.isShutdown) return
             val generation = ++loadGeneration
+            state = CatalogState.Loading
             val iconSize = dp(48)
             AppIconStore.useSize(iconSize)
             val reusable = iconCache.snapshotExcluding(changedPackage)
@@ -36,6 +37,7 @@ internal class CatalogController(private val activity: MainActivity) {
                         if (isDestroyed || generation != loadGeneration) return@runOnUiThread
                         apps = loadedApps
                         appSearch = preparedApps
+                        state = CatalogState.Ready(loadedApps.size)
                         drawerVisibleCount = if (loadedApps.all { reusable.containsKey(it.key) })
                             loadedApps.size else minOf(24, loadedApps.size)
                         iconCache.replace(loadedApps.associate { it.key to (reusable[it.key] ?: fallbackIcon) })
@@ -44,8 +46,8 @@ internal class CatalogController(private val activity: MainActivity) {
                                 configController.config.copy(favorites = apps.take(8).map { it.key }) else configController.config
                             if (configController.commitConfig(initial)) prefs.edit().putBoolean("initialized", true).apply()
                         }
-                        if (startupController.coreRecoveryVisible) {
-                            startupController.coreRecoveryVisible = false
+                        if (startupController.coreRecoveryState?.reason == CoreRecoveryReason.APP_CATALOG) {
+                            startupController.clearCoreRecovery()
                             root.setBackgroundColor(Color.TRANSPARENT)
                             homeController.showHome()
                         } else if (drawer) drawerController.renderApps(searchController.searchField?.text?.toString().orEmpty())
@@ -56,10 +58,10 @@ internal class CatalogController(private val activity: MainActivity) {
                     }
                 },
                 onIcons = { batch -> publishIcons(generation, batch) },
-                onComplete = {
+                onComplete = { iconFailures ->
                     runOnUiThread {
                         if (isDestroyed || generation != loadGeneration) return@runOnUiThread
-                        loadingApps = false
+                        state = if (iconFailures == 0) CatalogState.Ready(apps.size) else CatalogState.Degraded(apps.size, iconFailures)
                         drawerVisibleCount = apps.size
                         if (drawer && searchController.searchField?.text.isNullOrEmpty()) drawerController.renderApps("")
                     }
@@ -68,11 +70,11 @@ internal class CatalogController(private val activity: MainActivity) {
                     Log.w("Grove", "Unable to load apps", error)
                     runOnUiThread {
                         if (isDestroyed || generation != loadGeneration) return@runOnUiThread
-                        loadingApps = false
+                        state = CatalogState.Failed
                         apps = emptyList()
                         appSearch = SearchResults.prepare(apps) { it.searchName }
                         iconCache.clear()
-                        startupController.showCoreRecovery("Android could not provide the installed app list. Retry, or change your Home app in Android Settings.")
+                        startupController.showCoreRecovery(CoreRecoveryReason.APP_CATALOG)
                     }
                 },
             )

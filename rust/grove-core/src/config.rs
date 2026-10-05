@@ -9,15 +9,42 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("version")
         .and_then(Value::as_i64)
         .ok_or("Missing configuration version")?;
-    if !(1..=7).contains(&version) {
+    if !(1..=9).contains(&version) {
         return Err("Unsupported configuration version");
     }
-    let wallpaper = root
-        .get("wallpaper")
-        .and_then(Value::as_i64)
-        .ok_or("Missing wallpaper selection")?;
-    if !(0..=12).contains(&wallpaper) {
-        return Err("Wallpaper selection is invalid");
+    if version >= 9 {
+        let wallpaper = root
+            .get("wallpaper")
+            .and_then(Value::as_str)
+            .ok_or("Missing wallpaper selection")?;
+        if !matches!(
+            wallpaper,
+            "grove-fern"
+                | "grove-ember"
+                | "grove-dusk"
+                | "commons-0"
+                | "commons-1"
+                | "commons-2"
+                | "commons-3"
+                | "commons-4"
+                | "commons-5"
+                | "commons-6"
+                | "commons-7"
+                | "commons-8"
+                | "commons-9"
+                | "solid-black"
+                | "custom-image"
+        ) {
+            return Err("Wallpaper selection is invalid");
+        }
+    } else {
+        let wallpaper = root
+            .get("wallpaper")
+            .and_then(Value::as_i64)
+            .ok_or("Missing wallpaper selection")?;
+        if !(0..=14).contains(&wallpaper) {
+            return Err("Wallpaper selection is invalid");
+        }
     }
     let favorites = root
         .get("favorites")
@@ -54,7 +81,15 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
                 "useWallpaperButtonColors",
             ][..],
         ),
-        ("search", &["contacts", "files"][..]),
+        (
+            "search",
+            &[
+                "contacts",
+                "files",
+                "contactIndexing",
+                "fileIndexing",
+            ][..],
+        ),
     ] {
         if let Some(value) = root.get(section) {
             let map = value
@@ -99,4 +134,3 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
     }
     Ok(())
 }
-

@@ -2,7 +2,6 @@ package tech.granet.grove
 
 import android.content.*
 import android.graphics.*
-import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.os.*
@@ -10,19 +9,50 @@ import android.view.*
 import android.widget.*
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
-import java.util.*
+
+internal enum class CoreRecoveryReason {
+    CONFIG,
+    LAUNCHER_SERVICE,
+    APP_CATALOG,
+}
+
+internal data class CoreRecoveryState(
+    val reason: CoreRecoveryReason,
+    val detail: String,
+    val retryable: Boolean = true,
+    val settingsEscape: Boolean = true,
+)
+
+internal object CoreRecoveryPolicy {
+    fun forReason(reason: CoreRecoveryReason): CoreRecoveryState = CoreRecoveryState(
+        reason = reason,
+        detail = when (reason) {
+            CoreRecoveryReason.CONFIG -> GroveErrorRegistry.CONFIG_LOAD.let {
+                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
+            }
+            CoreRecoveryReason.LAUNCHER_SERVICE -> GroveErrorRegistry.LAUNCHER_SERVICE.let {
+                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings."
+            }
+            CoreRecoveryReason.APP_CATALOG -> GroveErrorRegistry.APP_CATALOG.let {
+                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings."
+            }
+        },
+    )
+}
 
 /** Essential startup checks and recovery. Failed config or launcher service prevents downstream normal Home startup. */
 internal class StartupController(private val activity: MainActivity) {
     internal var startupState: Bundle? = null
-    internal var coreRecoveryVisible = false
+    internal var coreRecoveryState: CoreRecoveryState? = null
+        private set
+    internal val coreRecoveryVisible get() = coreRecoveryState != null
     internal var launcherCallbackRegistered = false
 
     fun beginHome() {
         with(activity) {
             val loaded = runCatching { configController.configStore.load() }.getOrElse { error ->
                 Log.e("Grove", "Configuration unavailable", error)
-                showCoreRecovery("Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased.")
+                showCoreRecovery(CoreRecoveryReason.CONFIG)
                 return
             }
             configController.config = loaded
@@ -30,12 +60,12 @@ internal class StartupController(private val activity: MainActivity) {
             runCatching { widgets.restore(startupState) }
                 .onFailure { Log.w("Grove", "Widget state unavailable", it) }
             if (!ensureLauncherCallback()) return
-            coreRecoveryVisible = false
+            clearCoreRecovery()
             root.setBackgroundColor(Color.TRANSPARENT)
             homeController.homeScrollY = startupState?.getInt("homeScrollY") ?: homeController.homeScrollY
             startupState = null
             homeController.showHome()
-            applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
+            applyStartupPlan(StartupCoordinator.coldStart())
             if (configController.configStore.brokenCustomConfig != null) root.post { configController.showConfigRecoveryDialog() }
             if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.settings() }
         }
@@ -50,15 +80,20 @@ internal class StartupController(private val activity: MainActivity) {
                 true
             } catch (error: Exception) {
                 Log.e("Grove", "Launcher service unavailable", error)
-                showCoreRecovery("Grove could not connect to Android's app launcher service.")
+                showCoreRecovery(CoreRecoveryReason.LAUNCHER_SERVICE)
                 false
             }
         }
     }
 
-    fun showCoreRecovery(detail: String) {
+    fun clearCoreRecovery() {
+        coreRecoveryState = null
+    }
+
+    fun showCoreRecovery(reason: CoreRecoveryReason) {
         with(activity) {
-            coreRecoveryVisible = true
+            val recovery = CoreRecoveryPolicy.forReason(reason)
+            coreRecoveryState = recovery
             // Supersede pending catalog/search output before showing a closed core lane.
             catalogController.loadGeneration++
             searchController.cancelPending()
@@ -79,16 +114,16 @@ internal class StartupController(private val activity: MainActivity) {
                 gravity = Gravity.CENTER
             })
             panel.addView(TextView(this).apply {
-                text = detail
+                text = recovery.detail
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
             })
-            panel.addView(Button(this).apply {
+            if (recovery.retryable) panel.addView(Button(this).apply {
                 text = "Retry"
                 setOnClickListener { beginHome() }
             })
-            panel.addView(Button(this).apply {
+            if (recovery.settingsEscape) panel.addView(Button(this).apply {
                 text = "Android Home settings"
                 setOnClickListener {
                     try {
@@ -106,25 +141,12 @@ internal class StartupController(private val activity: MainActivity) {
         }
     }
 
-    fun startupSnapshot(): StartupCoordinator.Snapshot = with(activity) { StartupCoordinator.Snapshot(
-        contactSearchEnabled = configController.config.search.contacts,
-        contactsGranted = searchController.hasContactAccess(),
-        lastContactRefreshMs = searchController.lastContactRefresh,
-        indexingContacts = searchController.indexingContacts,
-        contactLoadFailed = searchController.contactLoadFailed,
-        fileSearchEnabled = configController.config.search.files,
-        filesGranted = Environment.isExternalStorageManager(),
-        hasFiles = searchController.files.isNotEmpty(),
-        indexingFiles = searchController.indexingFiles,
-    )
-    }
-
     fun applyStartupPlan(plan: StartupCoordinator.Plan) {
         with(activity) {
-            if (plan.clearFiles) searchController.sources.clearFiles()
             if (plan.loadApps) catalogController.loadApps()
-            if (plan.indexFiles) searchController.indexFiles()
-            if (plan.refreshContacts) searchController.refreshContacts()
+            if (plan.reconcileIndexes) root.postDelayed({
+                if (!isDestroyed && !coreRecoveryVisible) searchController.reconcileAccess()
+            }, 150L)
         }
     }
 }

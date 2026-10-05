@@ -13,6 +13,70 @@ internal data class App(val component: ComponentName, val label: String) {
     val searchName = Search.normalize(label.take(512))
 }
 
+/** Explicit app-catalog outcome. Icon failure degrades visuals without removing launchable apps. */
+internal sealed interface CatalogState {
+    data object Loading : CatalogState
+    data class Ready(val count: Int) : CatalogState
+    data class Degraded(val count: Int, val iconFailures: Int) : CatalogState
+    data object Failed : CatalogState
+}
+
+/**
+ * Pure catalog orchestration. Android-specific enumeration/bitmap work is injected by AppCatalog,
+ * which keeps generation cancellation and fallback behavior deterministic under unit test.
+ */
+internal class CatalogPipeline<E, I>(
+    private val enumerate: () -> List<E>,
+    private val key: (E) -> String,
+    private val packageName: (E) -> String,
+    private val fallback: () -> I,
+    private val loadIcon: (E) -> I,
+) {
+    fun run(
+        changedPackage: String?,
+        reusable: Map<String, I>,
+        current: () -> Boolean,
+        onCatalog: (List<E>, I) -> Unit,
+        onIcons: (Map<String, I>) -> Unit,
+        onComplete: (Int) -> Unit,
+        onFailure: (Exception) -> Unit,
+    ) {
+        try {
+            val entries = enumerate()
+            if (!current()) return
+            val fallbackIcon = fallback()
+            if (!current()) return
+            onCatalog(entries, fallbackIcon)
+            var iconFailures = 0
+            val batch = LinkedHashMap<String, I>(16)
+            for (entry in entries) {
+                if (!current()) return
+                val entryKey = key(entry)
+                if (reusable.containsKey(entryKey) && packageName(entry) != changedPackage) continue
+                val icon = try {
+                    loadIcon(entry)
+                } catch (_: Exception) {
+                    iconFailures++
+                    fallbackIcon
+                }
+                batch[entryKey] = icon
+                if (batch.size >= 16) {
+                    if (!current()) return
+                    onIcons(LinkedHashMap(batch))
+                    batch.clear()
+                }
+            }
+            if (batch.isNotEmpty()) {
+                if (!current()) return
+                onIcons(LinkedHashMap(batch))
+            }
+            if (current()) onComplete(iconFailures)
+        } catch (error: Exception) {
+            if (current()) onFailure(error)
+        }
+    }
+}
+
 /** Enumerates apps before decoding icons; failed icons never remove an app. */
 internal class AppCatalog(
     private val launcher: LauncherApps,
@@ -27,47 +91,36 @@ internal class AppCatalog(
         current: () -> Boolean,
         onCatalog: (List<App>, Bitmap) -> Unit,
         onIcons: (Map<String, Bitmap>) -> Unit,
-        onComplete: () -> Unit,
+        onComplete: (Int) -> Unit,
         onFailure: (Exception) -> Unit,
     ) {
         worker.execute {
-            try {
-                val apps = launcher.getActivityList(null, android.os.Process.myUserHandle())
-                    .filter { it.componentName.packageName != ownPackage }
-                    .map { App(it.componentName, it.label.toString().take(512)) }
-                    .sortedBy { it.searchName }
-                if (!current()) return@execute
-                val fallback = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
-                packageManager.defaultActivityIcon.apply {
-                    setBounds(0, 0, iconSize, iconSize)
-                    draw(Canvas(fallback))
-                }
-                onCatalog(apps, fallback)
-                val batch = HashMap<String, Bitmap>(16)
-                apps.forEach { app ->
-                    if (!current()) return@execute
-                    if (reusable.containsKey(app.key) &&
-                        app.component.packageName != changedPackage) return@forEach
-                    val icon = try {
-                        val drawable = packageManager.getActivityIcon(app.component)
-                        Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
-                            drawable.setBounds(0, 0, iconSize, iconSize)
-                            drawable.draw(Canvas(bitmap))
+            val pipeline = CatalogPipeline(
+                enumerate = {
+                    launcher.getActivityList(null, android.os.Process.myUserHandle())
+                        .filter { it.componentName.packageName != ownPackage }
+                        .map { App(it.componentName, it.label.toString().take(512)) }
+                        .sortedBy { it.searchName }
+                },
+                key = { app: App -> app.key },
+                packageName = { app: App -> app.component.packageName },
+                fallback = {
+                    Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        packageManager.defaultActivityIcon.apply {
+                            setBounds(0, 0, iconSize, iconSize)
+                            draw(Canvas(bitmap))
                         }
-                    } catch (_: Exception) {
-                        fallback
                     }
-                    batch[app.key] = icon
-                    if (batch.size >= 16) {
-                        onIcons(HashMap(batch))
-                        batch.clear()
+                },
+                loadIcon = { app: App ->
+                    val drawable = packageManager.getActivityIcon(app.component)
+                    Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        drawable.setBounds(0, 0, iconSize, iconSize)
+                        drawable.draw(Canvas(bitmap))
                     }
-                }
-                if (batch.isNotEmpty()) onIcons(HashMap(batch))
-                if (current()) onComplete()
-            } catch (error: Exception) {
-                if (current()) onFailure(error)
-            }
+                },
+            )
+            pipeline.run(changedPackage, reusable, current, onCatalog, onIcons, onComplete, onFailure)
         }
     }
 }

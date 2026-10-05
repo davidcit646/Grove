@@ -12,6 +12,7 @@ import android.view.*
 import android.widget.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.infoDialog
+import tech.granet.grove.ui.message
 import java.util.*
 
 /** Settings and first-run setup. Failed config persistence preserves the setup instance and reopens it for retry. */
@@ -26,7 +27,6 @@ internal class SetupController(private val activity: MainActivity) {
         with(activity) {
             actionController.showActionMenu("Grove settings", listOf(
                 Triple("Launcher settings", R.drawable.ic_settings) { launcherSettings() },
-                Triple("Replay first-run setup", R.drawable.ic_info) { startFirstRunSetup() },
                 Triple("Set as default launcher", R.drawable.ic_launcher) {
                     val role = getSystemService(RoleManager::class.java)
                     if (role.isRoleAvailable(RoleManager.ROLE_HOME))
@@ -40,7 +40,7 @@ internal class SetupController(private val activity: MainActivity) {
                 },
                 Triple("About Grove", R.drawable.ic_info) {
                     infoDialog("Grove · ${BuildConfig.VERSION_NAME}",
-                        "A quiet place to start.\n\nFree and open source · Apache 2.0\nNo telemetry. Internet is used only when downloading selected wallpapers.\n\nSwipe down for search and swipe up for all apps when enabled. Swipe down from the top of the app drawer to close it. Hold and drag pinned apps to reorder them. Pinned apps can be placed near the top or bottom of Home.",
+                        "A quiet place to start.\n\nFree and open source · Apache 2.0\nNo telemetry. Built-in wallpapers work offline; custom images stay in Grove's private on-device storage.\n\nSwipe down for search and swipe up for all apps when enabled. Swipe down from the top of the app drawer to close it. Hold and drag pinned apps to reorder them. Pinned apps can be placed near the top or bottom of Home.",
                         "Done")
                 },
             ))
@@ -49,9 +49,22 @@ internal class SetupController(private val activity: MainActivity) {
 
     fun startFirstRunSetup() {
         with(activity) {
-            if (firstRunSetup != null || catalogController.apps.isEmpty()) return
-            if (setupPending())
-                prefs.edit().remove("widget_tutorial_seen").apply()
+            when (TutorialReplayPolicy.decide(
+                pending = setupPending(),
+                setupShowing = firstRunSetup != null,
+                appsAvailable = catalogController.apps.isNotEmpty(),
+            )) {
+                TutorialReplayDecision.NONE -> return
+                TutorialReplayDecision.DEFER -> {
+                    message("Tutorial replay will start when apps are available")
+                    return
+                }
+                TutorialReplayDecision.START -> Unit
+            }
+            val setupPreviouslyCompleted = runCatching { prefs.getBoolean("setup_complete", false) }
+                .onFailure { Log.w("Grove", "Setup completion state unavailable", it) }
+                .getOrDefault(false)
+            prefs.edit().remove("widget_tutorial_seen").apply()
             firstRunSetup = FirstRunSetup(
                 this, surface, configController.config, catalogController.apps.map { it.key to it.label },
                 searchController::hasContactAccess, { Environment.isExternalStorageManager() },
@@ -82,7 +95,10 @@ internal class SetupController(private val activity: MainActivity) {
                     }
                 },
                 skipSetup@{
-                    if (setupPending() && configController.config.favorites.isEmpty()) {
+                    if (TutorialReplayPolicy.shouldSeedFavoritesOnSkip(
+                            setupPreviouslyCompleted,
+                            configController.config.favorites.isEmpty(),
+                        )) {
                         if (!configController.commitConfig(configController.config.copy(favorites = catalogController.apps.take(8).map { it.key }))) {
                             firstRunSetup?.show()
                             return@skipSetup
@@ -112,11 +128,12 @@ internal class SetupController(private val activity: MainActivity) {
                 { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
                 { setupPending() },
                 { enabled ->
-                    prefs.edit().apply {
-                        putBoolean("setup_complete", !enabled)
+                    val saved = prefs.edit().apply {
                         if (enabled) putBoolean("setup_pending", true)
                         else remove("setup_pending")
-                    }.apply()
+                    }.commit()
+                    if (!saved) GroveErrorPresenter.show(this, GroveErrorRegistry.TUTORIAL_REPLAY)
+                    saved
                 },
                 {
                     if (setupPending()) root.post {
@@ -125,6 +142,10 @@ internal class SetupController(private val activity: MainActivity) {
                             startFirstRunSetup()
                         }
                     }
+                },
+                { kind -> searchController.sources.status(kind) },
+                { kind ->
+                    if (kind == "files") searchController.indexFiles() else searchController.refreshContacts()
                 },
             ).show()
         }

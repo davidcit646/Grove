@@ -23,8 +23,10 @@ internal class LauncherSettingsScreen(
     private val exportConfig: () -> Unit,
     private val importConfig: () -> Unit,
     private val tutorialsPending: () -> Boolean,
-    private val resetTutorials: (Boolean) -> Unit,
+    private val resetTutorials: (Boolean) -> Boolean,
     private val onClose: () -> Unit,
+    private val indexStatus: (String) -> String,
+    private val retryIndex: (String) -> Unit,
 ) {
     fun show() {
         val config = current()
@@ -56,7 +58,17 @@ internal class LauncherSettingsScreen(
         toggle("File search (shared storage)", config.search.files) { enabled ->
             commit(current().copy(search = current().search.copy(files = enabled)))
         }
-        content.addView(activity.bodyText("Turning a search source off clears its in-memory results. Android permissions stay granted; turn the switch back on to use them again."))
+        content.addSection("Background indexing")
+        toggle("Index contacts", config.search.contactIndexing) { enabled ->
+            commit(current().copy(search = current().search.copy(contactIndexing = enabled)))
+        }
+        toggle("Index shared-storage files", config.search.fileIndexing) { enabled ->
+            commit(current().copy(search = current().search.copy(fileIndexing = enabled)))
+        }
+        content.addView(activity.bodyText("Contacts: ${indexStatus("contacts")} · Files: ${indexStatus("files")}"))
+        content.addView(activity.settingsButton("Retry contact index", R.drawable.ic_contact) { retryIndex("contacts") })
+        content.addView(activity.settingsButton("Retry file index", R.drawable.ic_folder) { retryIndex("files") })
+        content.addView(activity.bodyText("Indexes store names and file paths in Grove's private storage for faster search. They run in the background when Android permits access. Search can still work without an index, though file lookup may be slower or partial. Turning indexing off deletes that index. Android permissions stay granted until you revoke them in system settings."))
         content.addSection("Home screen")
         toggle("Show Apps button", config.homeScreen.showAppsButton) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(showAppsButton = enabled)))
@@ -85,10 +97,23 @@ internal class LauncherSettingsScreen(
         }
 
         content.addSection("Tutorials")
-        toggle("Replay tutorials on next Home", tutorialsPending()) { enabled ->
-            resetTutorials(enabled)
+        lateinit var replayButton: com.google.android.material.button.MaterialButton
+        fun refreshReplayButton() {
+            replayButton.text = if (tutorialsPending()) "Cancel tutorial replay" else "Replay first-run setup"
         }
-        content.addView(activity.bodyText("Turning this on restarts the full setup when you return Home and shows the widget tip again. Turn it off before leaving settings to cancel. Your current choices stay in place until you finish setup."))
+        replayButton = activity.settingsButton(
+            if (tutorialsPending()) "Cancel tutorial replay" else "Replay first-run setup",
+            R.drawable.ic_info,
+        ) {
+            val next = !tutorialsPending()
+            val committed = resetTutorials(next)
+            refreshReplayButton()
+            if (committed) activity.message(if (next) "Tutorial replay queued for next Home" else "Tutorial replay canceled")
+        }
+        content.addView(replayButton)
+        content.addView(activity.bodyText(
+            "Replay is one queued request: it begins when you return Home, can be canceled here before leaving settings, and does not change current pins, gestures, or search choices until setup finishes successfully."
+        ))
 
         content.addSection("Crash reports")
         toggle("Crash reporting", CrashReporter.isEnabled(activity)) { enabled ->
@@ -97,7 +122,7 @@ internal class LauncherSettingsScreen(
         content.addView(activity.bodyText("If Grove crashes or hits an error, a report is saved on this device only. On the next launch you'll be asked whether to email it to the developer. Nothing is ever sent automatically, and no third-party service is involved."))
         lateinit var emailButton: com.google.android.material.button.MaterialButton
         emailButton = activity.settingsButton(
-            "Developer email: ${CrashReporter.developerEmail(activity).ifBlank { "not set" }}",
+            "Developer email: ${CrashReporter.developerEmail(activity)}",
             R.drawable.ic_message,
         ) {
             activity.inputDialog(
@@ -107,7 +132,7 @@ internal class LauncherSettingsScreen(
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
             ) { email ->
                 CrashReporter.setDeveloperEmail(activity, email)
-                emailButton.text = "Developer email: ${email.ifBlank { "not set" }}"
+                emailButton.text = "Developer email: ${CrashReporter.developerEmail(activity)}"
                 activity.message("Developer email saved")
             }
         }

@@ -10,6 +10,11 @@ internal sealed interface SearchSourceState {
     data object Failed : SearchSourceState
 
     companion object {
+        fun fromFileScan(scan: FileIndex.ScanResult, count: Int): SearchSourceState =
+            if (scan.truncated || scan.skippedDirectories > 0)
+                Partial(count, scan.skippedDirectories + if (scan.truncated) 1 else 0)
+            else Ready(count)
+
         fun resolve(enabled: Boolean, access: Boolean, loading: Boolean,
                     failed: Boolean, count: Int, skippedDirectories: Int = 0): SearchSourceState = when {
             !enabled -> Disabled

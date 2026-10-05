@@ -201,7 +201,7 @@ internal class FirstRunPages(
                 feature(content, R.drawable.ic_info, "Why leave it off?",
                     "Fewer results can mean faster searches and less battery use.")
                 feature(content, R.drawable.ic_home, "Private and on your device",
-                    "Grove reads names and numbers only while enabled. They stay in memory. GraNet does not collect contacts; no copy is uploaded.")
+                    "Grove searches names on your device. If you separately enable indexing, names and lookup IDs are saved privately on this device. Phone numbers are read only for actions; no copy is uploaded.")
                 if (!state.search.contacts || !hasContacts()) action(content, "Enable contact search") {
                     state.search = state.search.copy(contacts = true)
                     rerender()
@@ -216,7 +216,12 @@ internal class FirstRunPages(
                 if (state.search.contacts) action(content, "Don't use contact search") {
                     state.search = state.search.copy(contacts = false); rerender()
                 }
-                content.addView(text("Turning this off stops reads and hides results. Android keeps a granted permission until you revoke it in system settings.",
+                action(content, if (state.search.contactIndexing) "Turn contact indexing off" else "Enable background contact indexing") {
+                    state.search = state.search.copy(contactIndexing = !state.search.contactIndexing)
+                    rerender()
+                    if (state.search.contactIndexing && !hasContacts()) requestContacts()
+                }
+                content.addView(text("Indexing is optional. Search works live without it, possibly slower. Turning search off hides results; indexing follows its own switch. Android keeps a granted permission until you revoke it in system settings.",
                     14f, color = muted), LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
             }
             7 -> {
@@ -227,7 +232,7 @@ internal class FirstRunPages(
                 feature(content, R.drawable.ic_info, "Why leave it off?",
                     "Skipping storage scans can make searches faster and use less battery.")
                 feature(content, R.drawable.ic_home, "What Android grants",
-                    "All files access grants broad read and write access to shared storage, but not other apps' private data or system partitions. Grove indexes names and paths in memory. It does not read contents, change files, or upload the index. GraNet does not collect your file list. Opening a result shares only that file with the app you choose.")
+                    "All files access grants broad access to shared storage, but not app-private data or system partitions. Grove searches names and paths without reading contents or uploading them. Optional indexing saves metadata privately on this device.")
                 if (!state.search.files || !hasFiles()) action(content, "Enable file search") {
                     state.search = state.search.copy(files = true)
                     rerender()
@@ -242,7 +247,12 @@ internal class FirstRunPages(
                 if (state.search.files) action(content, "Don't use file search") {
                     state.search = state.search.copy(files = false); rerender()
                 }
-                content.addView(text("Turning this off clears the in-memory index and hides results. Android keeps a granted permission until you revoke it in system settings.",
+                action(content, if (state.search.fileIndexing) "Turn file indexing off" else "Enable background file indexing") {
+                    state.search = state.search.copy(fileIndexing = !state.search.fileIndexing)
+                    rerender()
+                    if (state.search.fileIndexing && !hasFiles()) requestFiles()
+                }
+                content.addView(text("Indexing is optional. Live file search can be slower or partial. Turning search off hides results; indexing follows its own switch. Android keeps a granted permission until you revoke it in system settings.",
                     14f, color = muted), LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
             }
         }

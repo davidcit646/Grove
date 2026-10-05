@@ -7,6 +7,8 @@ import android.graphics.Typeface
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.text.util.Linkify
+import android.text.method.LinkMovementMethod
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -16,15 +18,16 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.dp
 
-/** A preview carousel; wallpaper changes only after the destination is chosen. */
+/** Responsive wallpaper library. Preview work is generation-owned and selection commits only after Android apply. */
 internal class WallpaperPicker(
     private val activity: MainActivity,
     private val controller: WallpaperController,
     initialIndex: Int,
     private val selected: (Int, Int) -> Unit,
+    private val chooseCustom: () -> Unit,
 ) {
-    private val count = WallpaperArt.commons.size + 3
-    private var index = initialIndex.coerceIn(0, count - 1)
+    private val count = WallpaperArt.sources.size
+    private var index = initialIndex.takeIf { WallpaperArt.source(it) != null } ?: 0
     private var generation = 0
     private var bitmap: Bitmap? = null
     private var ready = false
@@ -40,7 +43,7 @@ internal class WallpaperPicker(
     fun show() {
         val column = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(activity.dp(16), activity.dp(8), activity.dp(16), activity.dp(16))
+            setPadding(activity.dp(16), activity.dp(8), activity.dp(16), activity.dp(12))
         }
         val header = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
         header.addView(TextView(activity).apply {
@@ -48,18 +51,19 @@ internal class WallpaperPicker(
             textSize = 23f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(ThemeColors.icon(activity))
-        }, LinearLayout.LayoutParams(0, activity.dp(56), 1f).apply { gravity = Gravity.CENTER_VERTICAL })
-        val close = iconButton(R.drawable.ic_close, "Close wallpaper picker").apply {
+        }, LinearLayout.LayoutParams(0, activity.dp(52), 1f))
+        header.addView(iconButton(R.drawable.ic_close, "Close wallpaper picker").apply {
             setOnClickListener { dialog.dismiss() }
-        }
-        header.addView(close, LinearLayout.LayoutParams(activity.dp(48), activity.dp(48)))
+        }, LinearLayout.LayoutParams(activity.dp(48), activity.dp(48)))
         column.addView(header)
 
-        // Keep navigation visible even when an error, large text, or a translated
-        // label takes more space than the preview section can hold.
         val details = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        column.addView(ScrollView(activity).apply { addView(details) },
-            LinearLayout.LayoutParams(-1, 0, 1f))
+        val detailsScroll = ScrollView(activity).apply {
+            isFillViewport = false
+            addView(details)
+        }
+        column.addView(detailsScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
         preview = ImageView(activity).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(ThemeColors.iconSurface(activity))
@@ -83,15 +87,15 @@ internal class WallpaperPicker(
                 }
             }
         }
-        val height = (activity.resources.displayMetrics.heightPixels * 0.46f).toInt()
-            .coerceIn(activity.dp(180), activity.dp(500))
-        details.addView(preview, LinearLayout.LayoutParams(-1, height))
+        val previewHeight = (activity.resources.displayMetrics.heightPixels * 0.34f).toInt()
+            .coerceIn(activity.dp(140), activity.dp(360))
+        details.addView(preview, LinearLayout.LayoutParams(-1, previewHeight))
 
         title = TextView(activity).apply {
             textSize = 19f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(ThemeColors.icon(activity))
-            setPadding(0, activity.dp(14), 0, 0)
+            setPadding(0, activity.dp(12), 0, 0)
         }
         details.addView(title)
         subtitle = TextView(activity).apply {
@@ -112,6 +116,7 @@ internal class WallpaperPicker(
             setOnClickListener { load() }
         }
         details.addView(retry)
+
         val navigation = LinearLayout(activity).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, activity.dp(6), 0, 0)
@@ -129,11 +134,16 @@ internal class WallpaperPicker(
         navigation.addView(previous, LinearLayout.LayoutParams(0, -2, 1f))
         navigation.addView(next, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = activity.dp(8) })
         column.addView(navigation)
-        val credits = MaterialButton(activity).apply {
+        column.addView(MaterialButton(activity).apply {
+            text = "Choose photo or file"
+            contentDescription = "Choose a custom wallpaper image"
+            setOnClickListener { dialog.dismiss(); chooseCustom() }
+        }, LinearLayout.LayoutParams(-1, -2))
+        column.addView(MaterialButton(activity).apply {
             text = "Wallpaper credits and licenses"
             setOnClickListener { showCredits() }
-        }
-        column.addView(credits, LinearLayout.LayoutParams(-1, -2))
+        }, LinearLayout.LayoutParams(-1, -2))
+
         dialog = MaterialAlertDialogBuilder(activity).setView(column).create()
         dialog.setOnDismissListener {
             generation++
@@ -144,7 +154,7 @@ internal class WallpaperPicker(
         dialog.show()
         dialog.window?.setLayout(
             (activity.resources.displayMetrics.widthPixels * 0.94f).toInt(),
-            (activity.resources.displayMetrics.heightPixels * 0.86f).toInt(),
+            (activity.resources.displayMetrics.heightPixels * 0.88f).toInt(),
         )
         load()
     }
@@ -164,33 +174,38 @@ internal class WallpaperPicker(
     }
 
     private fun load() {
+        val source = WallpaperArt.source(index) ?: return
         val request = ++generation
         ready = false
         preview.setImageDrawable(null)
         bitmap?.recycle()
         bitmap = null
-        val item = WallpaperArt.commons.getOrNull(index - 3)
-        title.text = if (item == null) listOf("Fern · abstract", "Ember · mountain", "Dusk · mountain")[index]
-            else "${item.color} · ${item.title}"
-        subtitle.text = if (item == null) "${index + 1} of $count · Grove original"
-            else "${index + 1} of $count · ${item.author} · ${item.license}"
-        status.text = if (item == null) "Preparing preview…" else "Loading preview…"
-        preview.contentDescription = "Preview of ${title.text}. Loading."
+        title.text = source.title
+        subtitle.text = "${index + 1} of $count · ${source.author} · ${source.license}"
+        status.text = when (source.kind) {
+            WallpaperKind.CUSTOM -> "Loading your selected local image…"
+            WallpaperKind.COMMONS -> "Loading preview…"
+            else -> "Preparing preview…"
+        }
+        preview.contentDescription = "Preview of ${source.title}. Loading."
         retry.visibility = View.GONE
         previous.isEnabled = index > 0
         next.isEnabled = index < count - 1
         controller.preview(index) { image ->
             if (request != generation || !dialog.isShowing) { image?.recycle(); return@preview }
             if (image == null) {
-                status.text = "Could not load this wallpaper. Check your connection and retry."
-                retry.visibility = View.VISIBLE
-                preview.contentDescription = "Preview unavailable for ${title.text}"
+                val e = GroveErrorRegistry.WALLPAPER_PREVIEW
+                status.text = if (source.kind == WallpaperKind.CUSTOM)
+                    "No custom image is available. Choose a photo or file below."
+                else "Code ${e.code} · ${e.gws}\nCould not load this wallpaper. Retry without leaving the library."
+                retry.visibility = if (source.kind == WallpaperKind.CUSTOM) View.GONE else View.VISIBLE
+                preview.contentDescription = "Preview unavailable for ${source.title}"
             } else {
                 bitmap = image
                 preview.setImageBitmap(image)
                 ready = true
-                status.text = "Tap the preview to choose where to set it. Swipe to browse."
-                preview.contentDescription = "Preview of ${title.text}. Tap to choose a screen."
+                status.text = "Tap the preview to choose Home, Lock, or Both. Swipe to browse."
+                preview.contentDescription = "Preview of ${source.title}. Tap to choose a screen."
             }
         }
     }
@@ -214,12 +229,27 @@ internal class WallpaperPicker(
     }
 
     private fun showCredits() {
-        val credits = WallpaperArt.commons.joinToString("\n\n") {
-            "${it.color}: ${it.title} — ${it.author}\n${it.sourcePage}\n${it.license}"
+        val text = WallpaperArt.sources.joinToString("\n\n") { source ->
+            buildString {
+                append(source.title).append(" — ").append(source.author)
+                append("\n").append(source.license)
+                source.licenseUrl?.let { append("\n").append(it) }
+                source.changes?.let { append("\n").append(it) }
+                source.sourcePage?.let { append("\n").append(it) }
+            }
+        }
+        val body = TextView(activity).apply {
+            this.text = text
+            textSize = 14f
+            setTextColor(ThemeColors.icon(activity))
+            setPadding(activity.dp(20), activity.dp(12), activity.dp(20), activity.dp(20))
+            setTextIsSelectable(true)
+            Linkify.addLinks(this, Linkify.WEB_URLS)
+            movementMethod = LinkMovementMethod.getInstance()
         }
         MaterialAlertDialogBuilder(activity)
             .setTitle("Wallpaper sources")
-            .setMessage("Images hosted by Wikimedia Commons. Open each source for its license and terms.\n\n$credits")
+            .setView(ScrollView(activity).apply { addView(body) })
             .setPositiveButton("Done", null)
             .show()
     }
