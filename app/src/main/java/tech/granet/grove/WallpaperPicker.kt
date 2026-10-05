@@ -233,6 +233,8 @@ internal class WallpaperPicker(
             buildString {
                 append(source.title).append(" — ").append(source.author)
                 append("\n").append(source.license)
+                source.licenseUrl?.let { append("\n").append(it) }
+                source.changes?.let { append("\n").append(it) }
                 source.sourcePage?.let { append("\n").append(it) }
             }
         }
