@@ -192,7 +192,7 @@ object CrashReporter {
             throwable.stackTrace.take(24).forEach { frame ->
                 appendLine("at ${frame.className}.${frame.methodName}(${frame.fileName ?: "Unknown"}:${frame.lineNumber})")
             }
-            appendLine("Exception messages, contact data, file paths, imported configuration, and secrets are intentionally omitted.")
+            appendLine("Exception messages, contact data, file paths, imported configuration, and sensitive values are intentionally omitted.")
         }
     }
 
