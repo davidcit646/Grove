@@ -175,14 +175,21 @@ object CrashReporter {
             appendLine("code: ${error.code}")
             appendLine("gws: ${error.gws}")
             appendLine("summary: ${error.summary}")
-            if (throwable != null) {
+            safeDiagnostic(throwable)?.let {
                 appendLine("--- safe diagnostic ---")
-                appendLine("exception: ${throwable.javaClass.name}")
-                throwable.stackTrace.take(24).forEach { frame ->
-                    appendLine("at ${frame.className}.${frame.methodName}(${frame.fileName ?: "Unknown"}:${frame.lineNumber})")
-                }
-                appendLine("Caused messages, contact data, file paths, imported configuration, and exception messages are intentionally omitted.")
+                append(it)
             }
+        }
+    }
+
+    internal fun safeDiagnostic(throwable: Throwable?): String? {
+        if (throwable == null) return null
+        return buildString {
+            appendLine("exception: ${throwable.javaClass.name}")
+            throwable.stackTrace.take(24).forEach { frame ->
+                appendLine("at ${frame.className}.${frame.methodName}(${frame.fileName ?: "Unknown"}:${frame.lineNumber})")
+            }
+            appendLine("Exception messages, contact data, file paths, imported configuration, and secrets are intentionally omitted.")
         }
     }
 
