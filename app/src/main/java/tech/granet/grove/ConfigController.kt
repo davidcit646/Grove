@@ -16,6 +16,7 @@ import java.util.*
 internal class ConfigController(private val activity: MainActivity) {
     internal var config = Config()
     internal val configStore by lazy { with(activity) { ConfigStore(activity.prefs) } }
+    internal val workflow by lazy { ConfigWorkflow({ config }, ::activateConfig) }
 
     fun commitConfig(next: Config): Boolean {
         with(activity) {
@@ -67,7 +68,7 @@ internal class ConfigController(private val activity: MainActivity) {
             // recovery available until the replacement config actually commits.
             dialog.setOnShowListener {
                 dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener {
-                    if (activateConfig(Config())) {
+                    if (workflow.replaceWithDefaults()) {
                         dialog.dismiss()
                         homeController.showHome()
                         message("Default configuration loaded")
@@ -79,7 +80,7 @@ internal class ConfigController(private val activity: MainActivity) {
     }
     fun exportDocument(uri: Uri) = with(activity) {
         runCatching {
-            contentResolver.openOutputStream(uri)?.use { ConfigDocuments.write(config, it) }
+            contentResolver.openOutputStream(uri)?.use(workflow::export)
                 ?: error("Cannot open file")
         }.onFailure { message("Could not export configuration") }
         Unit
@@ -87,10 +88,10 @@ internal class ConfigController(private val activity: MainActivity) {
 
     fun importDocument(uri: Uri) = with(activity) {
         runCatching {
-            contentResolver.openInputStream(uri)?.use(ConfigDocuments::read)
+            contentResolver.openInputStream(uri)?.use(workflow::import)
                 ?: error("Cannot open file")
-        }.onSuccess {
-            if (activateConfig(it)) {
+        }.onSuccess { activated ->
+            if (activated) {
                 homeController.showHome()
                 message("Configuration imported")
             }
