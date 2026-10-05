@@ -97,19 +97,22 @@ internal class LauncherSettingsScreen(
         }
 
         content.addSection("Tutorials")
-        val pendingReplay = tutorialsPending()
-        content.addView(activity.settingsButton(
-            if (pendingReplay) "Cancel tutorial replay" else "Replay first-run setup",
+        lateinit var replayButton: com.google.android.material.button.MaterialButton
+        fun refreshReplayButton() {
+            replayButton.text = if (tutorialsPending()) "Cancel tutorial replay" else "Replay first-run setup"
+        }
+        replayButton = activity.settingsButton(
+            if (tutorialsPending()) "Cancel tutorial replay" else "Replay first-run setup",
             R.drawable.ic_info,
         ) {
-            resetTutorials(!tutorialsPending())
-            activity.message(if (tutorialsPending()) "Tutorial replay queued for next Home" else "Tutorial replay canceled")
-        })
+            val next = !tutorialsPending()
+            resetTutorials(next)
+            refreshReplayButton()
+            activity.message(if (next) "Tutorial replay queued for next Home" else "Tutorial replay canceled")
+        }
+        content.addView(replayButton)
         content.addView(activity.bodyText(
-            if (pendingReplay)
-                "Replay is queued for the next return to Home. Cancel here before leaving settings to keep the current setup uninterrupted."
-            else
-                "Queues the full first-run tutorial for the next return to Home. Current pins, gestures, and search choices stay unchanged until setup finishes successfully."
+            "Replay is one queued request: it begins when you return Home, can be canceled here before leaving settings, and does not change current pins, gestures, or search choices until setup finishes successfully."
         ))
 
         content.addSection("Crash reports")
