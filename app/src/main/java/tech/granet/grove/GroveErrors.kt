@@ -59,10 +59,15 @@ internal object GroveErrorRegistry {
 internal object GroveErrorPresenter {
     fun show(activity: Activity, error: GroveError, retry: (() -> Unit)? = null) {
         val body = "${error.feature} · ${error.severity.label}\nCode ${error.code} · ${error.gws}\n\n${error.summary}"
+        val dismissLabel = when (error.severity) {
+            ErrorSeverity.CONTINUE -> "Continue"
+            ErrorSeverity.RECOVER -> "Not now"
+            ErrorSeverity.STOP -> "Close"
+        }
         val builder = MaterialAlertDialogBuilder(activity)
             .setTitle("Grove problem")
             .setMessage(body)
-            .setNegativeButton("Continue", null)
+            .setNegativeButton(dismissLabel, null)
         if (retry != null) builder.setPositiveButton(if (error.severity == ErrorSeverity.RECOVER) "Recover" else "Retry") { _, _ -> retry() }
         builder.setNeutralButton("Report") { _, _ ->
             CrashReporter.reportNonFatal(activity, error, null)
