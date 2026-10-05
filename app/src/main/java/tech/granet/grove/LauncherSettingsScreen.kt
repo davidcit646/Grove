@@ -97,10 +97,20 @@ internal class LauncherSettingsScreen(
         }
 
         content.addSection("Tutorials")
-        toggle("Replay tutorials on next Home", tutorialsPending()) { enabled ->
-            resetTutorials(enabled)
-        }
-        content.addView(activity.bodyText("Turning this on restarts the full setup when you return Home and shows the widget tip again. Turn it off before leaving settings to cancel. Your current choices stay in place until you finish setup."))
+        val pendingReplay = tutorialsPending()
+        content.addView(activity.settingsButton(
+            if (pendingReplay) "Cancel tutorial replay" else "Replay first-run setup",
+            R.drawable.ic_info,
+        ) {
+            resetTutorials(!tutorialsPending())
+            activity.message(if (tutorialsPending()) "Tutorial replay queued for next Home" else "Tutorial replay canceled")
+        })
+        content.addView(activity.bodyText(
+            if (pendingReplay)
+                "Replay is queued for the next return to Home. Cancel here before leaving settings to keep the current setup uninterrupted."
+            else
+                "Queues the full first-run tutorial for the next return to Home. Current pins, gestures, and search choices stay unchanged until setup finishes successfully."
+        ))
 
         content.addSection("Crash reports")
         toggle("Crash reporting", CrashReporter.isEnabled(activity)) { enabled ->
