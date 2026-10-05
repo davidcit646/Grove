@@ -49,8 +49,11 @@ internal class ConfigController(private val activity: MainActivity) {
             }
             val dialog = MaterialAlertDialogBuilder(this).setTitle("Configuration").setView(editor).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create()
             dialog.setOnShowListener { dialog.getButton(-1).setOnClickListener {
-                runCatching { require(editor.length() <= 65536); ConfigStore.parse(editor.text.toString()) }
-                    .onSuccess { if (activateConfig(it)) { dialog.dismiss(); homeController.showHome() } else editor.error = "Could not save configuration" }.onFailure { editor.error = it.message ?: "Invalid JSON" }
+                runCatching { require(editor.length() <= 65536); workflow.replaceBroken(editor.text.toString()) }
+                    .onSuccess { activated ->
+                        if (activated) { dialog.dismiss(); homeController.showHome() }
+                        else editor.error = "Could not save configuration"
+                    }.onFailure { editor.error = it.message ?: "Invalid JSON" }
             } }; dialog.show()
         }
     }
