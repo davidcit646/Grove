@@ -26,7 +26,6 @@ internal class SetupController(private val activity: MainActivity) {
         with(activity) {
             actionController.showActionMenu("Grove settings", listOf(
                 Triple("Launcher settings", R.drawable.ic_settings) { launcherSettings() },
-                Triple("Replay first-run setup", R.drawable.ic_info) { startFirstRunSetup() },
                 Triple("Set as default launcher", R.drawable.ic_launcher) {
                     val role = getSystemService(RoleManager::class.java)
                     if (role.isRoleAvailable(RoleManager.ROLE_HOME))
@@ -49,7 +48,11 @@ internal class SetupController(private val activity: MainActivity) {
 
     fun startFirstRunSetup() {
         with(activity) {
-            if (firstRunSetup != null || catalogController.apps.isEmpty()) return
+            if (firstRunSetup != null) return
+            if (catalogController.apps.isEmpty()) {
+                if (setupPending()) tech.granet.grove.ui.message("Tutorial replay will start when apps are available")
+                return
+            }
             if (setupPending())
                 prefs.edit().remove("widget_tutorial_seen").apply()
             firstRunSetup = FirstRunSetup(
