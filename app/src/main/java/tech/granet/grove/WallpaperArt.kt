@@ -30,7 +30,7 @@ private object UriCompat {
 }
 
 /** Bundled original gradients plus a curated set of freely licensed Wikimedia Commons images. */
-object WallpaperArt {
+internal object WallpaperArt {
     val commons = listOf(
         CommonsWallpaper("Red", "Flower", "Red Flower red.jpg", "E.Prabha"),
         CommonsWallpaper("Orange", "Sunset landscape", "Landscape-sunset-sun-orange (24300255306).jpg", "Pixel.la Free Stock Photos"),
