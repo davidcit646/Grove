@@ -45,7 +45,7 @@ For the latest stacked build, inject a malformed preference type and a failing c
 See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-capability failure cases. CI passing is required but does not fill any row in this table.
 
 
-## Grove Status proposal verification (pending implementation)
+## Grove Status implementation verification (pending device execution)
 
 | Design requirement | Issue | Required evidence |
 | --- | --- | --- |
@@ -55,14 +55,15 @@ See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-cap
 | Android wallpaper reconciliation and explicit theme choices | [#77](https://github.com/davidcit646/Grove/issues/77) | External wallpaper and light/dark changes, Home/Lock/Both, restart and failed preference commit |
 | Severity/code error workflow and safe report draft | [#78](https://github.com/davidcit646/Grove/issues/78) | Each severity, no mail handler, chooser cancellation, report redaction/retention, no automatic send |
 
-Record device/API, build SHA, steps and outcome when these features exist. The closed [#34](https://github.com/davidcit646/Grove/issues/34) checklist records unrun device work; [#32](https://github.com/davidcit646/Grove/issues/32) remains the failure-injection implementation gate.
+PR #83 implements #74/#75, #82 (including #76), and #78 in source with deterministic tests; the rows above remain Android evidence gaps, not implementation gaps. Record device/API, build SHA, steps and outcome. The closed [#34](https://github.com/davidcit646/Grove/issues/34) checklist records unrun device work; [#32](https://github.com/davidcit646/Grove/issues/32) remains the broader failure-injection gate.
 
-## Wallpaper picker (0.1.28)
+## Wallpaper picker (#82 review branch)
 
-- On a clean install, browse all ten Commons images over a working connection; verify scaled photos that redirect to `thumb.wikimedia.org` show previews. Red, orange, blue, brown, and black and white previously failed.
-- Disable connectivity and open an uncached image. Verify Retry, Previous, Next, credits, and X remain reachable; restore connectivity and retry.
-- With large font and display size, confirm the preview/details scroll while Previous, Next, and credits stay visible.
-- Check that landscape photos crop to the display instead of stretching; set a photo to Home, Lock, and Both, then confirm each destination.
+- Browse every packaged curated image with networking disabled. Verify preview/apply works offline and each item exposes readable author, source and license metadata; verify generated art and the separate true `#000000` option.
+- On short screens, landscape, gesture-navigation insets, large font/display size and long attribution text, verify preview/details can scroll without hiding Previous/Next, Retry, credits, destination controls or the custom-image entry.
+- Choose an image through Android's picker/document flow; cancel, select unsupported/corrupt/oversized content, revoke/lose access, rotate/recreate the process, and supersede one pending choice with another. None may replace committed state until validation and the required apply path succeed.
+- Apply packaged/generated/custom/black sources to Home, Lock and Both. Verify Android apply failure preserves the prior Grove choice; lock-only leaves Grove Home selection unchanged; successful Android Home apply followed by Config failure reports the split state and can retry persistence without reapplying Android.
+- Inspect committed/staged private custom-wallpaper files across success, cancellation, replacement and failure. Verify only confirmed custom content is promoted, old committed content remains available through failed attempts, and uninstall removes app-private copies.
 
 ## First-run setup (0.1.29)
 
