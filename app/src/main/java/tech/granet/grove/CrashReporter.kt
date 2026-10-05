@@ -38,6 +38,10 @@ internal object ReportPromptPolicy {
         reportCount > 0 && !alreadyPrompting && (explicitReview || automaticCaptureEnabled)
 }
 
+internal object ReportHandoffPolicy {
+    fun hasMailHandler(handlerCount: Int): Boolean = handlerCount > 0
+}
+
 object CrashReporter {
     private const val TAG = "Grove"
     private const val PREFS = "crash_reports"
@@ -161,22 +165,39 @@ object CrashReporter {
             putExtra(Intent.EXTRA_SUBJECT, "Grove Launcher problem report")
             putExtra(Intent.EXTRA_TEXT, body)
         }
+        val handlerCount = try {
+            activity.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).size
+        } catch (_: Exception) {
+            0
+        }
+        if (!ReportHandoffPolicy.hasMailHandler(handlerCount)) {
+            showCopyFallback(activity, body)
+            return
+        }
         try {
             // A chooser launch is not proof of delivery. Reports remain until explicit discard.
             activity.startActivity(Intent.createChooser(intent, "Send problem report"))
         } catch (_: Exception) {
-            val e = GroveErrorRegistry.REPORT_HANDOFF
-            MaterialAlertDialogBuilder(activity)
-                .setTitle("No email app found")
-                .setMessage("Code ${e.code} · ${e.gws}\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Copy report") { _, _ ->
-                    val clipboard = activity.getSystemService(ClipboardManager::class.java)
-                    clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
-                    activity.message("Problem report copied")
-                }
-                .show()
+            showCopyFallback(activity, body)
         }
+    }
+
+    private fun showCopyFallback(activity: Activity, body: String) {
+        val e = GroveErrorRegistry.REPORT_HANDOFF
+        val codeLine = buildString {
+            append("Code ").append(e.code)
+            e.gws?.let { append(" · ").append(it) }
+        }
+        MaterialAlertDialogBuilder(activity)
+            .setTitle("No email app found")
+            .setMessage("$codeLine\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Copy report") { _, _ ->
+                val clipboard = activity.getSystemService(ClipboardManager::class.java)
+                clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
+                activity.message("Problem report copied")
+            }
+            .show()
     }
 
     private fun pendingReports(context: Context): List<File> =
@@ -208,7 +229,7 @@ object CrashReporter {
             appendLine("feature: ${error.feature}")
             appendLine("severity: ${error.severity.label}")
             appendLine("code: ${error.code}")
-            appendLine("gws: ${error.gws}")
+            error.gws?.let { appendLine("gws: $it") }
             appendLine("summary: ${error.summary}")
             safeDiagnostic(throwable)?.let {
                 appendLine("--- safe diagnostic ---")
