@@ -70,7 +70,7 @@ internal class SearchScreen(private val context: Context) {
                 "Allow Grove to search your contacts", action = requestContactAccess))
             SearchSourceState.Loading -> target.addView(context.wallpaperLabel("Loading contacts…", 14f))
             SearchSourceState.Failed -> target.addView(row("Retry contact search", R.drawable.ic_contact,
-                "Code ${GroveErrorRegistry.CONTACT_SEARCH.code} · ${GroveErrorRegistry.CONTACT_SEARCH.gws}", action = retryContacts))
+                GroveErrorRegistry.CONTACT_SEARCH.codeLine(), action = retryContacts))
             else -> Unit
         }
         if (fileState !is SearchSourceState.Disabled &&
@@ -85,7 +85,7 @@ internal class SearchScreen(private val context: Context) {
                 "Allow access to shared storage", action = requestFileAccess))
             SearchSourceState.Loading -> target.addView(context.wallpaperLabel("Searching files…", 14f))
             SearchSourceState.Failed -> target.addView(row("Retry file search", R.drawable.ic_folder,
-                "Code ${GroveErrorRegistry.FILE_SEARCH.code} · ${GroveErrorRegistry.FILE_SEARCH.gws}", action = retryFiles))
+                GroveErrorRegistry.FILE_SEARCH.codeLine(), action = retryFiles))
             is SearchSourceState.Partial -> target.addView(context.wallpaperLabel(
                 "Some files may be missing (${fileState.skippedDirectories} skipped or search bounded).", 14f))
             else -> Unit
