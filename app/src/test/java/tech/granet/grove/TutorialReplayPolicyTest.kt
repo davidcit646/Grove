@@ -23,4 +23,22 @@ class TutorialReplayPolicyTest {
         assertEquals(TutorialReplayDecision.START,
             TutorialReplayPolicy.decide(true, setupShowing = false, appsAvailable = true))
     }
+    @Test fun replaySkipNeverSeedsFavoritesIntoExistingSetup() {
+        assertEquals(false, TutorialReplayPolicy.shouldSeedFavoritesOnSkip(
+            setupPreviouslyCompleted = true,
+            favoritesEmpty = true,
+        ))
+    }
+
+    @Test fun genuineFirstRunSkipMaySeedOnlyAnEmptyFavoritesList() {
+        assertEquals(true, TutorialReplayPolicy.shouldSeedFavoritesOnSkip(
+            setupPreviouslyCompleted = false,
+            favoritesEmpty = true,
+        ))
+        assertEquals(false, TutorialReplayPolicy.shouldSeedFavoritesOnSkip(
+            setupPreviouslyCompleted = false,
+            favoritesEmpty = false,
+        ))
+    }
+
 }
