@@ -88,10 +88,27 @@ object CrashReporter {
         }
     }
 
-    /** Ask the user about unsent reports. Call from the main activity's onCreate. */
+    /** Explicit user report is allowed even when automatic crash/error capture is disabled. */
+    internal fun reportUserRequested(context: Context, error: GroveError, throwable: Throwable?): Boolean = try {
+        writeReport(context, kind = "user-report", error = error, throwable = throwable)
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Ask the user about automatically captured unsent reports on launch. */
     fun promptIfPending(activity: Activity) {
+        prompt(activity, requireEnabled = true)
+    }
+
+    /** Review reports after an explicit user Report action, regardless of automatic capture preference. */
+    internal fun reviewPending(activity: Activity) {
+        prompt(activity, requireEnabled = false)
+    }
+
+    private fun prompt(activity: Activity, requireEnabled: Boolean) {
         val reports = try {
-            if (!isEnabled(activity)) return
+            if (requireEnabled && !isEnabled(activity)) return
             pendingReports(activity)
         } catch (_: Exception) {
             return
