@@ -3,9 +3,6 @@ package tech.granet.grove
 import android.content.*
 import android.content.res.ColorStateList
 import android.graphics.*
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.LayerDrawable
 import android.provider.AlarmClock
 import android.os.*
 import android.view.*
@@ -15,7 +12,7 @@ import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
 import java.util.*
 
-/** Home rendering and scrolling. Android owns the wallpaper behind a legibility scrim. */
+/** Home rendering and scrolling. Android owns the unmodified wallpaper behind transparent Home. */
 internal class HomeController(private val activity: MainActivity) {
     internal lateinit var body: LinearLayout
     internal var homeScrollY = 0
@@ -52,9 +49,8 @@ internal class HomeController(private val activity: MainActivity) {
             root.animate().cancel(); root.translationY = 0f; root.alpha = 1f
             root.removeAllViews()
             // The Android wallpaper window is authoritative, including external/live changes.
-            // A translucent scrim protects white labels without painting remembered Grove art.
-            surface.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x66000000, 0xaa000000.toInt()))
+            // Keep the image unmodified; contrast belongs to text and system-bar regions.
+            surface.background = null
         }
     }
 

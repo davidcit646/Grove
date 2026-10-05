@@ -46,9 +46,16 @@ fun Context.label(text: String, size: Float = 16f, horizontalPaddingDp: Int = 0)
         setPadding(h, dp(8), h, dp(8))
     }
 
-/** Text on Grove's dark wallpaper scrim stays legible in either system theme. */
+/** Local text shadows preserve readability without dimming the wallpaper. */
 fun Context.wallpaperLabel(text: String, size: Float = 16f, horizontalPaddingDp: Int = 0): TextView =
-    label(text, size, horizontalPaddingDp).apply { setTextColor(Color.WHITE) }
+    label(text, size, horizontalPaddingDp).apply { wallpaperTextContrast() }
+
+/** Only the glyphs receive contrast treatment; no full-screen overlay. */
+fun TextView.wallpaperTextContrast() {
+    setTextColor(Color.WHITE)
+    val density = resources.displayMetrics.density
+    setShadowLayer(2f * density, 0f, density, Color.BLACK)
+}
 
 /** Section title: bold, in the theme's icon color. */
 fun Context.titleText(text: String, topPaddingDp: Int = 0): TextView = TextView(this).apply {

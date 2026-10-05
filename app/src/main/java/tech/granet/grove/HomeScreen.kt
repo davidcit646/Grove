@@ -1,12 +1,12 @@
 package tech.granet.grove
 
 import android.content.Context
-import android.graphics.Color
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextClock
 import tech.granet.grove.ui.dp
+import tech.granet.grove.ui.wallpaperTextContrast
 
 /** Places home controls, pins, and widgets according to the saved layout. */
 internal class HomeScreen(private val context: Context) {
@@ -18,7 +18,7 @@ internal class HomeScreen(private val context: Context) {
                pins: (LinearLayout) -> Unit, widgets: (LinearLayout) -> Unit): LinearLayout {
         if (config.showClock) {
             root.addView(TextClock(context).apply {
-                format12Hour = "h:mm"; format24Hour = "HH:mm"; textSize = 58f; setTextColor(Color.WHITE)
+                format12Hour = "h:mm"; format24Hour = "HH:mm"; textSize = 58f; wallpaperTextContrast()
                 if (config.tapClockOpensClock) {
                     contentDescription = "Open Clock"
                     setOnClickListener { openClock() }
@@ -26,7 +26,7 @@ internal class HomeScreen(private val context: Context) {
             })
             root.addView(TextClock(context).apply {
                 format12Hour = "EEEE, MMMM d"; format24Hour = "EEEE, MMMM d"
-                textSize = 16f; setTextColor(Color.WHITE); setPadding(0, context.dp(8), 0, context.dp(8))
+                textSize = 16f; wallpaperTextContrast(); setPadding(0, context.dp(8), 0, context.dp(8))
                 contentDescription = "Open Calendar"
                 setOnClickListener { openCalendar() }
             })
