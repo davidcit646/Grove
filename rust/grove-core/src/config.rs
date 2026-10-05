@@ -16,7 +16,7 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("wallpaper")
         .and_then(Value::as_i64)
         .ok_or("Missing wallpaper selection")?;
-    if !(0..=12).contains(&wallpaper) {
+    if !(0..=14).contains(&wallpaper) {
         return Err("Wallpaper selection is invalid");
     }
     let favorites = root
