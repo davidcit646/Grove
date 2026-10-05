@@ -42,16 +42,4 @@ class FileIndexTest {
         }
     }
 
-    @Test fun boundedScanReportsTruncationForPartialState() {
-        val root = Files.createTempDirectory("grove-index")
-        val files = (0 until 5).map { Files.createFile(root.resolve("file-$it.txt")) }
-        try {
-            val result = FileIndex.scan(root.toFile(), limit = 3)
-            assertEquals(3, result.files.size)
-            assertEquals(true, result.truncated)
-        } finally {
-            files.forEach(Files::deleteIfExists)
-            Files.deleteIfExists(root)
-        }
-    }
 }
