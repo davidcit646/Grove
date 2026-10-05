@@ -35,6 +35,7 @@ internal class DrawerController(private val activity: MainActivity) {
 
     fun showDrawer(keyboard: Boolean, animate: Boolean = false) {
         with(activity) {
+            if (isDestroyed || startupController.coreRecoveryVisible) return
             homeController.rememberHomeScroll()
             clearAppSelection()
             drawer = true; searchMode = false; homeController.base()

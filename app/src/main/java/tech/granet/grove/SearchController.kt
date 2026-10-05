@@ -115,6 +115,7 @@ internal class SearchController(private val activity: MainActivity) {
 
     fun showSearch(animate: Boolean = false) {
         with(activity) {
+            if (isDestroyed || startupController.coreRecoveryVisible) return
             homeController.rememberHomeScroll()
             drawerController.clearAppSelection()
             drawer = false; searchMode = true; homeController.base()

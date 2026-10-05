@@ -134,6 +134,7 @@ internal class HomeController(private val activity: MainActivity) {
 
     fun showHome(animate: Boolean = false) {
         with(activity) {
+            if (isDestroyed || startupController.coreRecoveryVisible) return
             rememberHomeScroll()
             drawerController.clearAppSelection()
             getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
