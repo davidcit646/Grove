@@ -260,9 +260,7 @@ internal class SearchController(private val activity: MainActivity) {
                     )) return@runOnUiThread
                 result.onSuccess {
                     liveFiles = it.second
-                    liveFileState = if (it.first.truncated || it.first.skippedDirectories > 0)
-                        SearchSourceState.Partial(liveFiles.size, it.first.skippedDirectories + if (it.first.truncated) 1 else 0)
-                    else SearchSourceState.Ready(liveFiles.size)
+                    liveFileState = SearchSourceState.fromFileScan(it.first, liveFiles.size)
                 }.onFailure { liveFileState = SearchSourceState.Failed }
                 refreshLiveDisplay(query)
             }
