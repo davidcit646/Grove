@@ -27,12 +27,15 @@ internal object CoreRecoveryPolicy {
     fun forReason(reason: CoreRecoveryReason): CoreRecoveryState = CoreRecoveryState(
         reason = reason,
         detail = when (reason) {
-            CoreRecoveryReason.CONFIG ->
-                "Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
-            CoreRecoveryReason.LAUNCHER_SERVICE ->
-                "Grove could not connect to Android's app launcher service."
-            CoreRecoveryReason.APP_CATALOG ->
-                "Installed apps · Recover\nCode ${GroveErrorRegistry.APP_CATALOG.code} · ${GroveErrorRegistry.APP_CATALOG.gws}\n\nAndroid could not provide the installed app list. Retry, or change your Home app in Android Settings."
+            CoreRecoveryReason.CONFIG -> GroveErrorRegistry.CONFIG_LOAD.let {
+                "${it.feature} · ${it.severity.label}\nCode ${it.code} · ${it.gws}\n\n${it.summary} Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
+            }
+            CoreRecoveryReason.LAUNCHER_SERVICE -> GroveErrorRegistry.LAUNCHER_SERVICE.let {
+                "${it.feature} · ${it.severity.label}\nCode ${it.code} · ${it.gws}\n\n${it.summary} Retry, or change your Home app in Android Settings."
+            }
+            CoreRecoveryReason.APP_CATALOG -> GroveErrorRegistry.APP_CATALOG.let {
+                "${it.feature} · ${it.severity.label}\nCode ${it.code} · ${it.gws}\n\n${it.summary} Retry, or change your Home app in Android Settings."
+            }
         },
     )
 }
