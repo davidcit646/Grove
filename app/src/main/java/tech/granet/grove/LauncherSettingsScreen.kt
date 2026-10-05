@@ -23,7 +23,7 @@ internal class LauncherSettingsScreen(
     private val exportConfig: () -> Unit,
     private val importConfig: () -> Unit,
     private val tutorialsPending: () -> Boolean,
-    private val resetTutorials: (Boolean) -> Unit,
+    private val resetTutorials: (Boolean) -> Boolean,
     private val onClose: () -> Unit,
     private val indexStatus: (String) -> String,
     private val retryIndex: (String) -> Unit,
@@ -106,9 +106,9 @@ internal class LauncherSettingsScreen(
             R.drawable.ic_info,
         ) {
             val next = !tutorialsPending()
-            resetTutorials(next)
+            val committed = resetTutorials(next)
             refreshReplayButton()
-            activity.message(if (next) "Tutorial replay queued for next Home" else "Tutorial replay canceled")
+            if (committed) activity.message(if (next) "Tutorial replay queued for next Home" else "Tutorial replay canceled")
         }
         content.addView(replayButton)
         content.addView(activity.bodyText(
