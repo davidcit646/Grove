@@ -4,59 +4,76 @@ import android.app.Activity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.message
 
+internal enum class GroveErrorOwner(val range: IntRange) {
+    CONFIGURATION(100..199),
+    APP_INVENTORY(200..299),
+    UI_UX(300..399),
+    SYSTEM(400..499),
+    GFI(500..599),
+    GCI(600..699),
+}
+
 internal enum class ErrorSeverity(val label: String) {
-    CONTINUE("Continue"),
+    DEGRADE("Degrade"),
     RECOVER("Recover"),
     STOP("Stop"),
 }
 
 internal data class GroveError(
     val code: Int,
-    val gws: String,
+    val owner: GroveErrorOwner,
+    val gws: String?,
     val feature: String,
     val severity: ErrorSeverity,
     val summary: String,
 )
 
 internal object GroveErrorRegistry {
-    val CONFIG_IMPORT = GroveError(110, "GWS-config-import", "Configuration import", ErrorSeverity.CONTINUE,
+    val CONFIG_IMPORT = GroveError(110, GroveErrorOwner.CONFIGURATION, null, "Configuration import", ErrorSeverity.DEGRADE,
         "The imported configuration could not be accepted.")
-    val CONFIG_EXPORT = GroveError(111, "GWS-config-export", "Configuration export", ErrorSeverity.CONTINUE,
+    val CONFIG_EXPORT = GroveError(111, GroveErrorOwner.CONFIGURATION, null, "Configuration export", ErrorSeverity.DEGRADE,
         "The configuration could not be exported.")
-    val CONFIG_PERSIST = GroveError(112, "GWS-config-persist", "Configuration", ErrorSeverity.RECOVER,
+    val CONFIG_PERSIST = GroveError(112, GroveErrorOwner.CONFIGURATION, null, "Configuration", ErrorSeverity.RECOVER,
         "Grove could not save the requested configuration change.")
-    val CONFIG_LOAD = GroveError(113, "GWS-config-load", "Configuration", ErrorSeverity.RECOVER,
+    val CONFIG_LOAD = GroveError(113, GroveErrorOwner.CONFIGURATION, null, "Configuration", ErrorSeverity.RECOVER,
         "Grove could not load its saved configuration.")
-    val APP_CATALOG = GroveError(210, "GWS-apps-catalog", "Installed apps", ErrorSeverity.RECOVER,
+
+    val APP_CATALOG = GroveError(210, GroveErrorOwner.APP_INVENTORY, null, "Installed apps", ErrorSeverity.RECOVER,
         "Android could not provide the installed app catalogue.")
-    val LAUNCHER_SERVICE = GroveError(211, "GWS-apps-launcher-service", "Android launcher service", ErrorSeverity.RECOVER,
+    val LAUNCHER_SERVICE = GroveError(211, GroveErrorOwner.APP_INVENTORY, null, "Android launcher service", ErrorSeverity.RECOVER,
         "Grove could not connect to Android's launcher service.")
-    val CONTACT_SEARCH = GroveError(220, "GWS-search-contacts", "Contact search", ErrorSeverity.CONTINUE,
-        "The contacts provider could not be read.")
-    val FILE_SEARCH = GroveError(230, "GWS-search-files", "File search", ErrorSeverity.CONTINUE,
-        "Shared storage could not be searched completely.")
-    val WALLPAPER_PREVIEW = GroveError(310, "GWS-wallpaper-preview", "Wallpaper preview", ErrorSeverity.CONTINUE,
+
+    val WALLPAPER_PREVIEW = GroveError(310, GroveErrorOwner.UI_UX, "GWS-READ-01", "Wallpaper preview", ErrorSeverity.DEGRADE,
         "This wallpaper preview is unavailable.")
-    val WALLPAPER_APPLY = GroveError(311, "GWS-wallpaper-apply", "Wallpaper apply", ErrorSeverity.STOP,
+    val WALLPAPER_APPLY = GroveError(311, GroveErrorOwner.UI_UX, "GWS-APPLY-01", "Wallpaper apply", ErrorSeverity.STOP,
         "Android did not confirm the wallpaper change.")
-    val WALLPAPER_SYNC = GroveError(312, "GWS-wallpaper-sync", "Wallpaper preference", ErrorSeverity.RECOVER,
+    val WALLPAPER_SYNC = GroveError(312, GroveErrorOwner.UI_UX, "GWS-WRITE-01", "Wallpaper preference", ErrorSeverity.RECOVER,
         "Android changed the wallpaper, but Grove could not save the matching Home preference.")
-    val WALLPAPER_LOCAL_SYNC = GroveError(313, "GWS-wallpaper-local-sync", "Custom wallpaper", ErrorSeverity.RECOVER,
+    val WALLPAPER_LOCAL_SYNC = GroveError(313, GroveErrorOwner.UI_UX, "GWS-WRITE-02", "Custom wallpaper", ErrorSeverity.RECOVER,
         "Android changed the wallpaper, but Grove could not commit the selected custom image locally.")
-    val TUTORIAL_REPLAY = GroveError(410, "GWS-tutorial-replay", "Tutorial replay", ErrorSeverity.CONTINUE,
+
+    val TUTORIAL_REPLAY = GroveError(410, GroveErrorOwner.SYSTEM, null, "Tutorial replay", ErrorSeverity.DEGRADE,
         "Tutorial replay could not start yet.")
-    val GENERIC_NONFATAL = GroveError(500, "GWS-report-nonfatal", "Grove operation", ErrorSeverity.CONTINUE,
-        "A caught Grove operation failed.")
-    val REPORT_HANDOFF = GroveError(510, "GWS-report-handoff", "Problem report", ErrorSeverity.CONTINUE,
+    val REPORT_HANDOFF = GroveError(420, GroveErrorOwner.SYSTEM, null, "Problem report", ErrorSeverity.DEGRADE,
         "No mail app accepted the report draft.")
-    val NATIVE_BRIDGE = GroveError(610, "GWS-native-bridge", "Native core", ErrorSeverity.CONTINUE,
+    val NATIVE_BRIDGE = GroveError(430, GroveErrorOwner.SYSTEM, null, "Native core", ErrorSeverity.DEGRADE,
         "The native helper was unavailable; Grove used its safe Kotlin fallback.")
-    val UNCAUGHT_CRASH = GroveError(699, "GWS-runtime-crash", "Grove runtime", ErrorSeverity.STOP,
+    val GENERIC_NONFATAL = GroveError(490, GroveErrorOwner.SYSTEM, null, "Grove operation", ErrorSeverity.DEGRADE,
+        "A caught Grove operation failed.")
+    val UNCAUGHT_CRASH = GroveError(499, GroveErrorOwner.SYSTEM, null, "Grove runtime", ErrorSeverity.STOP,
         "Grove stopped because of an uncaught error.")
 
+    val FILE_SEARCH = GroveError(510, GroveErrorOwner.GFI, null, "File search", ErrorSeverity.DEGRADE,
+        "Shared storage could not be searched completely.")
+    val CONTACT_SEARCH = GroveError(610, GroveErrorOwner.GCI, null, "Contact search", ErrorSeverity.DEGRADE,
+        "The contacts provider could not be read.")
+
     val all = listOf(
-        CONFIG_IMPORT, CONFIG_EXPORT, CONFIG_PERSIST, CONFIG_LOAD, APP_CATALOG, LAUNCHER_SERVICE, CONTACT_SEARCH, FILE_SEARCH,
-        WALLPAPER_PREVIEW, WALLPAPER_APPLY, WALLPAPER_SYNC, WALLPAPER_LOCAL_SYNC, TUTORIAL_REPLAY, GENERIC_NONFATAL, REPORT_HANDOFF, NATIVE_BRIDGE, UNCAUGHT_CRASH,
+        CONFIG_IMPORT, CONFIG_EXPORT, CONFIG_PERSIST, CONFIG_LOAD,
+        APP_CATALOG, LAUNCHER_SERVICE,
+        WALLPAPER_PREVIEW, WALLPAPER_APPLY, WALLPAPER_SYNC, WALLPAPER_LOCAL_SYNC,
+        TUTORIAL_REPLAY, REPORT_HANDOFF, NATIVE_BRIDGE, GENERIC_NONFATAL, UNCAUGHT_CRASH,
+        FILE_SEARCH, CONTACT_SEARCH,
     )
 
     fun byCode(code: Int): GroveError? = all.firstOrNull { it.code == code }
@@ -67,7 +84,7 @@ internal data class GroveErrorRoute(val dismissLabel: String, val actionLabel: S
 internal object GroveErrorRouting {
     fun route(error: GroveError, hasAction: Boolean): GroveErrorRoute = GroveErrorRoute(
         dismissLabel = when (error.severity) {
-            ErrorSeverity.CONTINUE -> "Continue"
+            ErrorSeverity.DEGRADE -> "Continue"
             ErrorSeverity.RECOVER -> "Not now"
             ErrorSeverity.STOP -> "Close"
         },
@@ -80,7 +97,11 @@ internal object GroveErrorRouting {
 
 internal object GroveErrorPresenter {
     fun show(activity: Activity, error: GroveError, retry: (() -> Unit)? = null) {
-        val body = "${error.feature} · ${error.severity.label}\nCode ${error.code} · ${error.gws}\n\n${error.summary}"
+        val codeLine = buildString {
+            append("Code ").append(error.code)
+            error.gws?.let { append(" · ").append(it) }
+        }
+        val body = "${error.feature} · ${error.severity.label}\n$codeLine\n\n${error.summary}"
         val route = GroveErrorRouting.route(error, retry != null)
         val builder = MaterialAlertDialogBuilder(activity)
             .setTitle("Grove problem")
