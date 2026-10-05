@@ -4,6 +4,20 @@
 
 Grove is the phone's home screen. A broken wallpaper download or contact index should not make the user lose their launcher. Each feature owns its own failure, and protected data stays unavailable whenever Android permission or the user's Grove setting says it should.
 
+## Implementation status on `main`
+
+This is the target contract. The current app already has a recoverable Home, permission-aware in-memory contact/file search, partial file-scan reporting, off-thread wallpaper preparation, and a user-directed crash email. The following parts are **proposed, not shipped**:
+
+| Target behavior | Current implementation | Tracking |
+| --- | --- | --- |
+| Search with indexing independently disabled; live GFS/GCS | One contact and one file search switch; enabling a source loads/scans it | [#74](https://github.com/davidcit646/Grove/issues/74) |
+| Separate durable GFI/GCI caches and the eight index states below | Separate in-memory lists only; no persistent search index or index-only switch | [#75](https://github.com/davidcit646/Grove/issues/75) |
+| User-selected wallpaper and solid black choice | Three generated designs and ten Commons choices | [#76](https://github.com/davidcit646/Grove/issues/76) |
+| Android-applied-wallpaper reconciliation and explicit theme modes | Saved Grove selection plus wallpaper-button-color toggle; system theme styling | [#77](https://github.com/davidcit646/Grove/issues/77), [#29](https://github.com/davidcit646/Grove/issues/29) |
+| GHEAEW severity/code registry, safe report draft, default recipient | Saved crash/nonfatal reports and a next-launch email choice; no numeric code UI or default address | [#78](https://github.com/davidcit646/Grove/issues/78), [#28](https://github.com/davidcit646/Grove/issues/28) |
+
+The remaining source refactor is [PR #73](https://github.com/davidcit646/Grove/pull/73), which has not merged into `main`. [TESTING.md](TESTING.md) and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) distinguish source checks from pending Android device evidence. [#79](https://github.com/davidcit646/Grove/issues/79) tracks documentation alignment.
+
 ## The rules in plain language
 
 1. **Get the home screen on screen first.** Load saved choices, show a usable home, and fill in icons as they become available. Start package, theme, and wallpaper listeners without holding up that first usable screen.
@@ -22,7 +36,7 @@ A **hard dependency** is something a particular operation needs to succeed. It i
 4. In the background, Grove observes app changes, light/dark theme changes, and wallpaper changes. If a listener cannot start, refresh on resume or retry instead of blocking home.
 5. Grove loads or renders missing app icons lazily and caches them for next time.
 
-If no valid settings exist, create safe defaults and show first-run setup. Permission states begin as **ungranted until checked against Android**; gestures begin enabled; theme follows the system. The user can choose settings during setup, and Grove saves them. A corrupt settings file also needs a recoverable default, but do not claim a choice was saved when the write failed.
+On a genuine first run with no saved settings, create safe defaults and show setup. If saved custom settings are corrupt, preserve them separately and show a safe fallback with a recovery choice; do not treat corruption as a fresh install. Permission states begin as **ungranted until checked against Android**; gestures begin enabled; theme follows the system. Save chosen settings only after a confirmed write, and never claim a failed write succeeded.
 
 If Android's app inventory cannot be read, retry and show a scoped error with whatever recovery surface Grove can render. Do not present stale cached apps as a verified current list. If Grove cannot render even a minimal home, that is a **Stop** failure.
 
