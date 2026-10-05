@@ -32,7 +32,7 @@ internal class ConfigController(private val activity: MainActivity) {
             val previousSearch = config.search
             val committed = ConfigTransaction.commit(next, configStore::activate, { config = it }) { error ->
                 Log.e("Grove", "Could not activate settings", error)
-                message("Could not save Grove settings")
+                GroveErrorPresenter.show(this, GroveErrorRegistry.CONFIG_PERSIST)
             }
             if (committed && previousSearch != next.search) searchController.applySearchSettings(previousSearch)
             return committed
