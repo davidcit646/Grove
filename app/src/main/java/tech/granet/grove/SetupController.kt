@@ -40,7 +40,7 @@ internal class SetupController(private val activity: MainActivity) {
                 },
                 Triple("About Grove", R.drawable.ic_info) {
                     infoDialog("Grove · ${BuildConfig.VERSION_NAME}",
-                        "A quiet place to start.\n\nFree and open source · Apache 2.0\nNo telemetry. Internet is used only when downloading selected wallpapers.\n\nSwipe down for search and swipe up for all apps when enabled. Swipe down from the top of the app drawer to close it. Hold and drag pinned apps to reorder them. Pinned apps can be placed near the top or bottom of Home.",
+                        "A quiet place to start.\n\nFree and open source · Apache 2.0\nNo telemetry. Built-in wallpapers work offline; custom images stay in Grove's private on-device storage.\n\nSwipe down for search and swipe up for all apps when enabled. Swipe down from the top of the app drawer to close it. Hold and drag pinned apps to reorder them. Pinned apps can be placed near the top or bottom of Home.",
                         "Done")
                 },
             ))
