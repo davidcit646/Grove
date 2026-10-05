@@ -4,8 +4,8 @@
 
 Record build SHA, device/API, and result for each case. Do not mark source review or JVM tests as Android proof.
 
-- Upgrade v7 settings with both search flags on: both indexing flags remain off, live search still returns contacts/files with current grants, and Home remains responsive. Export/import v8, including the combinations where search is off but indexing is on.
-- Regression #84: with the native library loaded, save a v8 configuration, change a wallpaper or ordinary setting, recreate/restart Grove, and verify the v8 configuration reloads without entering fallback recovery; malformed v8 and v9 must still enter the normal rejection/recovery path without erasing the preserved raw configuration.
+- Upgrade v7 settings with both search flags on: both indexing flags remain off, live search still returns contacts/files with current grants, and Home remains responsive. Import a v8 document with each search/index combination, then export/reload v9 and verify the wallpaper is represented by a stable source ID while the four search/index choices are unchanged.
+- Regression #84: with the native library loaded, load a valid legacy v8 configuration, change a wallpaper or ordinary setting so Grove commits v9, recreate/restart Grove, and verify both v8 input and the resulting v9 save reload without fallback recovery. Malformed v8/v9 and unsupported v10 must still enter the normal rejection/recovery path without erasing the preserved raw configuration.
 - Grant, deny, and revoke contacts and All files access while a query and background build are running. No protected row may remain visible or be committed after revocation; restoring a grant alone must not enable a Grove switch.
 - Turn indexing off during a build and verify worker cancellation, private cache deletion and permitted live search; turn search off independently and verify no rows while explicitly enabled indexing may refresh. App search and Home must work throughout.
 - Force unavailable, empty, corrupt, oversize, stale and partially scanned caches; force provider null/throw and a failed/low-storage atomic write. Check scoped status, retry/fallback, no false Indexed result, and isolation of the other source.
@@ -51,11 +51,11 @@ See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-cap
 | --- | --- | --- |
 | Search works live with indexing off, and a denied/revoked source reveals no stale results | [#74](https://github.com/davidcit646/Grove/issues/74) | Clean/upgrade config migration, provider failure, cancellation and query/action permission checks on device |
 | Independent, rebuildable contact/file caches with eight states | [#75](https://github.com/davidcit646/Grove/issues/75) | Cache missing/stale/corrupt, process death, revocation, partial scan, size/retention and privacy checks |
-| User photo/file and solid-black wallpaper | [#76](https://github.com/davidcit646/Grove/issues/76) | Cancel/invalid/oversized input, apply failure, prior-wallpaper preservation, rotation |
+| Packaged/user/solid-black wallpaper library | [#82](https://github.com/davidcit646/Grove/issues/82) (incorporates #76) | Offline built-ins and credits, stable-ID migration, cancel/invalid/oversized input, Home/Lock/Both, apply/config-sync failure, prior-wallpaper preservation, rotation/process recreation |
 | Android wallpaper reconciliation and explicit theme choices | [#77](https://github.com/davidcit646/Grove/issues/77) | External wallpaper and light/dark changes, Home/Lock/Both, restart and failed preference commit |
 | Severity/code error workflow and safe report draft | [#78](https://github.com/davidcit646/Grove/issues/78) | Each severity, no mail handler, chooser cancellation, report redaction/retention, no automatic send |
 
-PR #83 implements #74/#75, #82 (including #76), and #78 in source with deterministic tests; the rows above remain Android evidence gaps, not implementation gaps. Record device/API, build SHA, steps and outcome. The closed [#34](https://github.com/davidcit646/Grove/issues/34) checklist records unrun device work; [#32](https://github.com/davidcit646/Grove/issues/32) remains the broader failure-injection gate.
+PR #83 implements #27, #74/#75, #78, #81 and #82 (including #76) in source with deterministic tests; production/test head `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567; the rows above remain Android evidence gaps, not implementation gaps. Record device/API, build SHA, steps and outcome. The closed [#34](https://github.com/davidcit646/Grove/issues/34) checklist records unrun device work; [#32](https://github.com/davidcit646/Grove/issues/32) remains the broader failure-injection gate.
 
 ## Wallpaper picker (#82 review branch)
 
@@ -72,6 +72,7 @@ PR #83 implements #74/#75, #82 (including #76), and #78 in source with determini
 - Check the new cards, larger type, and navigation in light/dark mode, small screens, large font/display settings, and landscape. Permission details must remain readable and scrollable.
 - Change both swipe switches, practice an upward and downward swipe, then hide each home control independently. Verify the choices persist after Finish and restart.
 - Search for an installed app outside the first page of results, select pins, finish, and verify only the chosen apps appear on Home. Replay setup and check that the current choices are preselected.
+- From Launcher settings → Tutorials, queue replay and then cancel it before leaving settings; verify `setup_complete` remains true and Home/configuration is unchanged. Queue again, return Home, rotate/recreate, and verify only one setup instance appears. On an existing installation with no favorites, Skip must not auto-seed apps; on a genuine fresh first run, Skip may retain the existing safe seed behavior.
 - Skip contacts and file access and verify Grove still opens apps and search. Replay setup, grant contacts, deny it on another run, and confirm both paths return to setup.
 - Open all-files settings, return without granting, then grant and return; verify the displayed state matches Android's actual setting.
 - Finish setup and accept or decline Android's Home chooser. Confirm the previous launcher remains available and upgrades of an existing Grove install do not force setup.
