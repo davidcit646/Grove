@@ -12,6 +12,7 @@ import android.view.*
 import android.widget.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.infoDialog
+import tech.granet.grove.ui.message
 import java.util.*
 
 /** Settings and first-run setup. Failed config persistence preserves the setup instance and reopens it for retry. */
@@ -50,7 +51,7 @@ internal class SetupController(private val activity: MainActivity) {
         with(activity) {
             if (firstRunSetup != null) return
             if (catalogController.apps.isEmpty()) {
-                if (setupPending()) tech.granet.grove.ui.message("Tutorial replay will start when apps are available")
+                if (setupPending()) message("Tutorial replay will start when apps are available")
                 return
             }
             if (setupPending())
