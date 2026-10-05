@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
         setupController.firstRunSetup?.refreshPermissions()
     }
     internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
-    internal val chooseWallpaperImage = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    internal val chooseWallpaperImage: ActivityResultLauncher<Array<String>> = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) wallpaperPresentationController.importCustom(uri)
     }
     internal val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -69,10 +69,10 @@ class MainActivity : AppCompatActivity() {
         HomeTouchRouter(this, { root }, { drawerController.drawerGrid }, { drawer || searchMode },
             { configController.config.gestures }, setupController::settings, homeController::animateHomeGesture, homeController::animateDrawerClosed)
     }
-    internal val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    internal val export: ActivityResultLauncher<String> = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) configController.exportDocument(uri)
     }
-    internal val importConfig = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    internal val importConfig: ActivityResultLauncher<Array<String>> = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) configController.importDocument(uri)
     }
     internal val bindWidget: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
