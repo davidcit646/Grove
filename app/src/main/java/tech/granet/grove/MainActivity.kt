@@ -108,13 +108,13 @@ class MainActivity : AppCompatActivity() {
         // Android 15+ enforces edge-to-edge; protect only bar bounds, never the image.
         val statusProtection = View(this).apply { setBackgroundColor(0x66000000) }
         val navigationProtection = View(this).apply { setBackgroundColor(0x66000000) }
-        window.insetsController?.setSystemBarsAppearance(0,
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         root.setOnApplyWindowInsetsListener { v, insets ->
             val edges = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
             val bars = insets.getInsets(WindowInsets.Type.systemBars())
-            statusProtection.layoutParams = FrameLayout.LayoutParams(-1, bars.top, Gravity.TOP)
-            navigationProtection.layoutParams = FrameLayout.LayoutParams(-1, bars.bottom, Gravity.BOTTOM)
+            if (statusProtection.layoutParams.height != bars.top)
+                statusProtection.layoutParams = FrameLayout.LayoutParams(-1, bars.top, Gravity.TOP)
+            if (navigationProtection.layoutParams.height != bars.bottom)
+                navigationProtection.layoutParams = FrameLayout.LayoutParams(-1, bars.bottom, Gravity.BOTTOM)
             v.setPadding(dp(20), edges.top + dp(12), dp(20), edges.bottom + dp(12)); insets
         }
         surface = FrameLayout(this).apply {
@@ -123,6 +123,9 @@ class MainActivity : AppCompatActivity() {
             addView(navigationProtection, FrameLayout.LayoutParams(-1, 0, Gravity.BOTTOM))
         }
         setContentView(surface)
+        // PhoneWindow's getter dereferences decor; content must install it first.
+        window.insetsController?.setSystemBarsAppearance(0,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         CrashReporter.promptIfPending(this)
         root.setOnDragListener { _, event ->
             if (event.localState !is PinDragController.Drag) false else {
