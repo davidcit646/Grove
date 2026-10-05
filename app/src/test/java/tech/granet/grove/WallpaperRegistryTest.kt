@@ -15,6 +15,13 @@ class WallpaperRegistryTest {
         }
     }
 
+    @Test fun bundledCommonsSourcesHavePackagedResources() {
+        val curated = WallpaperArt.sources.filter { it.kind == WallpaperKind.COMMONS }
+        assertEquals(10, curated.size)
+        assertTrue(curated.all { it.resourceId != null && it.resourceId != 0 })
+        assertTrue(curated.all { it.sourcePage?.startsWith("https://commons.wikimedia.org/wiki/File:") == true })
+    }
+
     @Test fun blackAndCustomHaveDedicatedSources() {
         assertEquals(WallpaperKind.SOLID_BLACK, WallpaperArt.source(13)?.kind)
         assertEquals(WallpaperKind.CUSTOM, WallpaperArt.source(14)?.kind)
