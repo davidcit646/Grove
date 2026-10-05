@@ -4,7 +4,7 @@ For the full current system and invariant inventory with source line references,
 
 ## PR #87 presentation and failure-boundary changes
 
-The review branch adds an activity-scoped `PresentationController`: Android owns the applied static/live wallpaper and renders it through the wallpaper window. Grove paints a translucent legibility scrim, not a decoded copy of its remembered selection. Android owns wallpaper ID/color metadata; a private worker reads it, a Home-color listener invalidates it, and resume refresh is the fallback if registration fails. Lifecycle generations reject destroyed/superseded output. No additional wallpaper-reading or file permission is required. Missing color metadata uses the current theme's button colors.
+The review branch adds an activity-scoped `PresentationController`: Android owns the applied static/live wallpaper and renders it through the wallpaper window. Home stays transparent without global dimming. Text shadows protect clock/date and wallpaper labels; inset-sized views protect system-bar icons only. Grove does not paint a decoded copy of its remembered selection. Android owns wallpaper ID/color metadata; a private worker reads it, a Home-color listener invalidates it, and resume refresh is the fallback if registration fails. Lifecycle generations reject destroyed/superseded output. No additional wallpaper-reading or file permission is required. Missing color metadata uses the current theme's button colors.
 
 Config schema v10 adds `themeMode` (system/light/dark/wallpaper) in both Kotlin and Rust. Legacy v1–v9 imports retain System and their existing wallpaper-button-color preference. Explicit Light/Dark uses AppCompat night mode; Wallpaper colors follows system night mode and applies Android Home-wallpaper color to launcher buttons. Home/Lock/Both still apply through Android before Grove's remembered Home preference commits; lock-only never replaces Home preference. External changes never rewrite that preference.
 
@@ -47,7 +47,7 @@ drawer, and search retains the existing task/lifecycle behavior.
 | --- | --- | --- |
 | StartupController | Config loading, launcher callback, typed core recovery | Required config/service/catalog failure closes normal Home to a typed Retry/system-settings recovery state; entering recovery supersedes pending catalog/search work. |
 | CatalogController | App snapshot, prepared app search, explicit catalog state, icon publication, generation | Enumeration failure is Failed/core recovery; icon failures produce Degraded while apps stay usable; stale generations cannot publish. |
-| HomeController | Home rendering, scroll, animation, wallpaper backdrop | Optional backdrop failure keeps gradient; superseded/destroyed bitmap output is recycled. |
+| HomeController | Home rendering, scroll, animation, wallpaper backdrop | Android owns the unmodified wallpaper; local text shadows and system-bar regions supply contrast without a global overlay. |
 | DrawerController | Grid, filtering, selection, folders/drag | Folder/pin mutation passes through successful config commit before selection is cleared. |
 | SearchController | Search worker, query generation, source snapshots/permissions, publication gate | Source/access changes cancel before reconciliation; stale, revoked, inactive or cache-superseded output cannot publish; app/contact/file outcomes stay distinct. |
 | ConfigController | Active config, store, import/export/editor/recovery | Parse before activation; persistence before publication; failed save keeps editor/recovery open. |

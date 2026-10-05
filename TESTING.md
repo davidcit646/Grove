@@ -4,8 +4,11 @@
 
 Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
 
+#86 follow-up source `a2b7347ff0afefb401fbd5fe96bf60f653e5d2aa` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37360704390) (Rust, APK, JVM tests, lint and missing-signing gate). It removes the global Home gradient; text shadows and inset-sized system-bar protection are local only. Device visual acceptance remains pending.
+
 ## PR #87 Android acceptance checklist
 
+- #86: compare bright, dark and solid-black wallpapers against Android/source views in each theme. No full-screen dimming; clock/date, pinned labels, app icons and status/navigation icons remain readable. Repeat with live wallpaper, rotation, gesture/three-button navigation and IME open; bar protection must stay within system-bar bounds.
 - Type, erase and replace queries rapidly while contact/file live queries and index jobs complete. Search must not blank/flash or repeatedly rebuild unchanged rows. Revoke/disable a source during this test: its protected rows disappear immediately; app search stays usable.
 - Change Home wallpaper outside Grove, including a live wallpaper; return Home/restart and verify Android's actual image remains visible. The library may remember Grove's last choice but must not assert it is currently applied.
 - Apply Home, Lock and Both choices. Lock-only must leave Home wallpaper and Home-derived button colors unchanged. Test apply failure and successful Android apply followed by failed Config save; Home still reflects Android, and only a confirmed save updates the remembered choice.

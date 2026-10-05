@@ -9,7 +9,7 @@ An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1
 The review branch addresses #31, #77 and #85; these changes are not yet merged into main.
 
 - Search no longer blanks rows during debounce. Unchanged source notifications preserve existing rows, while revoked/disabled sources are cleared and stale query generations cannot publish.
-- Android displays the actual Home wallpaper, including external and live wallpaper changes, beneath Grove's legibility scrim. Grove's saved wallpaper choice is a library preference, not proof of Android's applied image.
+- Android displays the actual Home wallpaper, including external and live wallpaper changes, behind a transparent Home, with localized text shadows and system-bar protection. Grove's saved wallpaper choice is a library preference, not proof of Android's applied image.
 - Launcher settings → Appearance offers System, Light, Dark and Wallpaper colors. Wallpaper colors follows the system's night mode and uses Android's Home-wallpaper color for launcher buttons, with a theme fallback. Lock-only changes do not alter Home selection/colors.
 - Configuration documents run on a dedicated worker; a delayed import cannot replace settings changed while it was reading. Failed saves keep original UI recovery paths and roll settings switches back.
 - Contact scans at their bound report partial coverage. Contact actions recheck access, mail-handler visibility is declared, and report copy/delete/save and widget-provider failures expose truthful outcomes.

@@ -4,7 +4,7 @@ Review source `531d7870222d194018551e4a54cd63b8454ef8b4` (2026-10-05), after pro
 
 | Owner | External input / outcome | Audit result / proof |
 | --- | --- | --- |
-| HomeScreen / HomeController | Validated controls, widget surfaces, Android wallpaper | Android draws actual static/live wallpaper beneath a scrim; optional widgets remain scoped. UI remains legible in either theme. Android visual checks pending. |
+| HomeScreen / HomeController | Validated controls, widget surfaces, Android wallpaper | Android draws actual static/live wallpaper behind transparent Home with localized text shadows and inset-sized system-bar protection; optional widgets remain scoped. UI remains legible in either theme. Android visual checks pending. |
 | LauncherSettingsScreen / ConfigController | Candidate preferences and storage failure | Commit before activation; failed switches revert; generic retry cannot bypass original completion. Theme uses aligned v10 migration. ConfigTransaction/PresentationPolicy tests. |
 | SearchScreen / SearchController | Query, cache/live work, grants, source outcomes | No early blanking; same frames retain rows; state-only events do not restart scans. Protected rows clear on reconciliation; stale generations cannot publish. SearchFrameGate/SearchPublicationGate tests. |
 | Search / SearchResults / CoreBridge | Normalized labels and native result | Existing bounded ordering, payload validation and named Kotlin fallback retained. Search/SearchResults/NativeResults/Rust tests pass. |
