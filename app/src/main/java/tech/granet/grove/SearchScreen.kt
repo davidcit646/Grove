@@ -35,7 +35,9 @@ internal class SearchScreen(private val context: Context) {
         addView(context.wallpaperLabel(title, 12f))
     }
 
-    fun render(target: LinearLayout, query: String, apps: List<AppRow>, contacts: List<ContactRow>, files: List<FileRow>,
+    fun render(target: LinearLayout, query: String, apps: List<AppRow>,
+               appState: CatalogState, retryApps: () -> Unit,
+               contacts: List<ContactRow>, files: List<FileRow>,
                contactState: SearchSourceState, requestContactAccess: () -> Unit,
                retryContacts: () -> Unit, fileState: SearchSourceState,
                requestFileAccess: () -> Unit, retryFiles: () -> Unit,
@@ -43,10 +45,19 @@ internal class SearchScreen(private val context: Context) {
                searchStore: () -> Unit, storeMenu: () -> Unit) {
         target.removeAllViews()
         if (Search.prepare(query).text.isEmpty()) return
-        if (apps.isNotEmpty()) target.addView(heading("APPS", R.drawable.ic_grid))
+        if (apps.isNotEmpty() || appState is CatalogState.Loading || appState is CatalogState.Failed ||
+            appState is CatalogState.Degraded) target.addView(heading("APPS", R.drawable.ic_grid))
         apps.forEach { app ->
             target.addView(row(app.label, R.drawable.ic_grid, bitmap = app.icon, iconKey = app.key,
                 action = app.open, longPress = app.menu))
+        }
+        when (appState) {
+            CatalogState.Loading -> if (apps.isEmpty()) target.addView(context.wallpaperLabel("Loading apps…", 14f))
+            CatalogState.Failed -> target.addView(row("Retry app search", R.drawable.ic_grid,
+                "Android could not provide the installed app list", action = retryApps))
+            is CatalogState.Degraded -> target.addView(context.wallpaperLabel(
+                "Some app icons are unavailable; app names and actions still work.", 14f))
+            else -> Unit
         }
         if (contactState !is SearchSourceState.Disabled &&
             (contacts.isNotEmpty() || contactState !is SearchSourceState.Ready))
