@@ -1,5 +1,7 @@
 # Grove build verification
 
+PR #83 production/test source at `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567 on 2026-10-05: Rust tests, Android debug assembly, JVM unit tests, Android lint, and the missing-signing-secret negative gate all succeeded. The positive signed-release step remained skipped because `GROVE_SIGNING_PASSWORD` is not available in that PR context. This verifies source/build behavior only; Android device acceptance remains in [TESTING.md](TESTING.md). `GROVE-STATUS.md` was not modified by this implementation.
+
 The 0.1.30 alpha source at baseline commit `181c4ab` passed Android debug build, unit tests, lint and Rust tests. That run did not produce a signed release artifact because the signing secret was unavailable. The integrated source refactor and [PR #73](https://github.com/davidcit646/Grove/pull/73) MainActivity lane split are on main. PR #73 passed Rust tests, debug APK assembly, JVM tests, Android lint, and the missing-signing-secret negative check at `fe4ac0e`. That is source verification, not device validation. Main's release workflow still fails closed without `GROVE_SIGNING_PASSWORD`; no full Android device matrix has been run for this change. Some integrated Grove Test conditions were accepted by the user when #17 was closed, but the broader dated evidence in [TESTING.md](TESTING.md) remains pending.
 
 The source targets API 36. See [PLAY-READINESS.md](PLAY-READINESS.md) for the current distribution checklist. The optional broad file-search permission still requires a Play policy decision and declaration before a Play release; see [PLAY-READINESS.md](PLAY-READINESS.md).
@@ -16,4 +18,4 @@ This revision adds contact search through Android's aggregate Contacts Provider,
 
 Historical verification records in `verification/` describe earlier releases only.
 
-[GROVE-STATUS.md](GROVE-STATUS.md) is a target specification. Its [implementation matrix](GROVE-STATUS.md#implementation-status-on-main) lists proposed search/index, wallpaper, theme, and error-workflow behavior; adding this document does not verify or ship those features.
+[GROVE-STATUS.md](GROVE-STATUS.md) remains the immutable target specification for this work. PR #83 implements the linked search/indexing, configuration workflow, tutorial replay, wallpaper-library and error-reporting behavior in source, while external wallpaper/theme reconciliation and Android device evidence remain separate work.
