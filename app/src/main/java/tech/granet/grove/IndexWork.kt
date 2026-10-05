@@ -21,11 +21,11 @@ internal object IndexWork {
     private fun token(kind: String) = "index-token-$kind"
     private fun workId(kind: String) = "index-work-id-$kind"
     fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
-    private fun enabled(context: Context, kind: String): Boolean = runCatching {
+    private fun enabled(context: Context, kind: String): Boolean = try {
         val setting = ConfigStore(prefs(context)).load().search
         when (kind) { "files" -> setting.fileIndexing && Environment.isExternalStorageManager()
             else -> setting.contactIndexing && context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED }
-    }.getOrDefault(false)
+    } catch (_: Exception) { false }
 
     fun allowed(context: Context, kind: String, expected: String): Boolean =
         prefs(context).getString(token(kind), null) == expected && enabled(context, kind)
@@ -35,8 +35,8 @@ internal object IndexWork {
             prefs(context).edit().remove(token(kind)).commit()
     }
 
-    fun enqueue(context: Context, kind: String) {
-        if (!enabled(context, kind)) { cancel(context, kind); return }
+    fun enqueue(context: Context, kind: String): Boolean {
+        if (!enabled(context, kind)) { cancel(context, kind); return false }
         val id = UUID.randomUUID().toString()
         val request = OneTimeWorkRequestBuilder<IndexWorker>()
             .setInputData(androidx.work.workDataOf("kind" to kind, "token" to id))
@@ -44,8 +44,16 @@ internal object IndexWork {
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         if (!prefs(context).edit().putString(token(kind), id)
-                .putString(workId(kind), request.id.toString()).commit()) return
-        WorkManager.getInstance(context).enqueueUniqueWork(name(kind), ExistingWorkPolicy.REPLACE, request)
+                .putString(workId(kind), request.id.toString()).commit()) return false
+        return try {
+            WorkManager.getInstance(context).enqueueUniqueWork(name(kind), ExistingWorkPolicy.REPLACE, request)
+            true
+        } catch (error: Exception) {
+            if (prefs(context).getString(token(kind), null) == id)
+                prefs(context).edit().remove(token(kind)).remove(workId(kind)).commit()
+            Log.w("Grove", "Could not schedule $kind index: ${error.javaClass.simpleName}")
+            false
+        }
     }
 
     fun cancel(context: Context, kind: String) {
@@ -56,19 +64,21 @@ internal object IndexWork {
         if (!active && !tracked && !cache) return
         if (active || tracked) {
             prefs(context).edit().remove(token(kind)).remove(workId(kind)).commit()
-            WorkManager.getInstance(context).cancelUniqueWork(name(kind))
+            try { WorkManager.getInstance(context).cancelUniqueWork(name(kind)) }
+            catch (error: Exception) { Log.w("Grove", "Could not cancel $kind index: ${error.javaClass.simpleName}") }
         }
-        if (cache) IndexCache.clear(context, kind)
+        if (cache) try { IndexCache.clear(context, kind) }
+            catch (error: Exception) { Log.w("Grove", "Could not delete $kind index: ${error.javaClass.simpleName}") }
     }
 
-    fun reconcile(context: Context, kind: String) {
-        if (!enabled(context, kind)) { cancel(context, kind); return }
+    fun reconcile(context: Context, kind: String): Boolean {
+        if (!enabled(context, kind)) { cancel(context, kind); return true }
         // Reschedule only absent/stale caches; events and explicit Retry enqueue directly.
         val file = java.io.File(context.filesDir, "grove-$kind-index.json")
         val age = System.currentTimeMillis() - file.lastModified()
         val stale = !file.exists() || age < 0 || age >
             (if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000)
-        if (stale && prefs(context).getString(token(kind), null) == null) enqueue(context, kind)
+        return if (stale && prefs(context).getString(token(kind), null) == null) enqueue(context, kind) else true
     }
 }
 

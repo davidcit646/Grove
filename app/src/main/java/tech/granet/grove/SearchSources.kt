@@ -48,19 +48,24 @@ internal class SearchSources(
     private var observing = false
 
     init {
-        val work = WorkManager.getInstance(activity)
-        work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("contacts")).observe(activity, Observer { infos ->
-            val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "contacts") }
-            indexingContacts = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
-            contactLoadFailed = info?.state == WorkInfo.State.FAILED
-            if (info?.state == WorkInfo.State.SUCCEEDED) loadContacts() else redraw()
-        })
-        work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("files")).observe(activity, Observer { infos ->
-            val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "files") }
-            indexingFiles = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
-            fileLoadFailed = info?.state == WorkInfo.State.FAILED
-            if (info?.state == WorkInfo.State.SUCCEEDED) loadFiles() else redraw()
-        })
+        try {
+            val work = WorkManager.getInstance(activity)
+            work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("contacts")).observe(activity, Observer { infos ->
+                val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "contacts") }
+                indexingContacts = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
+                contactLoadFailed = info?.state == WorkInfo.State.FAILED
+                if (info?.state == WorkInfo.State.SUCCEEDED) loadContacts() else redraw()
+            })
+            work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("files")).observe(activity, Observer { infos ->
+                val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "files") }
+                indexingFiles = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
+                fileLoadFailed = info?.state == WorkInfo.State.FAILED
+                if (info?.state == WorkInfo.State.SUCCEEDED) loadFiles() else redraw()
+            })
+        } catch (error: Exception) {
+            contactLoadFailed = true; fileLoadFailed = true
+            Log.w("Grove", "Index scheduling unavailable: ${error.javaClass.simpleName}")
+        }
     }
 
     fun reconcile() {
@@ -70,25 +75,25 @@ internal class SearchSources(
                 observing = true
             }.onFailure { Log.w("Grove", "Contact observer unavailable", it) }
             loadContacts()
-            IndexWork.reconcile(activity, "contacts")
+            if (!IndexWork.reconcile(activity, "contacts")) contactLoadFailed = true
         } else clearContacts()
         if (settings().fileIndexing && Environment.isExternalStorageManager()) {
             loadFiles()
-            IndexWork.reconcile(activity, "files")
+            if (!IndexWork.reconcile(activity, "files")) fileLoadFailed = true
         } else clearFiles()
     }
 
-    fun indexFiles() { if (settings().fileIndexing && Environment.isExternalStorageManager()) IndexWork.enqueue(activity, "files") }
-    fun refreshContacts() { if (settings().contactIndexing && hasContactAccess()) IndexWork.enqueue(activity, "contacts") }
+    fun indexFiles() { if (settings().fileIndexing && Environment.isExternalStorageManager() && !IndexWork.enqueue(activity, "files")) { fileLoadFailed = true; redraw() } }
+    fun refreshContacts() { if (settings().contactIndexing && hasContactAccess() && !IndexWork.enqueue(activity, "contacts")) { contactLoadFailed = true; redraw() } }
 
     private fun loadContacts() {
         if (!settings().contactIndexing || !hasContactAccess()) return
         val generation = ++contactGeneration
         contactWorker.execute {
-            val cache = runCatching {
+            val cache = try { Result.success(run {
                 val snapshot = IndexCache.contacts(activity)
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { contact -> contact.searchName } }
-            }
+            }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
                 if (generation != contactGeneration || activity.isDestroyed || !settings().contactIndexing || !hasContactAccess()) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
@@ -114,10 +119,10 @@ internal class SearchSources(
         if (!settings().fileIndexing || !Environment.isExternalStorageManager()) return
         val generation = ++fileGeneration
         worker.execute {
-            val cache = runCatching {
+            val cache = try { Result.success(run {
                 val snapshot = IndexCache.files(activity)
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { file -> file.searchName } }
-            }
+            }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
                 if (generation != fileGeneration || activity.isDestroyed || !settings().fileIndexing || !Environment.isExternalStorageManager()) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
