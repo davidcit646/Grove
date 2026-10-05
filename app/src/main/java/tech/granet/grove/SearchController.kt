@@ -115,8 +115,10 @@ internal class SearchController(private val activity: MainActivity) {
     fun applySearchSettings(previous: SearchSettings) {
         with(activity) {
             sources.reconcile()
-            if (configController.config.search.contacts && !previous.contacts && !hasContactAccess()) explainContactAccess()
-            if (configController.config.search.files && !previous.files && !Environment.isExternalStorageManager()) explainFileAccess()
+            if (((configController.config.search.contacts && !previous.contacts) ||
+                    (configController.config.search.contactIndexing && !previous.contactIndexing)) && !hasContactAccess()) explainContactAccess()
+            if (((configController.config.search.files && !previous.files) ||
+                    (configController.config.search.fileIndexing && !previous.fileIndexing)) && !Environment.isExternalStorageManager()) explainFileAccess()
             if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         }
     }
@@ -221,11 +223,10 @@ internal class SearchController(private val activity: MainActivity) {
     private fun queryLiveFiles(generation: Int, query: String, prepared: Search.Query) {
         if (liveFileWorker.isShutdown) return
         liveFileWorker.execute {
-            val deadline = android.os.SystemClock.elapsedRealtime() + 2500L
             val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory(), shouldContinue = {
                 generation == searchGeneration && activity.configController.config.search.files &&
-                    Environment.isExternalStorageManager() && android.os.SystemClock.elapsedRealtime() < deadline
-            }).let { scan -> scan to SearchResults.matching(scan.files, prepared, 12) { file -> file.searchName } } }
+                    Environment.isExternalStorageManager()
+            }, maxDurationMs = 2500L).let { scan -> scan to SearchResults.matching(scan.files, prepared, 12) { file -> file.searchName } } }
             activity.runOnUiThread {
                 if (generation != searchGeneration || !activity.searchMode || !activity.configController.config.search.files ||
                     (activity.configController.config.search.fileIndexing && sources.fileCacheReady) || !Environment.isExternalStorageManager()) return@runOnUiThread

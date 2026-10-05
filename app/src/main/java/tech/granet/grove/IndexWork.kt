@@ -47,9 +47,14 @@ internal object IndexWork {
 
     fun cancel(context: Context, kind: String) {
         // Invalidate before cancellation/clearing: a worker already finishing must fail closed.
-        prefs(context).edit().remove(token(kind)).commit()
-        WorkManager.getInstance(context).cancelUniqueWork(name(kind))
-        IndexCache.clear(context, kind)
+        val active = prefs(context).contains(token(kind))
+        val cache = java.io.File(context.filesDir, "grove-$kind-index.json").exists()
+        if (!active && !cache) return
+        if (active) {
+            prefs(context).edit().remove(token(kind)).commit()
+            WorkManager.getInstance(context).cancelUniqueWork(name(kind))
+        }
+        if (cache) IndexCache.clear(context, kind)
     }
 
     fun reconcile(context: Context, kind: String) {
@@ -69,7 +74,10 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
         if (kind != "contacts" && kind != "files") return Result.failure()
         val context = applicationContext
         val allowed = { !isStopped && IndexWork.allowed(context, kind, token) }
-        if (!allowed()) return Result.success()
+        if (!allowed()) {
+            IndexWork.finished(context, kind, token)
+            return Result.success()
+        }
         var retry = false
         val outcome = try {
             val saved = if (kind == "files") {

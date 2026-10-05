@@ -17,7 +17,8 @@ object FileIndex {
     data class ScanResult(val files: List<IndexedFile>, val skippedDirectories: Int, val truncated: Boolean = false)
 
     fun scan(root: File, limit: Int = 15_000, shouldContinue: () -> Boolean = { true },
-             openDirectory: (Path) -> DirectoryStream<Path> = Files::newDirectoryStream): ScanResult {
+             openDirectory: (Path) -> DirectoryStream<Path> = Files::newDirectoryStream,
+             maxDurationMs: Long = Long.MAX_VALUE): ScanResult {
         data class Raw(val name: String, val ext: String, val file: File)
         val found = ArrayList<Raw>()
         val queue = ArrayDeque<File>()
@@ -25,8 +26,9 @@ object FileIndex {
         val visited = HashSet<String>()
         var scannedEntries = 0
         var skippedDirectories = 0
+        val deadline = if (maxDurationMs == Long.MAX_VALUE) Long.MAX_VALUE else System.nanoTime() + maxDurationMs * 1_000_000
         queue.add(root)
-        while (shouldContinue() && queue.isNotEmpty() && found.size < limit && visited.size < 10_000 && scannedEntries < 100_000) {
+        while (shouldContinue() && System.nanoTime() < deadline && queue.isNotEmpty() && found.size < limit && visited.size < 10_000 && scannedEntries < 100_000) {
             val parent = queue.removeFirst()
             val path = try { parent.canonicalPath } catch (error: Exception) {
                 if (parent == root) throw error
@@ -39,7 +41,7 @@ object FileIndex {
             runCatching {
                 openDirectory(parent.toPath()).use { entries ->
                     for (entryPath in entries) {
-                        if (!shouldContinue()) break
+                        if (!shouldContinue() || System.nanoTime() >= deadline) break
                         if (++scannedEntries > 100_000) break
                         val entry = entryPath.toFile()
                         // Shared storage can contain links planted by other apps.
@@ -57,7 +59,8 @@ object FileIndex {
                 skippedDirectories++
             }
         }
-        val truncated = queue.isNotEmpty() || found.size >= limit || scannedEntries >= 100_000 || !shouldContinue()
+        if (!shouldContinue()) return ScanResult(emptyList(), skippedDirectories, true)
+        val truncated = queue.isNotEmpty() || found.size >= limit || scannedEntries >= 100_000 || System.nanoTime() >= deadline
         // One native call classifies every extension Grove knows about; anything
         // unknown falls back to Android's MimeTypeMap, exactly as before.
         val table = CoreBridge.classifyTable(found.map { it.ext })
