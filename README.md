@@ -2,6 +2,8 @@
 
 An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.30 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
 
+[SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its [implementation status](GROVE-STATUS.md#implementation-status-on-main) distinguishes shipped code from proposals, including separate live search/indexing, durable index caches, custom/black wallpaper choices, theme modes, and error codes. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
+
 ## 0.1.29 changes
 
 - Reworked first-run setup with larger type, progress, visual cards, app icons in the pin picker, and readable permission disclosures. The setup colors follow the Android light or dark theme.

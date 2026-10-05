@@ -1,8 +1,8 @@
 # Grove build verification
 
-The 0.1.30 alpha source at baseline commit `181c4ab` passed Android debug build, unit tests, lint and Rust tests. That run did not produce a signed release artifact because the signing secret was unavailable. The refactor is under stacked draft PRs; their passing CI runs are source checks, not device validation. The 0.1.29 onboarding and current refactor have not been installed on a device in this work.
+The 0.1.30 alpha source at baseline commit `181c4ab` passed Android debug build, unit tests, lint and Rust tests. That run did not produce a signed release artifact because the signing secret was unavailable. The integrated source refactor and [PR #73](https://github.com/davidcit646/Grove/pull/73) MainActivity lane split are on main. PR #73 passed Rust tests, debug APK assembly, JVM tests, Android lint, and the missing-signing-secret negative check at `fe4ac0e`. That is source verification, not device validation. Main's release workflow still fails closed without `GROVE_SIGNING_PASSWORD`; no full Android device matrix has been run for this change. Some integrated Grove Test conditions were accepted by the user when #17 was closed, but the broader dated evidence in [TESTING.md](TESTING.md) remains pending.
 
-The source now targets API 36 for the current Google Play submission requirement. The optional broad file-search permission still requires a Play policy decision and declaration before a Play release; see [PLAY-READINESS.md](PLAY-READINESS.md).
+The source targets API 36. See [PLAY-READINESS.md](PLAY-READINESS.md) for the current distribution checklist. The optional broad file-search permission still requires a Play policy decision and declaration before a Play release; see [PLAY-READINESS.md](PLAY-READINESS.md).
 
 ## Earlier 0.1.24 verification
 
@@ -15,3 +15,5 @@ This revision adds contact search through Android's aggregate Contacts Provider,
 - The APK has not been installed or profiled on a device for this revision. It uses a development signing key.
 
 Historical verification records in `verification/` describe earlier releases only.
+
+[GROVE-STATUS.md](GROVE-STATUS.md) is a target specification. Its [implementation matrix](GROVE-STATUS.md#implementation-status-on-main) lists proposed search/index, wallpaper, theme, and error-workflow behavior; adding this document does not verify or ship those features.

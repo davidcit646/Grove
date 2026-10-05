@@ -1,6 +1,6 @@
 # Failure-policy verification ledger
 
-Refactor branch chain through PR #67, 2026-10-04. This records executable source checks and the remaining Android-only acceptance work for #32. A passing JVM/CI test does not mean the default Home app, provider, signed APK, or process death was exercised on a device.
+Integrated refactor source through 2026-10-04. This records executable source checks and remaining Android-only acceptance work for #32. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior; its [implementation matrix](GROVE-STATUS.md#implementation-status-on-main) marks new proposals separately. A passing JVM/CI test does not mean the default Home app, provider, signed APK, or process death was exercised on a device.
 
 | Capability | Fail decision and visible outcome | Deterministic proof | Android-only scenario still required |
 | --- | --- | --- | --- |
@@ -23,3 +23,7 @@ Refactor branch chain through PR #67, 2026-10-04. This records executable source
 4. Run the signed main and manual tag workflows only after the signing secret is configured; compare uploaded checksums and commit. No release is published by this refactor.
 
 These Android-only rows are outstanding work, not passing claims. They are the remaining closure criteria for #32, #34, #35 and #36.
+
+## Proposal-only verification still to design
+
+The current test rows above do not prove separate indexing/live GFS-GCS ([#74](https://github.com/davidcit646/Grove/issues/74)), durable GFI/GCI caches and eight states ([#75](https://github.com/davidcit646/Grove/issues/75)), user/black wallpaper ([#76](https://github.com/davidcit646/Grove/issues/76)), external Android wallpaper and theme reconciliation ([#77](https://github.com/davidcit646/Grove/issues/77)), or the GHEAEW code/severity/report-draft workflow ([#78](https://github.com/davidcit646/Grove/issues/78)). Add deterministic tests and dated device cases as those features are implemented; do not mark them passing from the existing source tests.

@@ -1,6 +1,6 @@
 # Google Play readiness
 
-This is a development checklist, not a claim of Google Play approval.
+This is a development checklist, not a claim of Google Play approval. [GROVE-STATUS.md](GROVE-STATUS.md) is the target design; its proposed durable indexes, user wallpaper sources, and error-report workflow are not current release behavior.
 
 - The Android app targets API 36 and builds arm64, ARMv7 and x86-64 native code. Draft refactor CI checks source; signed artifact and device validation remain pending.
 - The first-run flow asks separately for contact search and all-files search. Neither permission is required to use the launcher. The user chooses Grove as the Home app through Android's system role request.
@@ -8,3 +8,6 @@ This is a development checklist, not a claim of Google Play approval.
 - Review and publish [PRIVACY.md](PRIVACY.md) under the developer's identity and link its public URL in the Play listing. The app's menu opens this policy. Complete an accurate Data safety form describing contact lookups, file-name indexing, locally saved crash reports, wallpaper downloads, and any sharing through Android intents. Verify the public URL after pushing; the local draft alone is insufficient.
 - Configure `GROVE_SIGNING_PASSWORD` for the tracked release key. Main CI fails if it cannot build and verify a signed APK and App Bundle. The debug APK is for testing and cannot update an installation signed with a different key. Verify 16 KB page alignment and direct/Play install and update paths on devices before distribution.
 - Test setup on fresh installs, upgrades, denied permissions, TalkBack, font scaling, rotation, and Android 12 through 16 before distribution.
+
+- If [#74](https://github.com/davidcit646/Grove/issues/74) or [#75](https://github.com/davidcit646/Grove/issues/75) adds separate live search or persistent contact/file metadata, update [PRIVACY.md](PRIVACY.md), the onboarding disclosure, retention/deletion behavior and the Play Data safety answers before distribution. Reassess the broad file permission for the actual shipped design.
+- If [#76](https://github.com/davidcit646/Grove/issues/76)–[#78](https://github.com/davidcit646/Grove/issues/78) change user-chosen wallpaper access, system wallpaper behavior, or diagnostic report contents, update the same disclosures and test the corresponding device flows before release.

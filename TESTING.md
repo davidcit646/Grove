@@ -1,5 +1,7 @@
 # Device acceptance checklist
 
+[GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior, with a [current-versus-proposed matrix](GROVE-STATUS.md#implementation-status-on-main). Do not mark proposal-only cases as failures of the current release without first implementing their linked issues. The 2026-10-04 user acceptance of some integrated Grove Test conditions closed #17 by a scope decision; it was not the full dated Android 12/current-device matrix below.
+
 ## Refactor verification record (2026-10-04)
 
 The stacked refactor has CI source checks, but no Android device or emulator was available in this workspace. The cases below are pending, not passed. For every execution record date, device/model, API level, build commit SHA, clean install or upgrade, exact steps, observed outcome and linked defect. Run on Android 12 and current Android. Keep signed APK update results separate from debug APK results.
@@ -15,6 +17,18 @@ For the latest stacked build, inject a malformed preference type and a failing c
 
 See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-capability failure cases. CI passing is required but does not fill any row in this table.
 
+
+## Grove Status proposal verification (pending implementation)
+
+| Design requirement | Issue | Required evidence |
+| --- | --- | --- |
+| Search works live with indexing off, and a denied/revoked source reveals no stale results | [#74](https://github.com/davidcit646/Grove/issues/74) | Clean/upgrade config migration, provider failure, cancellation and query/action permission checks on device |
+| Independent, rebuildable contact/file caches with eight states | [#75](https://github.com/davidcit646/Grove/issues/75) | Cache missing/stale/corrupt, process death, revocation, partial scan, size/retention and privacy checks |
+| User photo/file and solid-black wallpaper | [#76](https://github.com/davidcit646/Grove/issues/76) | Cancel/invalid/oversized input, apply failure, prior-wallpaper preservation, rotation |
+| Android wallpaper reconciliation and explicit theme choices | [#77](https://github.com/davidcit646/Grove/issues/77) | External wallpaper and light/dark changes, Home/Lock/Both, restart and failed preference commit |
+| Severity/code error workflow and safe report draft | [#78](https://github.com/davidcit646/Grove/issues/78) | Each severity, no mail handler, chooser cancellation, report redaction/retention, no automatic send |
+
+Record device/API, build SHA, steps and outcome when these features exist. [#34](https://github.com/davidcit646/Grove/issues/34) and [#32](https://github.com/davidcit646/Grove/issues/32) remain the broad device and failure-injection gates.
 
 ## Wallpaper picker (0.1.28)
 
