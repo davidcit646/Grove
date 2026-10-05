@@ -1,6 +1,6 @@
 # Grove capability and failure policy
 
-Baseline design for #19 under the repository-wide refactor #17. This document specifies the contract to implement; it does not claim the current code already meets it. The file-by-file baseline is [FAILURE-BOUNDARY-AUDIT.md](FAILURE-BOUNDARY-AUDIT.md).
+Baseline capability-outcome design for #19 under the repository-wide refactor #17. [GROVE-STATUS.md](GROVE-STATUS.md) is the source of truth for the target user behavior and service dependencies; this file defines how operations express Ready/Degraded/Unavailable/Canceled outcomes. Neither document claims all target behavior is implemented. The historical file-by-file baseline is [FAILURE-BOUNDARY-AUDIT.md](FAILURE-BOUNDARY-AUDIT.md); current implementation gaps are listed in [Grove Status](GROVE-STATUS.md#implementation-status-on-main).
 
 ## Terms and outcomes
 
@@ -59,3 +59,9 @@ Persistent state changes use validate -> perform -> confirm -> commit, or a reco
 ## Verification gate
 
 For every row in [FAILURE-BOUNDARY-AUDIT.md](FAILURE-BOUNDARY-AUDIT.md), record a focused automated test or a named Android device case (#32, #34). Inject failure before work, during work, and after a canceled/superseded request when relevant. Assert both the outcome and the absence of unauthorized/stale state. Measure cold/warm Home startup and search latency against the pinned baseline (#35). CI and signed release validation must fail on missing artifacts (#36). Close #19 after this contract is reviewed and accepted as the implementation target; close #17 only after code and verification conform.
+
+## New target behavior not covered by the original refactor
+
+Separate search from indexing ([#74](https://github.com/davidcit646/Grove/issues/74)) and durable GFI/GCI caches ([#75](https://github.com/davidcit646/Grove/issues/75)) extend the current in-memory search contract. Permission and the user's search/index switches must be checked independently; a revoked grant always closes protected reads, while a failed or disabled index may degrade to permitted live search. A partial scan is visibly partial, not Ready(empty). These controls and caches are proposals until implemented and tested.
+
+User-selected/black wallpaper ([#76](https://github.com/davidcit646/Grove/issues/76)) and Android wallpaper/theme reconciliation ([#77](https://github.com/davidcit646/Grove/issues/77)) extend the existing transactional apply rule. A failed preview or apply leaves the previous applied state truthful and Home usable. The GHEAEW severity and numeric/GWS diagnostic registry ([#78](https://github.com/davidcit646/Grove/issues/78)) is also target behavior; current CrashReporter does not provide those codes. Reporting remains user-directed, and safe diagnostics exclude private contact/file/config data by default. See [GROVE-STATUS.md](GROVE-STATUS.md#when-something-goes-wrong).
