@@ -192,9 +192,10 @@ internal class WallpaperPicker(
         controller.preview(index) { image ->
             if (request != generation || !dialog.isShowing) { image?.recycle(); return@preview }
             if (image == null) {
+                val e = GroveErrorRegistry.WALLPAPER_PREVIEW
                 status.text = if (source.kind == WallpaperKind.CUSTOM)
                     "No custom image is available. Choose a photo or file below."
-                else "Could not load this wallpaper. Retry without leaving the library."
+                else "Code ${e.code} · ${e.gws}\nCould not load this wallpaper. Retry without leaving the library."
                 retry.visibility = if (source.kind == WallpaperKind.CUSTOM) View.GONE else View.VISIBLE
                 preview.contentDescription = "Preview unavailable for ${source.title}"
             } else {
