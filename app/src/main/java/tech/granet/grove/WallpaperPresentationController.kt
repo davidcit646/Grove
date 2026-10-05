@@ -46,12 +46,21 @@ internal class WallpaperPresentationController(private val activity: MainActivit
 
     private fun applySelection(index: Int, which: Int) {
         with(activity) {
-            wallpaperController.apply(index, which) applyDone@{ applied ->
-                if (!applied) {
-                    GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_APPLY) {
-                        applySelection(index, which)
+            wallpaperController.apply(index, which) applyDone@{ outcome ->
+                when (outcome) {
+                    WallpaperApplyOutcome.PLATFORM_FAILED -> {
+                        GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_APPLY) {
+                            applySelection(index, which)
+                        }
+                        return@applyDone
                     }
-                    return@applyDone
+                    WallpaperApplyOutcome.LOCAL_SYNC_FAILED -> {
+                        GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_LOCAL_SYNC) {
+                            applySelection(index, which)
+                        }
+                        return@applyDone
+                    }
+                    WallpaperApplyOutcome.APPLIED -> Unit
                 }
                 if (which and WallpaperManager.FLAG_SYSTEM != 0) {
                     if (commitHomeSelection(index)) homeController.showHome()
