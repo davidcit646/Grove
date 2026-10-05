@@ -14,7 +14,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.infoDialog
 import java.util.*
 
-/** SetupController owns its lane; Android lifecycle and results remain in MainActivity. */
+/** Settings and first-run setup. Failed config persistence preserves the setup instance and reopens it for retry. */
 internal class SetupController(private val activity: MainActivity) {
     internal var firstRunSetup: FirstRunSetup? = null
 
@@ -25,8 +25,8 @@ internal class SetupController(private val activity: MainActivity) {
     fun settings() {
         with(activity) {
             actionController.showActionMenu("Grove settings", listOf(
-                Triple("Launcher settings", R.drawable.ic_settings) { setupController.launcherSettings() },
-                Triple("Replay first-run setup", R.drawable.ic_info) { setupController.startFirstRunSetup() },
+                Triple("Launcher settings", R.drawable.ic_settings) { launcherSettings() },
+                Triple("Replay first-run setup", R.drawable.ic_info) { startFirstRunSetup() },
                 Triple("Set as default launcher", R.drawable.ic_launcher) {
                     val role = getSystemService(RoleManager::class.java)
                     if (role.isRoleAvailable(RoleManager.ROLE_HOME))
@@ -49,10 +49,10 @@ internal class SetupController(private val activity: MainActivity) {
 
     fun startFirstRunSetup() {
         with(activity) {
-            if (setupController.firstRunSetup != null || catalogController.apps.isEmpty()) return
-            if (setupController.setupPending())
+            if (firstRunSetup != null || catalogController.apps.isEmpty()) return
+            if (setupPending())
                 prefs.edit().remove("widget_tutorial_seen").apply()
-            setupController.firstRunSetup = FirstRunSetup(
+            firstRunSetup = FirstRunSetup(
                 this, surface, configController.config, catalogController.apps.map { it.key to it.label },
                 searchController::hasContactAccess, { Environment.isExternalStorageManager() },
                 { SearchSourceState.resolve(true, searchController.hasContactAccess(), searchController.indexingContacts,
@@ -62,8 +62,11 @@ internal class SetupController(private val activity: MainActivity) {
                 searchController::explainContactAccess, searchController::explainFileAccess,
                 finishSetup@{ next ->
                     val previousSearch = configController.config.search
-                    if (!configController.commitConfig(next)) return@finishSetup
-                    setupController.firstRunSetup = null
+                    if (!configController.commitConfig(next)) {
+                        firstRunSetup?.show()
+                        return@finishSetup
+                    }
+                    firstRunSetup = null
                     searchController.applySearchSettings(previousSearch)
                     prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
                     homeController.showHome()
@@ -79,12 +82,14 @@ internal class SetupController(private val activity: MainActivity) {
                     }
                 },
                 skipSetup@{
-                    if (setupController.setupPending() && configController.config.favorites.isEmpty()) {
-                        if (!configController.commitConfig(configController.config.copy(favorites = catalogController.apps.take(8).map { it.key })))
+                    if (setupPending() && configController.config.favorites.isEmpty()) {
+                        if (!configController.commitConfig(configController.config.copy(favorites = catalogController.apps.take(8).map { it.key }))) {
+                            firstRunSetup?.show()
                             return@skipSetup
+                        }
                         homeController.showHome()
                     }
-                    setupController.firstRunSetup = null
+                    firstRunSetup = null
                     prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
                 },
             ).also { it.show() }
@@ -105,7 +110,7 @@ internal class SetupController(private val activity: MainActivity) {
                 { configController.editConfig() },
                 { export.launch("grove-config.json") },
                 { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-                { setupController.setupPending() },
+                { setupPending() },
                 { enabled ->
                     prefs.edit().apply {
                         putBoolean("setup_complete", !enabled)
@@ -114,10 +119,10 @@ internal class SetupController(private val activity: MainActivity) {
                     }.apply()
                 },
                 {
-                    if (setupController.setupPending()) root.post {
-                        if (!isDestroyed && setupController.setupPending()) {
+                    if (setupPending()) root.post {
+                        if (!isDestroyed && setupPending()) {
                             homeController.showHome()
-                            setupController.startFirstRunSetup()
+                            startFirstRunSetup()
                         }
                     }
                 },

@@ -15,33 +15,33 @@ import tech.granet.grove.ui.message
 import java.util.*
 import java.io.File
 
-/** ActionController owns its lane; Android lifecycle and results remain in MainActivity. */
+/** External actions and uninstall queue. Adapters check prerequisites; cancel or launch failure stops the batch. */
 internal class ActionController(private val activity: MainActivity) {
     internal val uninstallBatch = UninstallBatch()
     internal val fileActions by lazy { with(activity) { FileActions(this) { configController.config.search.files } } }
     internal val contactActions by lazy { with(activity) {
         ContactActions(this, contactWorker, { configController.config }, searchController::hasContactAccess,
-            { packageName -> catalogController.apps.any { it.component.packageName == packageName } }, actionController::showActionMenu)
+            { packageName -> catalogController.apps.any { it.component.packageName == packageName } }, this@ActionController::showActionMenu)
     } }
-    internal val searchActions by lazy { with(activity) { SearchActions(this, actionController::showActionMenu) } }
+    internal val searchActions by lazy { with(activity) { SearchActions(this, this@ActionController::showActionMenu) } }
 
-    fun sharedFileUri(file: File): Uri = with(activity) { actionController.fileActions.shareUri(file)
+    fun sharedFileUri(file: File): Uri = with(activity) { fileActions.shareUri(file)
     }
 
-    fun contactMenu(contact: ContactIndex.Contact): Unit = with(activity) { actionController.contactActions.show(contact)
+    fun contactMenu(contact: ContactIndex.Contact): Unit = with(activity) { contactActions.show(contact)
     }
 
-    fun openFile(file: IndexedFile): Unit = with(activity) { actionController.fileActions.open(file)
+    fun openFile(file: IndexedFile): Unit = with(activity) { fileActions.open(file)
     }
 
     fun openPlayStore(query: String, install: Boolean = false): Unit = with(activity) {
-        actionController.searchActions.openPlayStore(query, install)
+        searchActions.openPlayStore(query, install)
     }
 
     fun appMenu(app: App) {
         with(activity) {
             val pinned = app.key in configController.config.favorites
-            actionController.showActionMenu(app.label, listOf(
+            showActionMenu(app.label, listOf(
                 Triple(if (pinned) "Unpin from home" else "Pin to home", R.drawable.ic_grid) {
                     val next = configController.config.copy(favorites = if (pinned) configController.config.favorites - app.key else configController.config.favorites + app.key)
                     if (configController.commitConfig(next) && !drawer) homeController.showHome()
@@ -60,15 +60,15 @@ internal class ActionController(private val activity: MainActivity) {
 
     fun searchItemMenu(file: IndexedFile) {
         with(activity) {
-            actionController.showActionMenu(file.name, listOf(
-                Triple("Open", R.drawable.ic_open) { actionController.openFile(file) },
+            showActionMenu(file.name, listOf(
+                Triple("Open", R.drawable.ic_open) { openFile(file) },
                 Triple("Open containing folder", R.drawable.ic_folder) {
                     val parent = file.file.parentFile
-                    if (parent == null) message("Containing folder unavailable") else actionController.openFile(IndexedFile(parent.name, "resource/folder", parent, "Folder"))
+                    if (parent == null) message("Containing folder unavailable") else openFile(IndexedFile(parent.name, "resource/folder", parent, "Folder"))
                 },
                 Triple("Share", R.drawable.ic_share) {
                     runCatching {
-                        val uri = actionController.sharedFileUri(file.file)
+                        val uri = sharedFileUri(file.file)
                         startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                             type = file.mime
                             putExtra(Intent.EXTRA_STREAM, uri)
@@ -85,10 +85,10 @@ internal class ActionController(private val activity: MainActivity) {
         }
     }
 
-    fun webResultMenu(query: String, provider: String): Unit = with(activity) { actionController.searchActions.webResultMenu(query, provider)
+    fun webResultMenu(query: String, provider: String): Unit = with(activity) { searchActions.webResultMenu(query, provider)
     }
 
-    fun playStoreMenu(query: String): Unit = with(activity) { actionController.searchActions.playStoreMenu(query)
+    fun playStoreMenu(query: String): Unit = with(activity) { searchActions.playStoreMenu(query)
     }
 
     fun showActionMenu(title: String, actions: List<Triple<String, Int, () -> Unit>>) {
@@ -97,7 +97,7 @@ internal class ActionController(private val activity: MainActivity) {
         }
     }
 
-    fun openWeb(url: String): Unit = with(activity) { actionController.searchActions.openWeb(url)
+    fun openWeb(url: String): Unit = with(activity) { searchActions.openWeb(url)
     }
 
     fun uninstallSelected(keys: Set<String>) {
@@ -105,7 +105,7 @@ internal class ActionController(private val activity: MainActivity) {
             val packages = catalogController.apps.filter { it.key in keys }.map { it.component.packageName }.distinct()
             confirmDialog("Uninstall ${packages.size} app${if (packages.size == 1) "" else "s"}?",
                 "Android will ask you to confirm each uninstall.", "Continue") {
-                    actionController.launchNextUninstall(actionController.uninstallBatch.start(packages))
+                    launchNextUninstall(uninstallBatch.start(packages))
                     drawerController.drawerState.clearKeys(); drawerController.refreshDrawer()
                 }
         }
@@ -118,7 +118,7 @@ internal class ActionController(private val activity: MainActivity) {
                 uninstallNext.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$packageName"))
                     .putExtra(Intent.EXTRA_RETURN_RESULT, true))
             } catch (error: Exception) {
-                actionController.uninstallBatch.cancel()
+                uninstallBatch.cancel()
                 Log.w("Grove", "Could not launch batch uninstall for $packageName", error)
                 message("Cannot uninstall $packageName")
             }

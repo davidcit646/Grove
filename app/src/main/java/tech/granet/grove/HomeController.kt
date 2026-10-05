@@ -15,7 +15,7 @@ import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
 import java.util.*
 
-/** HomeController owns its lane; Android lifecycle and results remain in MainActivity. */
+/** Home rendering, scrolling and backdrop ownership. Wallpaper failure keeps the gradient; stale bitmaps are recycled. */
 internal class HomeController(private val activity: MainActivity) {
     internal lateinit var body: LinearLayout
     internal var homeScrollY = 0
@@ -31,8 +31,8 @@ internal class HomeController(private val activity: MainActivity) {
     fun button(text: String, action: () -> Unit): MaterialButton = with(activity) { MaterialButton(this).apply {
         this.text = text
         val themeColors = ThemeColors.buttonSurface(activity) to ThemeColors.onButtonSurface(activity)
-        val colors = if (configController.config.homeScreen.useWallpaperButtonColors && homeController.artworkStyle == configController.config.wallpaper)
-            homeController.wallpaperButtonColors ?: themeColors
+        val colors = if (configController.config.homeScreen.useWallpaperButtonColors && artworkStyle == configController.config.wallpaper)
+            wallpaperButtonColors ?: themeColors
         else themeColors
         backgroundTintList = ColorStateList.valueOf(colors.first)
         setTextColor(colors.second)
@@ -63,27 +63,27 @@ internal class HomeController(private val activity: MainActivity) {
             val width = surface.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
             val height = surface.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
             val key = Triple(configController.config.wallpaper, width, height)
-            if (homeController.artworkStyle != key.first || homeController.backdropWidth != width || homeController.backdropHeight != height || homeController.backdrop == null) {
-                if (homeController.pendingWallpaper != key) {
-                    homeController.pendingWallpaper = key
+            if (artworkStyle != key.first || backdropWidth != width || backdropHeight != height || backdrop == null) {
+                if (pendingWallpaper != key) {
+                    pendingWallpaper = key
                     wallpaperController.background(key.first, width, height) { prepared, colors ->
-                        if (isDestroyed || homeController.pendingWallpaper != key || configController.config.wallpaper != key.first) {
+                        if (isDestroyed || pendingWallpaper != key || configController.config.wallpaper != key.first) {
                             prepared?.recycle()
                         } else {
-                            homeController.pendingWallpaper = null
+                            pendingWallpaper = null
                             if (prepared == null) {
                                 message("Home wallpaper unavailable")
                             } else {
-                                val previous = homeController.artwork
-                                homeController.artwork = prepared
-                                homeController.backdrop = prepared
-                                homeController.artworkStyle = key.first
-                                homeController.backdropWidth = width
-                                homeController.backdropHeight = height
-                                homeController.wallpaperButtonColors = colors
-                                homeController.showWallpaperBackground(prepared)
+                                val previous = artwork
+                                artwork = prepared
+                                backdrop = prepared
+                                artworkStyle = key.first
+                                backdropWidth = width
+                                backdropHeight = height
+                                wallpaperButtonColors = colors
+                                showWallpaperBackground(prepared)
                                 if (previous !== prepared) previous?.recycle()
-                                if (!drawer && !searchMode) homeController.showHome()
+                                if (!drawer && !searchMode) showHome()
                             }
                         }
                     }
@@ -92,7 +92,7 @@ internal class HomeController(private val activity: MainActivity) {
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(0xff416e60.toInt(), 0xff142f30.toInt()),
                 )
-            } else homeController.showWallpaperBackground(homeController.backdrop!!)
+            } else showWallpaperBackground(backdrop!!)
         }
     }
 
@@ -136,25 +136,25 @@ internal class HomeController(private val activity: MainActivity) {
 
     fun showHome(animate: Boolean = false) {
         with(activity) {
-            homeController.rememberHomeScroll()
+            rememberHomeScroll()
             drawerController.clearAppSelection()
             getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
-            drawer = false; searchMode = false; homeController.base()
-            homeController.body = HomeScreen(this).render(root, configController.config.homeScreen, homeController::button,
-                homeController::openSearch, homeController::openAppDrawer, homeController::openClock, homeController::openCalendar,
-                homeController::renderPinnedApps, widgetFlow::render)
-            (homeController.body.parent as ScrollView).apply {
-                val restored = homeController.homeScrollY
-                post { if (homeController.body.parent === this) scrollTo(0, restored) }
+            drawer = false; searchMode = false; base()
+            body = HomeScreen(this).render(root, configController.config.homeScreen, this@HomeController::button,
+                this@HomeController::openSearch, this@HomeController::openAppDrawer, this@HomeController::openClock, this@HomeController::openCalendar,
+                this@HomeController::renderPinnedApps, widgetFlow::render)
+            (body.parent as ScrollView).apply {
+                val restored = homeScrollY
+                post { if (body.parent === this) scrollTo(0, restored) }
             }
-            if (animate) homeController.enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
+            if (animate) enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
         }
     }
 
     fun rememberHomeScroll() {
         with(activity) {
-            if (!homeController.bodyInitialized() || drawer || searchMode) return
-            (homeController.body.parent as? ScrollView)?.let { homeController.homeScrollY = it.scrollY }
+            if (!bodyInitialized() || drawer || searchMode) return
+            (body.parent as? ScrollView)?.let { homeScrollY = it.scrollY }
         }
     }
 
@@ -166,7 +166,7 @@ internal class HomeController(private val activity: MainActivity) {
                 target.addView(heading)
                 target.addView(wallpaperLabel("Hold and drag to move. Hold and release for options.", 12f))
             }
-            homeController.addGrid(catalogController.apps.filter { it.key in configController.config.favorites }.sortedBy { configController.config.favorites.indexOf(it.key) }, target)
+            addGrid(catalogController.apps.filter { it.key in configController.config.favorites }.sortedBy { configController.config.favorites.indexOf(it.key) }, target)
             if (configController.config.favorites.isEmpty()) target.addView(wallpaperLabel("Long-press an app in the drawer to pin it here."))
         }
     }
@@ -198,7 +198,7 @@ internal class HomeController(private val activity: MainActivity) {
             when (gesture) {
                 HomeGesture.SEARCH -> searchController.showSearch(animate = true)
                 HomeGesture.APP_DRAWER -> drawerController.showDrawer(false, animate = true)
-                else -> homeController.settleSwipeFeedback()
+                else -> settleSwipeFeedback()
             }
         }
     }
@@ -210,8 +210,8 @@ internal class HomeController(private val activity: MainActivity) {
             root.animate().cancel()
             root.animate().translationY(root.height.toFloat()).setInterpolator(android.view.animation.AccelerateInterpolator())
                 .setDuration(180L).withEndAction {
-                homeController.showHome()
-                homeController.enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
+                showHome()
+                enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
             }.start()
         }
     }

@@ -8,38 +8,34 @@ import android.util.Log
 import android.os.*
 import android.view.*
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
 import java.util.*
 
-/** StartupController owns its lane; Android lifecycle and results remain in MainActivity. */
+/** Essential startup checks and recovery. Failed config or launcher service prevents downstream normal Home startup. */
 internal class StartupController(private val activity: MainActivity) {
     internal var startupState: Bundle? = null
     internal var coreRecoveryVisible = false
-    // Widget RemoteViews must inflate with a plain framework context. An
-    // AppCompatActivity context can substitute AppCompat views that reject
-    // RemoteViews actions and end up in Android's "Couldn't add widget" view.
     internal var launcherCallbackRegistered = false
 
     fun beginHome() {
         with(activity) {
             val loaded = runCatching { configController.configStore.load() }.getOrElse { error ->
                 Log.e("Grove", "Configuration unavailable", error)
-                startupController.showCoreRecovery("Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased.")
+                showCoreRecovery("Grove could not load its settings. Retry, or change your Home app in Android Settings. Your saved settings have not been erased.")
                 return
             }
             configController.config = loaded
             // Widget metadata is optional. Keep the app list and Home available if it is damaged.
-            runCatching { widgets.restore(startupController.startupState) }
+            runCatching { widgets.restore(startupState) }
                 .onFailure { Log.w("Grove", "Widget state unavailable", it) }
-            if (!startupController.ensureLauncherCallback()) return
-            startupController.coreRecoveryVisible = false
+            if (!ensureLauncherCallback()) return
+            coreRecoveryVisible = false
             root.setBackgroundColor(Color.TRANSPARENT)
-            homeController.homeScrollY = startupController.startupState?.getInt("homeScrollY") ?: homeController.homeScrollY
-            startupController.startupState = null
+            homeController.homeScrollY = startupState?.getInt("homeScrollY") ?: homeController.homeScrollY
+            startupState = null
             homeController.showHome()
-            startupController.applyStartupPlan(StartupCoordinator.coldStart(startupController.startupSnapshot()))
+            applyStartupPlan(StartupCoordinator.coldStart(startupSnapshot()))
             if (configController.configStore.brokenCustomConfig != null) root.post { configController.showConfigRecoveryDialog() }
             if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.settings() }
         }
@@ -47,14 +43,14 @@ internal class StartupController(private val activity: MainActivity) {
 
     fun ensureLauncherCallback(): Boolean {
         with(activity) {
-            if (startupController.launcherCallbackRegistered) return true
+            if (launcherCallbackRegistered) return true
             return try {
                 launcher.registerCallback(changes, Handler(Looper.getMainLooper()))
-                startupController.launcherCallbackRegistered = true
+                launcherCallbackRegistered = true
                 true
             } catch (error: Exception) {
                 Log.e("Grove", "Launcher service unavailable", error)
-                startupController.showCoreRecovery("Grove could not connect to Android's app launcher service.")
+                showCoreRecovery("Grove could not connect to Android's app launcher service.")
                 false
             }
         }
@@ -62,7 +58,7 @@ internal class StartupController(private val activity: MainActivity) {
 
     fun showCoreRecovery(detail: String) {
         with(activity) {
-            startupController.coreRecoveryVisible = true
+            coreRecoveryVisible = true
             drawer = false
             searchMode = false
             root.animate().cancel()
@@ -87,7 +83,7 @@ internal class StartupController(private val activity: MainActivity) {
             })
             panel.addView(Button(this).apply {
                 text = "Retry"
-                setOnClickListener { startupController.beginHome() }
+                setOnClickListener { beginHome() }
             })
             panel.addView(Button(this).apply {
                 text = "Android Home settings"

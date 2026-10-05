@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     internal val prefs by lazy { getSharedPreferences("grove", MODE_PRIVATE) }
     internal val launcher by lazy { getSystemService(LauncherApps::class.java) }
+    // Framework context avoids AppCompat substitutions in widget RemoteViews.
     internal val manager by lazy { AppWidgetManager.getInstance(applicationContext) }
     internal val host by lazy { AppWidgetHost(applicationContext, 1024) }
     internal val worker = Executors.newSingleThreadExecutor()

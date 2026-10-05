@@ -8,7 +8,7 @@ import android.view.*
 import android.widget.*
 import java.util.*
 
-/** WallpaperPresentationController owns its lane; Android lifecycle and results remain in MainActivity. */
+/** Wallpaper picker and applied preference. System application succeeds before preference commit. */
 internal class WallpaperPresentationController(private val activity: MainActivity) {
     fun wallpapers() {
         with(activity) {

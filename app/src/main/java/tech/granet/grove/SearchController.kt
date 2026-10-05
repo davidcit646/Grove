@@ -20,7 +20,7 @@ import java.util.*
 import java.io.File
 import java.util.concurrent.Executors
 
-/** SearchController owns its lane; Android lifecycle and results remain in MainActivity. */
+/** Query execution and optional source state. Permissions close the affected source; stale queries cannot publish. */
 internal class SearchController(private val activity: MainActivity) {
     internal val searchWorker = Executors.newSingleThreadExecutor()
     internal val searchHandler = Handler(Looper.getMainLooper())
@@ -29,26 +29,26 @@ internal class SearchController(private val activity: MainActivity) {
     internal var searchResults: LinearLayout? = null
     internal var searchField: EditText? = null
     internal val sources by lazy { with(activity) {
-        SearchSources(this, worker, contactWorker, { configController.config.search }, searchController::hasContactAccess) {
-            if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+        SearchSources(this, worker, contactWorker, { configController.config.search }, this@SearchController::hasContactAccess) {
+            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         }
     } }
-    internal val contacts get() = with(activity) { searchController.sources.contacts }
-    internal val contactSearch get() = with(activity) { searchController.sources.contactSearch }
-    internal val files get() = with(activity) { searchController.sources.files }
-    internal val fileSearch get() = with(activity) { searchController.sources.fileSearch }
-    internal val indexingContacts get() = with(activity) { searchController.sources.indexingContacts }
-    internal val contactLoadFailed get() = with(activity) { searchController.sources.contactLoadFailed }
-    internal val lastContactRefresh get() = with(activity) { searchController.sources.lastContactRefresh }
-    internal val indexingFiles get() = with(activity) { searchController.sources.indexingFiles }
-    internal val fileLoadFailed get() = with(activity) { searchController.sources.fileLoadFailed }
-    internal val fileScanSkipped get() = with(activity) { searchController.sources.fileScanSkipped }
+    internal val contacts get() = with(activity) { sources.contacts }
+    internal val contactSearch get() = with(activity) { sources.contactSearch }
+    internal val files get() = with(activity) { sources.files }
+    internal val fileSearch get() = with(activity) { sources.fileSearch }
+    internal val indexingContacts get() = with(activity) { sources.indexingContacts }
+    internal val contactLoadFailed get() = with(activity) { sources.contactLoadFailed }
+    internal val lastContactRefresh get() = with(activity) { sources.lastContactRefresh }
+    internal val indexingFiles get() = with(activity) { sources.indexingFiles }
+    internal val fileLoadFailed get() = with(activity) { sources.fileLoadFailed }
+    internal val fileScanSkipped get() = with(activity) { sources.fileScanSkipped }
     internal val searchScreen by lazy { with(activity) { SearchScreen(this) } }
 
-    fun indexFiles(): Unit = with(activity) { searchController.sources.indexFiles()
+    fun indexFiles(): Unit = with(activity) { sources.indexFiles()
     }
 
-    fun refreshContacts(): Unit = with(activity) { searchController.sources.refreshContacts()
+    fun refreshContacts(): Unit = with(activity) { sources.refreshContacts()
     }
 
     fun hasContactAccess(): Boolean = with(activity) {
@@ -62,12 +62,12 @@ internal class SearchController(private val activity: MainActivity) {
 
     fun explainContactAccess() {
         with(activity) {
-            if (searchController.hasContactAccess()) { searchController.refreshContacts(); return }
+            if (hasContactAccess()) { refreshContacts(); return }
             MaterialAlertDialogBuilder(this)
                 .setTitle("Contact search access")
                 .setMessage("Grove reads contact names and phone numbers from Android's Contacts Provider to show search results and contact actions. Results stay in memory on this device; Grove does not upload or save a contact copy. If you choose Call or Text, Android passes that number to the app you select. You can skip this and turn Contact search off at any time. The Android permission remains granted until you revoke it in system settings.")
                 .setNegativeButton("Not now", null)
-                .setPositiveButton("Continue to Android") { _, _ -> searchController.requestContactAccess() }
+                .setPositiveButton("Continue to Android") { _, _ -> requestContactAccess() }
                 .show()
         }
     }
@@ -83,27 +83,27 @@ internal class SearchController(private val activity: MainActivity) {
 
     fun explainFileAccess() {
         with(activity) {
-            if (Environment.isExternalStorageManager()) { searchController.indexFiles(); return }
+            if (Environment.isExternalStorageManager()) { indexFiles(); return }
             MaterialAlertDialogBuilder(this)
                 .setTitle("Shared-storage file search access")
                 .setMessage("Android's All files access grants Grove broad read and write access to shared storage, including files beyond photos and videos. It does not grant access to other apps' private data or system partitions. Grove uses it to read file names and paths for on-device search; it does not read file contents, modify files, or upload the index. Opening a result shares that one file with the app you select. This is optional. Turning File search off clears Grove's in-memory index, but Android keeps the permission until you revoke it in system settings.")
                 .setNegativeButton("Not now", null)
-                .setPositiveButton("Open Android settings") { _, _ -> searchController.requestFileAccess() }
+                .setPositiveButton("Open Android settings") { _, _ -> requestFileAccess() }
                 .show()
         }
     }
 
     fun applySearchSettings(previous: SearchSettings) {
         with(activity) {
-            if (!configController.config.search.contacts) searchController.sources.clearContacts()
+            if (!configController.config.search.contacts) sources.clearContacts()
             else if (!previous.contacts) {
-                if (searchController.hasContactAccess()) searchController.refreshContacts() else searchController.explainContactAccess()
+                if (hasContactAccess()) refreshContacts() else explainContactAccess()
             }
-            if (!configController.config.search.files) searchController.sources.clearFiles()
+            if (!configController.config.search.files) sources.clearFiles()
             else if (!previous.files) {
-                if (Environment.isExternalStorageManager()) searchController.indexFiles() else searchController.explainFileAccess()
+                if (Environment.isExternalStorageManager()) indexFiles() else explainFileAccess()
             }
-            if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+            if (searchMode) renderSearch(searchField?.text?.toString().orEmpty())
         }
     }
 
@@ -119,57 +119,57 @@ internal class SearchController(private val activity: MainActivity) {
                 setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(0xffc1ccc5.toInt())
                 contentDescription = "Search apps, contacts, files, Google, and Play Store"
             }
-            searchController.searchField = field
+            searchField = field
             root.addView(field)
             val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            searchController.searchResults = list
+            searchResults = list
             root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
             root.addView(homeController.button("Home") { homeController.animateDrawerClosed() })
             field.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = searchController.renderSearch(s.toString())
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderSearch(s.toString())
                 override fun afterTextChanged(s: Editable?) {}
             })
-            searchController.renderSearch("")
+            renderSearch("")
             if (animate) homeController.enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
             field.requestFocus()
-            field.post { if (searchMode && searchController.searchField === field) getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, 0) }
+            field.post { if (searchMode && searchField === field) getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, 0) }
         }
     }
 
     fun renderSearch(query: String) {
         with(activity) {
-            val target = searchController.searchResults ?: return
-            val generation = ++searchController.searchGeneration
-            searchController.pendingSearch?.let(searchController.searchHandler::removeCallbacks)
-            searchController.pendingSearch = null
+            val target = searchResults ?: return
+            val generation = ++searchGeneration
+            pendingSearch?.let(searchHandler::removeCallbacks)
+            pendingSearch = null
             val prepared = Search.prepare(query)
             if (prepared.text.isEmpty()) {
-                searchController.displaySearch(target, query, emptyList(), emptyList(), emptyList())
+                displaySearch(target, query, emptyList(), emptyList(), emptyList())
                 return
             }
             val appSnapshot = catalogController.appSearch
-            val contactSnapshot = searchController.contactSearch
-            val fileSnapshot = searchController.fileSearch
+            val contactSnapshot = contactSearch
+            val fileSnapshot = fileSearch
             target.removeAllViews()
             val task = Runnable {
-                if (searchController.searchWorker.isShutdown) return@Runnable
-                searchController.searchWorker.execute {
-                    if (generation != searchController.searchGeneration) return@execute
+                if (searchWorker.isShutdown) return@Runnable
+                searchWorker.execute {
+                    if (generation != searchGeneration) return@execute
                     val matchingApps = SearchResults.matching(appSnapshot, prepared, 12)
-                    if (generation != searchController.searchGeneration) return@execute
+                    if (generation != searchGeneration) return@execute
                     val matchingContacts = SearchResults.matching(contactSnapshot, prepared, 12)
-                    if (generation != searchController.searchGeneration) return@execute
+                    if (generation != searchGeneration) return@execute
                     val matchingFiles = SearchResults.matching(fileSnapshot, prepared, 12)
                     runOnUiThread {
-                        if (generation != searchController.searchGeneration || !searchMode || searchController.searchResults !== target) return@runOnUiThread
-                        searchController.pendingSearch = null
-                        searchController.displaySearch(target, query, matchingApps, matchingContacts, matchingFiles)
+                        if (generation != searchGeneration || !searchMode || searchResults !== target) return@runOnUiThread
+                        pendingSearch = null
+                        displaySearch(target, query, matchingApps, matchingContacts, matchingFiles)
                     }
                 }
             }
-            searchController.pendingSearch = task
-            searchController.searchHandler.postDelayed(task, 80L)
+            pendingSearch = task
+            searchHandler.postDelayed(task, 80L)
         }
     }
 
@@ -177,7 +177,7 @@ internal class SearchController(private val activity: MainActivity) {
                               matchingApps: List<App>, matchingContacts: List<ContactIndex.Contact>,
                               matchingFiles: List<IndexedFile>) {
         with(activity) {
-            searchController.searchScreen.render(
+            searchScreen.render(
                 target, query,
                 matchingApps.map { app -> SearchScreen.AppRow(app.key, app.label, catalogController.iconCache[app.key],
                     open = {
@@ -187,12 +187,12 @@ internal class SearchController(private val activity: MainActivity) {
                 matchingContacts.map { contact -> SearchScreen.ContactRow(contact.name) { actionController.contactMenu(contact) } },
                 matchingFiles.map { file -> SearchScreen.FileRow(file,
                     open = { actionController.openFile(file) }, menu = { actionController.searchItemMenu(file) }) },
-                SearchSourceState.resolve(configController.config.search.contacts, searchController.hasContactAccess(),
-                    searchController.indexingContacts, searchController.contactLoadFailed, searchController.contacts.size),
-                searchController::explainContactAccess, searchController::refreshContacts,
+                SearchSourceState.resolve(configController.config.search.contacts, hasContactAccess(),
+                    indexingContacts, contactLoadFailed, contacts.size),
+                this@SearchController::explainContactAccess, this@SearchController::refreshContacts,
                 SearchSourceState.resolve(configController.config.search.files, Environment.isExternalStorageManager(),
-                    searchController.indexingFiles, searchController.fileLoadFailed, searchController.files.size, searchController.fileScanSkipped),
-                requestFileAccess = { searchController.explainFileAccess() }, retryFiles = { searchController.indexFiles() },
+                    indexingFiles, fileLoadFailed, files.size, fileScanSkipped),
+                requestFileAccess = { explainFileAccess() }, retryFiles = { indexFiles() },
                 searchGoogle = { actionController.openWeb("https://www.google.com/search?q=${Uri.encode(query.trim())}") },
                 googleMenu = { actionController.webResultMenu(query.trim(), "Google") },
                 searchStore = { actionController.openPlayStore(query.trim()) },
