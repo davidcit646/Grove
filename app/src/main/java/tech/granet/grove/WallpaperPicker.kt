@@ -7,6 +7,8 @@ import android.graphics.Typeface
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.text.util.Linkify
+import android.text.method.LinkMovementMethod
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -240,6 +242,8 @@ internal class WallpaperPicker(
             setTextColor(ThemeColors.icon(activity))
             setPadding(activity.dp(20), activity.dp(12), activity.dp(20), activity.dp(20))
             setTextIsSelectable(true)
+            Linkify.addLinks(this, Linkify.WEB_URLS)
+            movementMethod = LinkMovementMethod.getInstance()
         }
         MaterialAlertDialogBuilder(activity)
             .setTitle("Wallpaper sources")
