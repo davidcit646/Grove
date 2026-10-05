@@ -122,7 +122,7 @@ internal class LauncherSettingsScreen(
         content.addView(activity.bodyText("If Grove crashes or hits an error, a report is saved on this device only. On the next launch you'll be asked whether to email it to the developer. Nothing is ever sent automatically, and no third-party service is involved."))
         lateinit var emailButton: com.google.android.material.button.MaterialButton
         emailButton = activity.settingsButton(
-            "Developer email: ${CrashReporter.developerEmail(activity).ifBlank { "not set" }}",
+            "Developer email: ${CrashReporter.developerEmail(activity)}",
             R.drawable.ic_message,
         ) {
             activity.inputDialog(
@@ -132,7 +132,7 @@ internal class LauncherSettingsScreen(
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
             ) { email ->
                 CrashReporter.setDeveloperEmail(activity, email)
-                emailButton.text = "Developer email: ${email.ifBlank { "not set" }}"
+                emailButton.text = "Developer email: ${CrashReporter.developerEmail(activity)}"
                 activity.message("Developer email saved")
             }
         }
