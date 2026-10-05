@@ -17,8 +17,8 @@ class CoreRecoveryPolicyTest {
     @Test fun appCatalogFailureUsesRegisteredRecoveryIdentity() {
         val state = CoreRecoveryPolicy.forReason(CoreRecoveryReason.APP_CATALOG)
         val error = GroveErrorRegistry.APP_CATALOG
-        assertTrue(state.detail.contains("Code ${error.code}"))
-        assertTrue(state.detail.contains(error.gws))
+        assertTrue(state.detail.contains(error.codeLine()))
+        assertFalse(state.detail.contains("null"))
         assertTrue(state.detail.contains(error.summary))
     }
 
