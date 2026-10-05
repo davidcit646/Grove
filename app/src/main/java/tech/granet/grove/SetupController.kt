@@ -116,11 +116,13 @@ internal class SetupController(private val activity: MainActivity) {
                 { importConfig.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
                 { setupPending() },
                 { enabled ->
-                    prefs.edit().apply {
+                    val saved = prefs.edit().apply {
                         putBoolean("setup_complete", !enabled)
                         if (enabled) putBoolean("setup_pending", true)
                         else remove("setup_pending")
-                    }.apply()
+                    }.commit()
+                    if (!saved) GroveErrorPresenter.show(this, GroveErrorRegistry.TUTORIAL_REPLAY)
+                    saved
                 },
                 {
                     if (setupPending()) root.post {
