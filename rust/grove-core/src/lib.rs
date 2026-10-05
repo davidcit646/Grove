@@ -88,6 +88,10 @@ mod tests {
         assert!(validate_config(r#"{"version":6,"wallpaper":0,"favorites":[],"folders":[{"name":"Bad","apps":["invalid"]}]}"#).is_err());
         assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"contacts":false,"files":true}}"#).is_ok());
         assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"files":"true"}}"#).is_err());
+        assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contacts":true,"files":true,"contactIndexing":true,"fileIndexing":false}}"#).is_ok());
+        assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contactIndexing":"true"}}"#).is_err());
+        assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"fileIndexing":1}}"#).is_err());
+        assert!(validate_config(r#"{"version":9,"wallpaper":0,"favorites":[]}"#).is_err());
     }
 
     #[test]
