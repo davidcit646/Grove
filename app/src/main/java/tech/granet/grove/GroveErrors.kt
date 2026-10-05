@@ -35,6 +35,8 @@ internal object GroveErrorRegistry {
         "This wallpaper preview is unavailable.")
     val WALLPAPER_APPLY = GroveError(311, "GWS-wallpaper-apply", "Wallpaper apply", ErrorSeverity.STOP,
         "Android did not confirm the wallpaper change.")
+    val WALLPAPER_SYNC = GroveError(312, "GWS-wallpaper-sync", "Wallpaper preference", ErrorSeverity.RECOVER,
+        "Android changed the wallpaper, but Grove could not save the matching Home preference.")
     val TUTORIAL_REPLAY = GroveError(410, "GWS-tutorial-replay", "Tutorial replay", ErrorSeverity.CONTINUE,
         "Tutorial replay could not start yet.")
     val GENERIC_NONFATAL = GroveError(500, "GWS-report-nonfatal", "Grove operation", ErrorSeverity.CONTINUE,
@@ -48,7 +50,7 @@ internal object GroveErrorRegistry {
 
     val all = listOf(
         CONFIG_IMPORT, CONFIG_EXPORT, CONFIG_PERSIST, APP_CATALOG, CONTACT_SEARCH, FILE_SEARCH,
-        WALLPAPER_PREVIEW, WALLPAPER_APPLY, TUTORIAL_REPLAY, GENERIC_NONFATAL, REPORT_HANDOFF, NATIVE_BRIDGE, UNCAUGHT_CRASH,
+        WALLPAPER_PREVIEW, WALLPAPER_APPLY, WALLPAPER_SYNC, TUTORIAL_REPLAY, GENERIC_NONFATAL, REPORT_HANDOFF, NATIVE_BRIDGE, UNCAUGHT_CRASH,
     )
 
     fun byCode(code: Int): GroveError? = all.firstOrNull { it.code == code }
