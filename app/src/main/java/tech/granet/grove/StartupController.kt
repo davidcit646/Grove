@@ -28,13 +28,13 @@ internal object CoreRecoveryPolicy {
         reason = reason,
         detail = when (reason) {
             CoreRecoveryReason.CONFIG -> GroveErrorRegistry.CONFIG_LOAD.let {
-                "${it.feature} · ${it.severity.label}\nCode ${it.code} · ${it.gws}\n\n${it.summary} Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
+                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
             }
             CoreRecoveryReason.LAUNCHER_SERVICE -> GroveErrorRegistry.LAUNCHER_SERVICE.let {
-                "${it.feature} · ${it.severity.label}\nCode ${it.code} · ${it.gws}\n\n${it.summary} Retry, or change your Home app in Android Settings."
+                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings."
             }
             CoreRecoveryReason.APP_CATALOG -> GroveErrorRegistry.APP_CATALOG.let {
-                "${it.feature} · ${it.severity.label}\nCode ${it.code} · ${it.gws}\n\n${it.summary} Retry, or change your Home app in Android Settings."
+                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings."
             }
         },
     )
