@@ -74,6 +74,8 @@ internal object WallpaperArt {
     fun source(index: Int): WallpaperSource? = sources.firstOrNull { it.legacyIndex == index }
     fun indexForId(id: String): Int? = sources.firstOrNull { it.id == id }?.legacyIndex
     fun customFile(filesDir: File) = File(filesDir, "wallpapers/custom-image")
+    fun customCandidateFile(filesDir: File) = File(filesDir, "wallpapers/custom-image.pending")
+    fun customBackupFile(filesDir: File) = File(filesDir, "wallpapers/custom-image.backup")
 
     private const val ART_WIDTH = 1080
     private const val ART_HEIGHT = 2400
