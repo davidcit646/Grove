@@ -3,6 +3,7 @@ package tech.granet.grove
 import java.net.URL
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class WallpaperControllerTest {
@@ -21,5 +22,18 @@ class WallpaperControllerTest {
             "https://thumb.wikimedia.org:8443/image.jpg",
             "https://user@thumb.wikimedia.org/image.jpg",
         )) assertFalse(url, WallpaperController.allowedWallpaperDestination(URL(url)))
+    }
+
+    @Test fun customImageValidationFailsBeforeDecodeForBadInputs() {
+        WallpaperController.validateCustomImage("image/jpeg", 1024, 1080, 2400)
+        assertThrows(IllegalArgumentException::class.java) {
+            WallpaperController.validateCustomImage("text/plain", 1024, 1080, 2400)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            WallpaperController.validateCustomImage("image/jpeg", 21L * 1024 * 1024, 1080, 2400)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            WallpaperController.validateCustomImage("image/jpeg", 1024, 9000, 2400)
+        }
     }
 }
