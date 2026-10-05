@@ -13,6 +13,8 @@ internal data class WallpaperSource(
     val author: String,
     val license: String,
     val sourcePage: String? = null,
+    val licenseUrl: String? = null,
+    val changes: String? = null,
     val resourceId: Int? = null,
 )
 
@@ -22,6 +24,8 @@ data class CommonsWallpaper(
     val fileName: String,
     val author: String,
     val license: String = "CC0 1.0",
+    val licenseUrl: String = "https://creativecommons.org/publicdomain/zero/1.0/",
+    val changes: String? = null,
 ) {
     val sourcePage: String get() = "https://commons.wikimedia.org/wiki/File:${UriCompat.encodeTitle(fileName)}"
 }
@@ -34,7 +38,7 @@ private object UriCompat {
 internal object WallpaperArt {
     val commons = listOf(
         CommonsWallpaper("Red", "Flower", "Red Flower red.jpg", "E.Prabha"),
-        CommonsWallpaper("Orange", "Sunset landscape", "Landscape-sunset-sun-orange (24300255306).jpg", "Pixel.la Free Stock Photos"),
+        CommonsWallpaper("Orange", "Sunset landscape", "Landscape-sunset-sun-orange (24300255306).jpg", "www.Pixel.la Free Stock Photos"),
         CommonsWallpaper("Yellow", "Flower", "Yellow flower.png", "SurendharKandasami"),
         CommonsWallpaper("Green", "Hills and trees", "Green Landscape with Hills and Trees.jpg", "Baap8969"),
         CommonsWallpaper("Blue", "Flower", "A Blue Flower.jpg", "Iurie Nistor"),
@@ -42,7 +46,15 @@ internal object WallpaperArt {
         CommonsWallpaper("Pink", "Paper flower", "Pink Paper flower.jpg", "By atmika"),
         CommonsWallpaper("Brown", "Sand dunes", "Sand dunes landscape before sunset, Lençóis Maranhenses.jpg", "Gerda Arendt"),
         CommonsWallpaper("Gray", "Granite texture", "Grey granite boulder seamless stone surface texture.jpg", "Sisters.seamless"),
-        CommonsWallpaper("Black & white", "Abstract landscape", "Black ^ white quasi-abstract landscape - Flickr - rossomoto.jpg", "rossomoto", "CC BY 2.0"),
+        CommonsWallpaper(
+            "Black & white",
+            "Abstract landscape",
+            "Black ^ white quasi-abstract landscape - Flickr - rossomoto.jpg",
+            "rossomoto",
+            "CC BY 2.0",
+            "https://creativecommons.org/licenses/by/2.0/",
+            "Bundled copy resized and optimized for Grove.",
+        ),
     )
 
     val sources: List<WallpaperSource> =
@@ -64,8 +76,18 @@ internal object WallpaperArt {
                 R.drawable.wallpaper_black_white,
             )
         ).mapIndexed { offset, (item, resourceId) ->
-            WallpaperSource("commons-${offset}", offset + 3, WallpaperKind.COMMONS,
-                "${item.color} · ${item.title}", item.author, item.license, item.sourcePage, resourceId)
+            WallpaperSource(
+                "commons-${offset}",
+                offset + 3,
+                WallpaperKind.COMMONS,
+                "${item.color} · ${item.title}",
+                item.author,
+                item.license,
+                item.sourcePage,
+                item.licenseUrl,
+                item.changes,
+                resourceId,
+            )
         } + listOf(
             WallpaperSource("solid-black", 13, WallpaperKind.SOLID_BLACK, "Solid black", "Grove", "Apache 2.0"),
             WallpaperSource("custom-image", 14, WallpaperKind.CUSTOM, "Your photo or file", "You", "Local image"),
