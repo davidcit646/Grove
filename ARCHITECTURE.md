@@ -22,3 +22,34 @@ The JSON schema and preference compatibility remain versions 1–7. A damaged cu
 Gradle `preBuild` calls `scripts/build-rust-android.sh` with NDK 27.3.13750724, producing arm64, ARMv7 and x86-64 `.so` files. PR CI runs Rust tests, Android debug build, JVM tests, lint and the missing-signing negative check. A main build requires signing and verifies APK/AAB certificate, native payloads/alignment and checksums. The manual release workflow rebuilds from a supplied tag and exact commit; nothing is published by the refactor itself. Positive signing and device install/update are pending #34/#36. This split passed source CI on its branch; new Android widget, permission, and onboarding interactions have not been device-tested for this change.
 
 Run the dated device and performance gates in [TESTING.md](TESTING.md) and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) before calling #17 or #6 complete.
+
+## MainActivity lane split (#6)
+
+`MainActivity` is the Android host: lifecycle, result registrations, root views,
+platform services, and routing. Lane controllers are activity-scoped and own their
+mutable feature state; they use the host for Android effects and explicit calls to
+other controllers. This is a single HOME Activity, so switching between Home,
+drawer, and search retains the existing task/lifecycle behavior.
+
+| Owner | Lane/state | Failure boundary |
+| --- | --- | --- |
+| StartupController | Config loading, launcher callback, recovery | Required config/service/catalog failure closes normal Home to Retry/system settings; optional indexing starts afterward. |
+| CatalogController | App snapshot, prepared app search, icon publication, generation | Failed enumeration closes catalog to recovery; icons keep placeholders; stale generations cannot publish. |
+| HomeController | Home rendering, scroll, animation, wallpaper backdrop | Optional backdrop failure keeps gradient; superseded/destroyed bitmap output is recycled. |
+| DrawerController | Grid, filtering, selection, folders/drag | Folder/pin mutation passes through successful config commit before selection is cleared. |
+| SearchController | Search worker, query generation, source snapshots/permissions | Optional source state is isolated; stale query output cannot publish. |
+| ConfigController | Active config, store, import/export/editor/recovery | Parse before activation; persistence before publication; failed save keeps editor/recovery open. |
+| SetupController | Setup instance, settings and permission explanations | Failed config save retains setup for retry; optional permissions do not block Home. |
+| ActionController | External actions, menus, uninstall queue | File/contact adapters recheck access; canceled/failed uninstall stops the batch. |
+| WallpaperPresentationController | Picker and applied preference | System apply must succeed before wallpaper preference commit. |
+
+`ConfigTransaction` tests enforce persistence-before-publication and ensure a
+publication invariant is propagated rather than mislabeled as a storage failure.
+The broader Ready/Degraded/Unavailable/Canceled policy remains specified by
+FAILURE-POLICY.md; this extraction preserves existing source/widget outcomes and
+does not claim every Android boundary has completed failure-injection coverage.
+
+Device gate: Home scroll/back, drawer filter/selection/folders/pins, search with
+permissions denied/revoked, setup finish/skip/replay, widgets bind/cancel/restore,
+config import/editor/recovery, wallpaper apply, and rotation/resume during pending
+search/catalog/wallpaper work. #6 remains open until device behavior is verified.
