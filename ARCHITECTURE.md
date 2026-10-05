@@ -8,8 +8,8 @@ Status: the integrated source refactor and [PR #73](https://github.com/davidcit6
 
 | Owner | Boundary and timing | Failure outcome / retry | Verification |
 | --- | --- | --- | --- |
-| `StartupCoordinator`, `AppCatalog`, `AppIconStore` | Cold/resume plan, launcher enumeration and icon decode after a responsive shell | Core app catalog failure shows recovery Home; missing icon keeps label/placeholder; recheck on package/resume | #20-#22, StartupCoordinatorTest, #34 |
-| `SearchSources`, `SearchSourceState`, `ContactIndex`, `FileIndex` | Enabled source and permission at feature/resume; provider on worker; file canonical path again at action | Denied/unavailable/partial are distinct; Retry and stale generation cleanup | #5, #9, #23, SearchSourceStateTest, FileIndexTest, #34 |
+| `StartupCoordinator`, `AppCatalog`, `CatalogController`, `AppIconStore` | Cold/resume plan; app enumeration is separate from icon decode; catalog publishes Loading/Ready/Degraded/Failed | Typed config/service/catalog recovery shows Retry/Home settings; icon failure degrades imagery only; changed-package/size refresh invalidates the relevant cache; stale generations cannot publish | #20-#22, CoreRecoveryPolicyTest, AppCatalogTest, StartupCoordinatorTest; device gate in TESTING.md |
+| `SearchSources`, `SearchSourceState`, `SearchController`, `ContactIndex`, `FileIndex` | Enabled source + current permission + current query generation; access changes cancel before reconciliation; file canonical path is rechecked at action | Disabled/permission/loading/ready/partial/failed remain distinct; stale, revoked, inactive or cache-superseded live results cannot publish; app source exposes its own catalog state | #5, #9, #23, SearchSourceStateTest, SearchPublicationGateTest, FileIndexTest; device gate in TESTING.md |
 | `ContactActions`, `FileActions`, `SearchActions` | Current permission/package/path before external action | A failed contact/file/intent action reports local error; Home remains usable | #6, #32, #34 |
 | `GestureSession`, `HomeTouchRouter`, `DrawerState`, `DrawerTiles`, `DrawerDragController`, `FolderActions`, `PinDragController`, `UninstallBatch` | Touch/selection state before animation or persisted drawer edit; OS uninstall result before next launch | Disabled/invalid/canceled means no action or commit; cancellation clears queue | #14, #24, #25 and respective unit tests, #34 |
 | `WidgetFlow`, `WidgetRegistry`, `WidgetScreen` | Allocation and persisted ID transition; provider again at render | Missing provider/createView yields removable placeholder; interrupted setup offers retry/removal | #26, #34 |
@@ -35,11 +35,11 @@ drawer, and search retains the existing task/lifecycle behavior.
 
 | Owner | Lane/state | Failure boundary |
 | --- | --- | --- |
-| StartupController | Config loading, launcher callback, recovery | Required config/service/catalog failure closes normal Home to Retry/system settings; optional indexing starts afterward. |
-| CatalogController | App snapshot, prepared app search, icon publication, generation | Failed enumeration closes catalog to recovery; icons keep placeholders; stale generations cannot publish. |
+| StartupController | Config loading, launcher callback, typed core recovery | Required config/service/catalog failure closes normal Home to a typed Retry/system-settings recovery state; entering recovery supersedes pending catalog/search work. |
+| CatalogController | App snapshot, prepared app search, explicit catalog state, icon publication, generation | Enumeration failure is Failed/core recovery; icon failures produce Degraded while apps stay usable; stale generations cannot publish. |
 | HomeController | Home rendering, scroll, animation, wallpaper backdrop | Optional backdrop failure keeps gradient; superseded/destroyed bitmap output is recycled. |
 | DrawerController | Grid, filtering, selection, folders/drag | Folder/pin mutation passes through successful config commit before selection is cleared. |
-| SearchController | Search worker, query generation, source snapshots/permissions | Optional source state is isolated; stale query output cannot publish. |
+| SearchController | Search worker, query generation, source snapshots/permissions, publication gate | Source/access changes cancel before reconciliation; stale, revoked, inactive or cache-superseded output cannot publish; app/contact/file outcomes stay distinct. |
 | ConfigController | Active config, store, import/export/editor/recovery | Parse before activation; persistence before publication; failed save keeps editor/recovery open. |
 | SetupController | Setup instance, settings and permission explanations | Failed config save retains setup for retry; optional permissions do not block Home. |
 | ActionController | External actions, menus, uninstall queue | File/contact adapters recheck access; canceled/failed uninstall stops the batch. |
