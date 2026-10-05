@@ -9,60 +9,39 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 
-/** Loads and applies artwork away from the launcher navigation code. */
+/** Loads, validates and applies local wallpaper sources away from launcher navigation code. */
 internal class WallpaperController(
     private val activity: AppCompatActivity,
     private val worker: ExecutorService,
     private val message: (String) -> Unit,
 ) {
-    private val maxDownloadBytes = 20L * 1024 * 1024
+    init {
+        // Versions before #82 cached Commons downloads in private storage. Built-ins
+        // are packaged now, so those stale network-era files have no authority.
+        runCatching {
+            File(activity.filesDir, "wallpapers").listFiles { file ->
+                file.isFile && file.name.startsWith("commons-")
+            }?.forEach(File::delete)
+        }.onFailure { Log.w("Grove", "Could not clean legacy wallpaper cache", it) }
+    }
 
-    private fun wallpaperConnection(start: URL): HttpURLConnection {
-        var url = start
-        repeat(5) {
-            require(allowedWallpaperDestination(url)) { "Unexpected wallpaper destination" }
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("User-Agent", "GroveLauncher wallpaper downloader")
-            try {
-                val status = connection.responseCode
-                if (status in 300..399) {
-                    val location = connection.getHeaderField("Location") ?: error("Wallpaper redirect has no destination")
-                    url = URL(url, location)
-                } else {
-                    require(status in 200..299) { "Wallpaper download failed (HTTP $status)" }
-                    require(connection.contentType?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)?.startsWith("image/") == true) {
-                        "Wallpaper response is not an image"
-                    }
-                    require(connection.contentLengthLong in -1L..maxDownloadBytes) { "Wallpaper is too large" }
-                    return connection
-                }
-            } catch (error: Exception) {
-                connection.disconnect()
-                throw error
-            }
-            connection.disconnect()
+    fun artwork(index: Int): Bitmap {
+        val source = WallpaperArt.source(index) ?: error("Unknown wallpaper source")
+        return when (source.kind) {
+            WallpaperKind.GENERATED -> WallpaperArt.create(index)
+            WallpaperKind.COMMONS -> decodeBundled(source.resourceId ?: error("Bundled wallpaper resource missing"))
+                ?: error("Bundled wallpaper is unavailable")
+            WallpaperKind.SOLID_BLACK ->
+                Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
+            WallpaperKind.CUSTOM -> decode(WallpaperArt.customFile(activity.filesDir))
+                ?: error("Custom wallpaper is unavailable")
         }
-        error("Too many wallpaper redirects")
     }
 
-    fun artwork(index: Int): Bitmap = when {
-        index < 3 -> WallpaperArt.create(index)
-        index in 3..12 -> decode(WallpaperArt.cachedFile(activity.filesDir, index))
-            ?: error("Selected wallpaper cache is unavailable")
-        index == 13 -> Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
-        index == 14 -> decode(WallpaperArt.customFile(activity.filesDir))
-            ?: error("Custom wallpaper is unavailable")
-        else -> error("Unknown wallpaper source")
-    }
-
+    /** Copy a user-picked image into Grove private storage only after bounded validation. */
     fun importCustom(uri: Uri, done: (Boolean) -> Unit) {
         worker.execute {
             val target = WallpaperArt.customFile(activity.filesDir)
@@ -79,7 +58,7 @@ internal class WallpaperController(
                             val count = input.read(buffer)
                             if (count < 0) break
                             total += count
-                            require(total <= maxDownloadBytes) { "Wallpaper is too large" }
+                            require(total <= MAX_CUSTOM_BYTES) { "Wallpaper is too large" }
                             output.write(buffer, 0, count)
                         }
                     }
@@ -103,8 +82,12 @@ internal class WallpaperController(
         worker.execute {
             val prepared = runCatching {
                 val source = artwork(index)
-                try { centerCrop(source, width, height).also { if (it !== source) source.recycle() } }
-                catch (error: Throwable) { source.recycle(); throw error }
+                try {
+                    centerCrop(source, width, height).also { if (it !== source) source.recycle() }
+                } catch (error: Throwable) {
+                    source.recycle()
+                    throw error
+                }
             }.onFailure { Log.w("Grove", "Wallpaper background unavailable", it) }.getOrNull()
             val colors = prepared?.let(ThemeColors::wallpaperButtonColors)
             activity.runOnUiThread {
@@ -113,71 +96,19 @@ internal class WallpaperController(
         }
     }
 
-    fun download(index: Int, done: (Boolean) -> Unit) {
-        val wallpaper = WallpaperArt.commons[index - 3]
-        val target = WallpaperArt.cachedFile(activity.filesDir, index)
-        worker.execute {
-            val temp = File(target.parentFile, target.name + ".tmp")
-            val ok = runCatching {
-                if (target.exists() && decode(target)?.let { it.recycle(); true } == true) return@runCatching true
-                target.delete()
-                target.parentFile?.mkdirs()
-                val encoded = java.net.URLEncoder.encode(wallpaper.fileName, "UTF-8").replace("+", "%20")
-                val connection = wallpaperConnection(URL("https://commons.wikimedia.org/wiki/Special:FilePath/$encoded?width=1600"))
-                try {
-                    connection.inputStream.use { input -> FileOutputStream(temp).use { output ->
-                        val buffer = ByteArray(16 * 1024)
-                        var total = 0L
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            total += count
-                            require(total <= maxDownloadBytes) { "Wallpaper is too large" }
-                            output.write(buffer, 0, count)
-                        }
-                    } }
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(temp.absolutePath, bounds)
-                    require(bounds.outWidth in 1..8192 && bounds.outHeight in 1..8192) { "Invalid wallpaper dimensions" }
-                    check(temp.renameTo(target)) { "Could not save wallpaper" }
-                } finally { connection.disconnect() }
-                true
-            }.onFailure { Log.w("Grove", "Wallpaper download failed for ${wallpaper.fileName}", it) }
-                .getOrDefault(false)
-            temp.delete()
-            activity.runOnUiThread { if (!activity.isDestroyed) done(ok) }
-        }
-    }
-
     /** A small preview is decoded off the UI thread. The caller owns and recycles it. */
     fun preview(index: Int, done: (Bitmap?) -> Unit) {
-        fun decodePreview() {
-            worker.execute {
-                val preview = runCatching {
-                    val full = runCatching { artwork(index) }.getOrNull()
-                    full?.let {
-                        val cropped = centerCrop(it, 360, 800)
-                        val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
-                        if (cropped !== scaled && cropped !== it) cropped.recycle()
-                        if (it !== scaled) it.recycle()
-                        scaled
-                    }
-                }.onFailure { Log.w("Grove", "Wallpaper preview failed", it) }.getOrNull()
-                activity.runOnUiThread {
-                    if (activity.isDestroyed) preview?.recycle() else done(preview)
-                }
-            }
-        }
-        if (index < 3 || index >= 13) decodePreview()
-        else {
-            val cached = WallpaperArt.cachedFile(activity.filesDir, index)
-            worker.execute {
-                val valid = runCatching { decode(cached)?.also { it.recycle() } != null }.getOrDefault(false)
-                activity.runOnUiThread {
-                    if (activity.isDestroyed) return@runOnUiThread
-                    if (valid) decodePreview()
-                    else download(index) { ok -> if (ok) decodePreview() else done(null) }
-                }
+        worker.execute {
+            val preview = runCatching {
+                val full = artwork(index)
+                val cropped = centerCrop(full, 360, 800)
+                val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
+                if (cropped !== scaled && cropped !== full) cropped.recycle()
+                if (full !== scaled) full.recycle()
+                scaled
+            }.onFailure { Log.w("Grove", "Wallpaper preview failed", it) }.getOrNull()
+            activity.runOnUiThread {
+                if (activity.isDestroyed) preview?.recycle() else done(preview)
             }
         }
     }
@@ -186,33 +117,55 @@ internal class WallpaperController(
         worker.execute {
             runCatching {
                 val source = artwork(index)
-                val bitmap = centerCrop(source, activity.resources.displayMetrics.widthPixels,
-                    activity.resources.displayMetrics.heightPixels)
-                try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which) }
-                finally { bitmap.recycle(); if (source !== bitmap) source.recycle() }
-            }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) { message("Wallpaper applied"); done(true) } } }
-                .onFailure {
-                    Log.w("Grove", "Could not apply wallpaper", it)
-                    activity.runOnUiThread { if (!activity.isDestroyed) {
+                val bitmap = centerCrop(
+                    source,
+                    activity.resources.displayMetrics.widthPixels,
+                    activity.resources.displayMetrics.heightPixels,
+                )
+                try {
+                    WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which)
+                } finally {
+                    bitmap.recycle()
+                    if (source !== bitmap) source.recycle()
+                }
+            }.onSuccess {
+                activity.runOnUiThread {
+                    if (!activity.isDestroyed) {
+                        message("Wallpaper applied")
+                        done(true)
+                    }
+                }
+            }.onFailure {
+                Log.w("Grove", "Could not apply wallpaper", it)
+                activity.runOnUiThread {
+                    if (!activity.isDestroyed) {
                         GroveErrorPresenter.show(activity, GroveErrorRegistry.WALLPAPER_APPLY)
                         done(false)
-                    } }
+                    }
                 }
+            }
         }
     }
 
+    private fun decodeBundled(resourceId: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeResource(activity.resources, resourceId, bounds)
+        if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null
+        var sample = 1
+        while (bounds.outWidth / sample > 1440 || bounds.outHeight / sample > 2560) sample *= 2
+        return BitmapFactory.decodeResource(
+            activity.resources,
+            resourceId,
+            BitmapFactory.Options().apply { inSampleSize = sample },
+        )
+    }
+
     companion object {
-        /** Wikimedia now redirects scaled images to its dedicated thumbnail host. */
-        fun allowedWallpaperDestination(url: URL): Boolean =
-            url.protocol.equals("https", true) &&
-                url.host.lowercase(Locale.ROOT) in setOf(
-                    "commons.wikimedia.org", "upload.wikimedia.org", "thumb.wikimedia.org"
-                ) &&
-                (url.port == -1 || url.port == 443) && url.userInfo == null
+        private const val MAX_CUSTOM_BYTES = 20L * 1024 * 1024
 
         fun validateCustomImage(mime: String, bytes: Long, width: Int, height: Int) {
             require(mime.lowercase(Locale.ROOT).startsWith("image/")) { "Selected document is not an image" }
-            require(bytes in 1..20L * 1024 * 1024) { "Wallpaper is too large" }
+            require(bytes in 1..MAX_CUSTOM_BYTES) { "Wallpaper is too large" }
             require(width in 1..8192 && height in 1..8192) { "Invalid wallpaper dimensions" }
         }
 
@@ -222,7 +175,10 @@ internal class WallpaperController(
             if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null
             var sample = 1
             while (bounds.outWidth / sample > 1440 || bounds.outHeight / sample > 2560) sample *= 2
-            return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+            return BitmapFactory.decodeFile(
+                file.absolutePath,
+                BitmapFactory.Options().apply { inSampleSize = sample },
+            )
         }
 
         fun centerCrop(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
