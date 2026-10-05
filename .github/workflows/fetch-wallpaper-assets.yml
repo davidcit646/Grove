@@ -3,30 +3,38 @@ on:
   push:
     branches: [codex/indexing-74-75]
 permissions:
-  contents: read
+  contents: write
 jobs:
   fetch:
+    if: github.event.head_commit.message != 'Bundle curated wallpaper assets'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/indexing-74-75
       - name: Fetch curated Commons thumbnails
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p wallpapers
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Red%20Flower%20red.jpg?width=1080' -o wallpapers/wallpaper_red.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Landscape-sunset-sun-orange%20%2824300255306%29.jpg?width=1080' -o wallpapers/wallpaper_orange.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Yellow%20flower.png?width=1080' -o wallpapers/wallpaper_yellow.png
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Green%20Landscape%20with%20Hills%20and%20Trees.jpg?width=1080' -o wallpapers/wallpaper_green.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/A%20Blue%20Flower.jpg?width=1080' -o wallpapers/wallpaper_blue.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Purple%20flower%20nature.jpg?width=1080' -o wallpapers/wallpaper_purple.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Pink%20Paper%20flower.jpg?width=1080' -o wallpapers/wallpaper_pink.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Sand%20dunes%20landscape%20before%20sunset%2C%20Len%C3%A7%C3%B3is%20Maranhenses.jpg?width=1080' -o wallpapers/wallpaper_brown.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Grey%20granite%20boulder%20seamless%20stone%20surface%20texture.jpg?width=1080' -o wallpapers/wallpaper_gray.jpg
-          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Black%20%5E%20white%20quasi-abstract%20landscape%20-%20Flickr%20-%20rossomoto.jpg?width=1080' -o wallpapers/wallpaper_black_white.jpg
-          file wallpapers/*
-          du -h wallpapers/*
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wallpaper-source-assets
-          path: wallpapers/
-          if-no-files-found: error
+          out=app/src/main/res/drawable-nodpi
+          mkdir -p "$out"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Red%20Flower%20red.jpg?width=1080' -o "$out/wallpaper_red.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Landscape-sunset-sun-orange%20%2824300255306%29.jpg?width=1080' -o "$out/wallpaper_orange.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Yellow%20flower.png?width=1080' -o "$out/wallpaper_yellow.png"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Green%20Landscape%20with%20Hills%20and%20Trees.jpg?width=1080' -o "$out/wallpaper_green.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/A%20Blue%20Flower.jpg?width=1080' -o "$out/wallpaper_blue.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Purple%20flower%20nature.jpg?width=1080' -o "$out/wallpaper_purple.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Pink%20Paper%20flower.jpg?width=1080' -o "$out/wallpaper_pink.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Sand%20dunes%20landscape%20before%20sunset%2C%20Len%C3%A7%C3%B3is%20Maranhenses.jpg?width=1080' -o "$out/wallpaper_brown.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Grey%20granite%20boulder%20seamless%20stone%20surface%20texture.jpg?width=1080' -o "$out/wallpaper_gray.jpg"
+          curl -fL --retry 3 --retry-all-errors 'https://commons.wikimedia.org/wiki/Special:FilePath/Black%20%5E%20white%20quasi-abstract%20landscape%20-%20Flickr%20-%20rossomoto.jpg?width=1080' -o "$out/wallpaper_black_white.jpg"
+          file "$out"/wallpaper_*
+      - name: Commit bundled assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/res/drawable-nodpi/wallpaper_*
+          git commit -m 'Bundle curated wallpaper assets'
+          git push origin HEAD:codex/indexing-74-75
