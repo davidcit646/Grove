@@ -46,4 +46,29 @@ class ConfigWorkflowTest {
         assertTrue(workflow.replaceWithDefaults())
         assertEquals(Config(), active)
     }
+    @Test fun successfulImportSurvivesWorkflowRecreationWhenActivationPersists() {
+        var stored = Config(wallpaper = 2).json()
+        var active = Config.parse(stored)
+
+        fun workflow() = ConfigWorkflow({ active }) { next ->
+            stored = next.json()
+            active = next
+            true
+        }
+
+        assertTrue(workflow().import(
+            ByteArrayInputStream("""{"version":8,"wallpaper":13,"favorites":[]}""".toByteArray())
+        ))
+        // Simulate process/activity recreation by rebuilding active state from the persisted document.
+        active = Config.parse(stored)
+        val recreated = workflow()
+        val output = ByteArrayOutputStream()
+        recreated.export(output)
+
+        assertEquals(13, active.wallpaper)
+        assertEquals("solid-black", org.json.JSONObject(stored).getString("wallpaper"))
+        assertEquals(active, ConfigDocuments.read(ByteArrayInputStream(output.toByteArray())))
+    }
+
+
 }
