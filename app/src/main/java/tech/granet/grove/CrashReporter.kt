@@ -9,6 +9,7 @@ import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.message
 import java.io.File
@@ -74,7 +75,7 @@ object CrashReporter {
     fun reportNonFatal(context: Context, tag: String, throwable: Throwable) {
         try {
             if (isEnabled(context)) writeReport(context, kind = "error",
-                error = GroveErrorRegistry.GENERIC_NONFATAL.copy(feature = tag.take(80)),
+                error = GroveErrorRegistry.GENERIC_NONFATAL,
                 throwable = throwable)
         } catch (_: Exception) {
         }
@@ -140,10 +141,17 @@ object CrashReporter {
             // A chooser launch is not proof of delivery. Reports remain until explicit discard.
             activity.startActivity(Intent.createChooser(intent, "Send problem report"))
         } catch (_: Exception) {
-            val clipboard = activity.getSystemService(ClipboardManager::class.java)
-            clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
             val e = GroveErrorRegistry.REPORT_HANDOFF
-            activity.message("Code ${e.code} · ${e.gws}. No email app found; report copied for manual paste.")
+            MaterialAlertDialogBuilder(activity)
+                .setTitle("No email app found")
+                .setMessage("Code ${e.code} · ${e.gws}\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Copy report") { _, _ ->
+                    val clipboard = activity.getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
+                    activity.message("Problem report copied")
+                }
+                .show()
         }
     }
 
