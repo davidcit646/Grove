@@ -8,4 +8,7 @@ internal object TutorialReplayPolicy {
         !appsAvailable -> TutorialReplayDecision.DEFER
         else -> TutorialReplayDecision.START
     }
+
+    fun shouldSeedFavoritesOnSkip(setupPreviouslyCompleted: Boolean, favoritesEmpty: Boolean): Boolean =
+        !setupPreviouslyCompleted && favoritesEmpty
 }
