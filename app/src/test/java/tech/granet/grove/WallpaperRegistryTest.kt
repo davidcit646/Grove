@@ -31,4 +31,12 @@ class WallpaperRegistryTest {
         assertEquals(13, Config.parse(Config(wallpaper = 13).json()).wallpaper)
         assertEquals(14, Config.parse(Config(wallpaper = 14).json()).wallpaper)
     }
+    @Test fun attributedCommonsAssetCarriesLicenseLinkAndChangeNotice() {
+        val attributed = WallpaperArt.sources.single { it.license == "CC BY 2.0" }
+        assertEquals("rossomoto", attributed.author)
+        assertEquals("https://creativecommons.org/licenses/by/2.0/", attributed.licenseUrl)
+        assertTrue(attributed.changes?.contains("resized") == true)
+        assertTrue(attributed.sourcePage?.contains("Black_") == true)
+    }
+
 }
