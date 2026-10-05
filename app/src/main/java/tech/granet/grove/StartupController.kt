@@ -32,7 +32,7 @@ internal object CoreRecoveryPolicy {
             CoreRecoveryReason.LAUNCHER_SERVICE ->
                 "Grove could not connect to Android's app launcher service."
             CoreRecoveryReason.APP_CATALOG ->
-                "Android could not provide the installed app list. Retry, or change your Home app in Android Settings."
+                "Installed apps · Recover\nCode ${GroveErrorRegistry.APP_CATALOG.code} · ${GroveErrorRegistry.APP_CATALOG.gws}\n\nAndroid could not provide the installed app list. Retry, or change your Home app in Android Settings."
         },
     )
 }
