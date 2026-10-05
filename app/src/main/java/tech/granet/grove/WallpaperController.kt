@@ -3,6 +3,8 @@ package tech.granet.grove
 import android.app.WallpaperManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.net.Uri
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
@@ -51,10 +53,47 @@ internal class WallpaperController(
         error("Too many wallpaper redirects")
     }
 
-    fun artwork(index: Int): Bitmap = if (index >= 3) {
-        decode(WallpaperArt.cachedFile(activity.filesDir, index))
+    fun artwork(index: Int): Bitmap = when {
+        index < 3 -> WallpaperArt.create(index)
+        index in 3..12 -> decode(WallpaperArt.cachedFile(activity.filesDir, index))
             ?: error("Selected wallpaper cache is unavailable")
-    } else WallpaperArt.create(index)
+        index == 13 -> Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
+        index == 14 -> decode(WallpaperArt.customFile(activity.filesDir))
+            ?: error("Custom wallpaper is unavailable")
+        else -> error("Unknown wallpaper source")
+    }
+
+    fun importCustom(uri: Uri, done: (Boolean) -> Unit) {
+        worker.execute {
+            val target = WallpaperArt.customFile(activity.filesDir)
+            val temp = File(target.parentFile, target.name + ".tmp")
+            val ok = runCatching {
+                val type = activity.contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
+                require(type.startsWith("image/")) { "Selected document is not an image" }
+                target.parentFile?.mkdirs()
+                activity.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(temp).use { output ->
+                        val buffer = ByteArray(16 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= maxDownloadBytes) { "Wallpaper is too large" }
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                } ?: error("Cannot open selected image")
+                val decoded = decode(temp) ?: error("Selected image is corrupt or has unsupported dimensions")
+                decoded.recycle()
+                target.delete()
+                check(temp.renameTo(target)) { "Could not save selected image" }
+                true
+            }.onFailure { Log.w("Grove", "Custom wallpaper import failed", it) }.getOrDefault(false)
+            if (!ok) temp.delete()
+            activity.runOnUiThread { if (!activity.isDestroyed) done(ok) }
+        }
+    }
 
     /** Decode and crop on the worker. The caller owns the returned bitmap. */
     fun background(index: Int, width: Int, height: Int, done: (Bitmap?, Pair<Int, Int>?) -> Unit) {
@@ -112,8 +151,7 @@ internal class WallpaperController(
         fun decodePreview() {
             worker.execute {
                 val preview = runCatching {
-                    val full = if (index < 3) WallpaperArt.create(index)
-                        else decode(WallpaperArt.cachedFile(activity.filesDir, index))
+                    val full = runCatching { artwork(index) }.getOrNull()
                     full?.let {
                         val cropped = centerCrop(it, 360, 800)
                         val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
@@ -127,7 +165,7 @@ internal class WallpaperController(
                 }
             }
         }
-        if (index < 3) decodePreview()
+        if (index < 3 || index >= 13) decodePreview()
         else {
             val cached = WallpaperArt.cachedFile(activity.filesDir, index)
             worker.execute {
@@ -144,8 +182,7 @@ internal class WallpaperController(
     fun apply(index: Int, which: Int, done: (Boolean) -> Unit) {
         worker.execute {
             runCatching {
-                val source = if (index >= 3) decode(WallpaperArt.cachedFile(activity.filesDir, index))
-                    ?: error("Wallpaper cache is missing") else WallpaperArt.create(index)
+                val source = artwork(index)
                 val bitmap = centerCrop(source, activity.resources.displayMetrics.widthPixels,
                     activity.resources.displayMetrics.heightPixels)
                 try { WallpaperManager.getInstance(activity).setBitmap(bitmap, null, true, which) }
@@ -153,7 +190,10 @@ internal class WallpaperController(
             }.onSuccess { activity.runOnUiThread { if (!activity.isDestroyed) { message("Wallpaper applied"); done(true) } } }
                 .onFailure {
                     Log.w("Grove", "Could not apply wallpaper", it)
-                    activity.runOnUiThread { if (!activity.isDestroyed) { message("System wallpaper could not be changed"); done(false) } }
+                    activity.runOnUiThread { if (!activity.isDestroyed) {
+                        GroveErrorPresenter.show(activity, GroveErrorRegistry.WALLPAPER_APPLY)
+                        done(false)
+                    } }
                 }
         }
     }
