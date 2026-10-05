@@ -1,5 +1,22 @@
 # Device acceptance checklist
 
+## PR #87 source verification (2026-10-05)
+
+Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
+
+## PR #87 Android acceptance checklist
+
+- Type, erase and replace queries rapidly while contact/file live queries and index jobs complete. Search must not blank/flash or repeatedly rebuild unchanged rows. Revoke/disable a source during this test: its protected rows disappear immediately; app search stays usable.
+- Change Home wallpaper outside Grove, including a live wallpaper; return Home/restart and verify Android's actual image remains visible. The library may remember Grove's last choice but must not assert it is currently applied.
+- Apply Home, Lock and Both choices. Lock-only must leave Home wallpaper and Home-derived button colors unchanged. Test apply failure and successful Android apply followed by failed Config save; Home still reflects Android, and only a confirmed save updates the remembered choice.
+- Change System/Light/Dark/Wallpaper colors, switch Android night mode, rotate/restart and import legacy v1/v8/v9 settings. Verify v10 roundtrip and Kotlin/native acceptance; malformed v10 modes and future v11 reject. Unavailable Android colors use legible theme fallback, including light wallpaper colors with black button text.
+- Use a slow/broken document provider while Home remains responsive. Change a setting during import: the delayed document must not overwrite it. Cancel/recreate while reading. Fail a config save and verify settings toggle rollback, retained setup/editor recovery, and no stale generic retry.
+- Reach the contact scan bound and verify Partial rather than complete Indexed. Revoke contacts after opening a menu, then select call/text/contact actions: no protected intent may launch. Verify genuine empty results remain Ready(0).
+- Verify real mail-app detection, no-handler copy fallback and failed clipboard access. Fail report-setting saves and report deletion: no false saved/copied/deleted message. Make widget-provider enumeration throw: report unavailable rather than empty.
+
+These are new review-branch checks, not covered by the earlier main acceptance. Historical verification-only issues #20–#26, #29, #30, #32 and #33 were closed on David's explicit acceptance on 2026-10-05; that decision does not manufacture individual test results.
+
+
 ## #74/#75 indexer review gate (pending device execution)
 
 Record build SHA, device/API, and result for each case. Do not mark source review or JVM tests as Android proof.

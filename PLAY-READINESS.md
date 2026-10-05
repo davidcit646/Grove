@@ -11,3 +11,9 @@ This is a development checklist, not a claim of Google Play approval. [GROVE-STA
 
 - For #74/#75, verify [PRIVACY.md](PRIVACY.md), setup/permission explanations, retention and deletion on an installed build; declare local persistent contact/file metadata accurately in Play Data safety. All files access requires the Play declaration and approval for the actual use, even though on-device file search is listed as an eligible category. Reassess narrower access before submission.
 - For #82/#78, verify Android Photo Picker/OpenDocument cancellation, revoked/invalid/oversized inputs, Home/Lock/Both behavior, offline built-ins/credits, report redaction, no-mail copy fallback, chooser cancellation and retained-report behavior on installed builds. #77 separately tracks external Android wallpaper/theme reconciliation.
+
+## PR #87 source verification (2026-10-05)
+
+Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
+
+PR #87 adds locally persisted appearance choices and reads only Android wallpaper ID/color metadata for launcher button colors. Actual wallpaper rendering uses Android's wallpaper window; no extra image/storage permission is introduced. MANAGE_EXTERNAL_STORAGE and its existing review requirement are unchanged. Validate new schema-v10 upgrade and theme/night-mode/external-live-wallpaper behavior on Android 12 and current Android before distribution.

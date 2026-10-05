@@ -1,5 +1,9 @@
 # Grove build verification
 
+## PR #87 source verification (2026-10-05)
+
+Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
+
 PR #83 production/test source at `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567 on 2026-10-05: Rust tests, Android debug assembly, JVM unit tests, Android lint, and the missing-signing-secret negative gate all succeeded. The positive signed-release step remained skipped because `GROVE_SIGNING_PASSWORD` is not available in that PR context. This verifies source/build behavior only; Android device acceptance remains in [TESTING.md](TESTING.md). `GROVE-STATUS.md` was not modified by this implementation.
 
 The 0.1.30 alpha source at baseline commit `181c4ab` passed Android debug build, unit tests, lint and Rust tests. That run did not produce a signed release artifact because the signing secret was unavailable. The integrated source refactor and [PR #73](https://github.com/davidcit646/Grove/pull/73) MainActivity lane split are on main. PR #73 passed Rust tests, debug APK assembly, JVM tests, Android lint, and the missing-signing-secret negative check at `fe4ac0e`. That is source verification, not device validation. Main's release workflow still fails closed without `GROVE_SIGNING_PASSWORD`; no full Android device matrix has been run for this change. Some integrated Grove Test conditions were accepted by the user when #17 was closed, but the broader dated evidence in [TESTING.md](TESTING.md) remains pending.

@@ -1,5 +1,20 @@
 # Grove system catalogue
 
+
+## Current review addendum — PR #87
+
+Source `531d7870222d194018551e4a54cd63b8454ef8b4` passed [CI](https://github.com/davidcit646/Grove/actions/runs/37356982336). The pinned historical catalogue below remains a baseline audit; this addendum describes the review branch, not a merged release. GROVE-STATUS is unchanged.
+
+| Owner/source | Authority and flow | Invariant/failure boundary | Verification |
+| --- | --- | --- | --- |
+| [PresentationController](https://github.com/davidcit646/Grove/blob/531d7870222d194018551e4a54cd63b8454ef8b4/app/src/main/java/tech/granet/grove/PresentationController.kt), HomeController | Android renders applied wallpaper; Android ID/colors → private worker → lifecycle gate → button-color metadata. Grove Config owns requested picker choice and theme preference only. | No remembered image masks external/live wallpaper. Lock-only callback is ignored for Home. Listener failure refreshes on resume; unavailable colors fall back to theme. No main-thread wallpaper decode. | PresentationPolicyTest; external/live/Home/Lock/Both/device cases in TESTING. |
+| Config / Rust config / ConfigController | User preference → aligned v10 validation → confirmed persistence → active config → source/theme reconciliation. Legacy v1–v9 stays readable. | Invalid modes fail closed. Failed writes do not publish; original action is retried from its originating UI, not a stale generic callback. | ConfigTest, PresentationPolicyTest, ConfigTransactionTest; failed-save UI remains device work. |
+| ConfigDocuments / ConfigController | Android document stream → dedicated worker, bounded bytes/schema → main-thread activation if generation/lifecycle/config snapshot still match. Export uses a fixed config snapshot. | Slow providers never block Home. Late import cannot overwrite newer choices; canceled/destroyed/superseded result cannot activate. Zero-byte chunk read makes bounded forward progress. | ConfigDocumentGateTest, ConfigDocumentsTest, ConfigWorkflowTest. |
+| SearchController / SearchSources / SearchScreen | Current Android grants + Grove switches authorize cache/live snapshots; query worker publishes one frame. Stable cache payloads retain prepared identity. | No blank frame during debounce; identical frames do not rebuild rows. Permission/source disable clears protected rows; generation gates still discard stale queries. | SearchFrameGateTest, SearchPublicationGateTest; rapid typing/background/device checks pending. |
+| ContactIndex / IndexCache / ContactActions | Android contacts → bounded ScanResult → private derived metadata with coverage → live/cache Partial; actions recheck user switch and current grant. | Hitting 50,000 results never claims complete coverage; old bound-sized caches are conservatively Partial. Phone/contact actions fail closed after access changes. | ContactCoverage/ConfigDocumentGateTest, existing ContactIndexTest; provider/action revocation device cases pending. |
+| CrashReporter / LauncherSettings / UiKit / WidgetFlow | Confirmed settings/report operations → truthful UI; declared mail intent visibility → user-reviewed draft or copy fallback; provider failure → retry message. | No saved/copied/deleted claim after failure; failed config toggles revert. Wallpaper-row icons use their foreground color. | Existing report/privacy tests, CI; clipboard/storage/mail/widget injected device failures pending. |
+
+
 ## #27/#78/#81/#82 implementation addendum (review branch, 2026-10-05)
 
 This addendum records the verified source implementation on PR #83. Production/test source at `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567 (Rust tests, debug build, JVM tests, lint, and the missing-signing-secret negative gate). It is source/CI evidence, not Android device proof. [GROVE-STATUS.md](GROVE-STATUS.md) remains the operating contract and was not edited.
