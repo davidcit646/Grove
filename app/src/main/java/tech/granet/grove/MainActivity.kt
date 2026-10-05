@@ -36,9 +36,8 @@ class MainActivity : AppCompatActivity() {
     internal val host by lazy { AppWidgetHost(applicationContext, 1024) }
     internal val worker = Executors.newSingleThreadExecutor()
     internal val contactWorker = Executors.newSingleThreadExecutor()
-    internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        searchController.sources.reconcile()
-        if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+    internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        searchController.reconcileAccess()
         setupController.firstRunSetup?.refreshPermissions()
     }
     internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
@@ -149,7 +148,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
-        if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
+        if (searchMode) searchController.reconcileAccess()
         startupController.applyStartupPlan(StartupCoordinator.resume())
     }
 
