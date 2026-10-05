@@ -49,13 +49,19 @@ internal class SetupController(private val activity: MainActivity) {
 
     fun startFirstRunSetup() {
         with(activity) {
-            if (firstRunSetup != null) return
-            if (catalogController.apps.isEmpty()) {
-                if (setupPending()) message("Tutorial replay will start when apps are available")
-                return
+            when (TutorialReplayPolicy.decide(
+                pending = setupPending(),
+                setupShowing = firstRunSetup != null,
+                appsAvailable = catalogController.apps.isNotEmpty(),
+            )) {
+                TutorialReplayDecision.NONE -> return
+                TutorialReplayDecision.DEFER -> {
+                    message("Tutorial replay will start when apps are available")
+                    return
+                }
+                TutorialReplayDecision.START -> Unit
             }
-            if (setupPending())
-                prefs.edit().remove("widget_tutorial_seen").apply()
+            prefs.edit().remove("widget_tutorial_seen").apply()
             firstRunSetup = FirstRunSetup(
                 this, surface, configController.config, catalogController.apps.map { it.key to it.label },
                 searchController::hasContactAccess, { Environment.isExternalStorageManager() },
