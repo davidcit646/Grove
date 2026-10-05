@@ -82,7 +82,7 @@ data class Config(
             require(version in 1..8) { "Unsupported configuration version" }
 
             val wallpaper = root.getInt("wallpaper")
-            require(wallpaper in 0..(2 + WallpaperArt.commons.size)) { "Wallpaper selection is invalid" }
+            require(WallpaperArt.source(wallpaper) != null) { "Wallpaper selection is invalid" }
 
             val entries = root.getJSONArray("favorites")
             require(entries.length() <= 100) { "Too many favorites" }
