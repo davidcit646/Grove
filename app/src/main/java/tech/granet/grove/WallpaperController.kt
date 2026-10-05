@@ -84,6 +84,9 @@ internal class WallpaperController(
                         }
                     }
                 } ?: error("Cannot open selected image")
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(temp.absolutePath, bounds)
+                validateCustomImage(type, temp.length(), bounds.outWidth, bounds.outHeight)
                 val decoded = decode(temp) ?: error("Selected image is corrupt or has unsupported dimensions")
                 decoded.recycle()
                 target.delete()
@@ -206,6 +209,12 @@ internal class WallpaperController(
                     "commons.wikimedia.org", "upload.wikimedia.org", "thumb.wikimedia.org"
                 ) &&
                 (url.port == -1 || url.port == 443) && url.userInfo == null
+
+        fun validateCustomImage(mime: String, bytes: Long, width: Int, height: Int) {
+            require(mime.lowercase(Locale.ROOT).startsWith("image/")) { "Selected document is not an image" }
+            require(bytes in 1..20L * 1024 * 1024) { "Wallpaper is too large" }
+            require(width in 1..8192 && height in 1..8192) { "Invalid wallpaper dimensions" }
+        }
 
         fun decode(file: File): Bitmap? {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
