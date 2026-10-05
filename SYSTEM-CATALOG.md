@@ -1,12 +1,30 @@
 # Grove system catalogue
 
-**Baseline:** `main` at `fbeec5686f815aec84e6748358fe5ff95229694a` (2026-10-05). Code links in this catalogue are pinned to that commit, so their line numbers remain meaningful after later edits. This is a **source audit**, not Android device proof. The further MainActivity lane split in PR #73 is not included because it was not merged at this baseline.
+**Baseline:** `main` at `fbeec5686f815aec84e6748358fe5ff95229694a` (2026-10-05). Code links in this catalogue are pinned to that commit, so their line numbers remain meaningful after later edits. This is a **source audit**, not Android device proof. The MainActivity lane split merged later in PR #73. The pinned baseline below remains a historical source audit; use the current lane map next for the new ownership.
 
 **Contract:** [GROVE-STATUS.md](GROVE-STATUS.md) defines intended user behavior. This catalogue describes the code that exists at the baseline. A **current invariant** is a condition the cited code attempts to maintain; a **target invariant** is a requirement awaiting implementation. A source check does not prove an Android provider or OEM will behave the same way on a device. [FAILURE-POLICY.md](FAILURE-POLICY.md) defines Ready, Degraded, Unavailable and Canceled, plus fail first, fail fast, fail open and fail closed.
 
 ## How to read a system
 
 Each entry records its owner and location, the authoritative data source, information flow, prerequisites and consumers, invariants, failure boundary, and remaining verification. “Fail open” always means a named safe fallback. It never permits bypassing an Android permission or a disabled Grove setting. Line links below point to the operation that enforces or threatens the stated rule. The source inventory at the end accounts for every production Kotlin and Rust file at this baseline.
+
+## Current ownership after PR #73
+
+The current [MainActivity](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/MainActivity.kt#L21-L200) remains the single Android HOME Activity. It owns lifecycle, result registrations, platform services, root views and routing. The following activity-scoped owners hold the state previously concentrated in it; links are pinned to the tested PR head, whose code was merged. Each lane still depends on the platform and lower-level files in the historical systems below. See [ARCHITECTURE.md](ARCHITECTURE.md#mainactivity-lane-split-6) for failure boundaries and device gate.
+
+| Owner | Source of truth and flow | Depends on → used by | Invariant / failure edge |
+| --- | --- | --- | --- |
+| [StartupController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/StartupController.kt#L16-L130) | Saved config and Android launcher checks → recovery or normal Home | ConfigStore, LauncherApps, StartupCoordinator → Activity/Home | Required load/callback failure shows Retry and system settings; invalidates pending work before recovery. |
+| [CatalogController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/CatalogController.kt#L14-L100) | LauncherApps enumeration → generation-checked app and icon snapshot | AppCatalog, AppIconStore → drawer/search/Home | Failed enumeration goes to recovery; missing icons retain placeholders; stale batches are ignored. |
+| [HomeController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/HomeController.kt#L19-L217) | Config and app snapshot → Home render and backdrop | Config, catalog, WallpaperController → Home navigation | Backdrop is optional; destroyed/superseded bitmap work cannot publish. |
+| [DrawerController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/DrawerController.kt#L18-L210) | App snapshot and committed config → filtered grid, folders, selection | Catalog, ConfigController, DrawerState/Tiles → user edits | Folder/pin changes commit before clearing selection. |
+| [SearchController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/SearchController.kt#L24-L210) | Config, permissions and optional source snapshots → generation-checked query results | SearchSources, catalog → search UI/actions | Denied source stays unavailable; stale query work cannot publish. |
+| [ConfigController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/ConfigController.kt#L16-L88) | SharedPreferences/ConfigStore → active Config → controllers | ConfigStore, ConfigDocuments, [ConfigTransaction](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/ConfigTransaction.kt#L1-L16) → all settings consumers | Parse and persist before activation/publication; failed editor/recovery save retains retry surface. |
+| [SetupController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/SetupController.kt#L18-L132) | Provisional first-run answers → config commit and permission requests | FirstRunSetup/State, ConfigController → Home | Failed finish retains setup; optional permission denial does not block Home. |
+| [ActionController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/ActionController.kt#L19-L127) | Current selection and Android access → external intents/uninstall results | FileActions, ContactActions, UninstallBatch → platform apps | Access rechecked; canceled uninstall ends queue. |
+| [WallpaperPresentationController](https://github.com/davidcit646/Grove/blob/fe4ac0e4320ae0c8c3b3e05e391f83721e95abfa/app/src/main/java/tech/granet/grove/WallpaperPresentationController.kt#L12-L28) | Picker choice → Android apply → committed Grove preference | WallpaperPicker/Controller, ConfigController → Home | Apply succeeds before preference commit; failed apply leaves old choice. |
+
+The historical 15-system inventory below remains pinned to `fbeec568`; its old MainActivity line links describe that earlier layout, not current ownership. PR #73 added the nine controllers and ConfigTransaction (56 Kotlin and 6 Rust production source files at this merge). The target-only systems remain tracked by #74–#78. Source CI passed on the PR head; device verification remains #6/#34.
 
 ## 1. Process, lifecycle and startup
 
@@ -195,10 +213,10 @@ These are specified by Grove Status, but have **no current production owner**: s
 ## Verification and maintenance
 
 - The current source enforces many conditions above, but full device failure injection, Android 12/current Android runs, performance measurements and positive signed update checks remain open in [TESTING.md](TESTING.md) and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md). Do not mark an invariant device-verified from a JVM unit test alone.
-- When PR #73 merges, update the baseline and move MainActivity line references to the new controllers. Keep the old pinned version available for historical review; distinguish current from target in each replacement.
+- The pinned baseline below is historical. Use the current ownership map above for the controller split; replace individual historical invariant links with current line-level evidence as later behavior changes.
 - For each change, record the owner, incoming source, outgoing consumer, hard/soft prerequisite, fail-first check, state commit point, fallback, retry, cancellation, and focused test/device evidence. A missing or ambiguous edge is a documentation gap, not proof of safety.
 
-## Complete production source index
+## Production source index at the historical baseline
 
 Each link spans its complete file at the pinned baseline. The sections above identify the narrower entry, invariant and failure lines. Files with multiple duties, especially MainActivity, appear once here but in every relevant system above.
 

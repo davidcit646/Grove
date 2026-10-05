@@ -18,7 +18,7 @@ This is the target contract. The current app already has a recoverable Home, per
 | Android-applied-wallpaper reconciliation and explicit theme modes | Saved Grove selection plus wallpaper-button-color toggle; system theme styling | [#77](https://github.com/davidcit646/Grove/issues/77), [#29](https://github.com/davidcit646/Grove/issues/29) |
 | GHEAEW severity/code registry, safe report draft, default recipient | Saved crash/nonfatal reports and a next-launch email choice; no numeric code UI or default address | [#78](https://github.com/davidcit646/Grove/issues/78), [#28](https://github.com/davidcit646/Grove/issues/28) |
 
-The remaining source refactor is [PR #73](https://github.com/davidcit646/Grove/pull/73), which has not merged into `main`. [TESTING.md](TESTING.md) and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) distinguish source checks from pending Android device evidence. [#79](https://github.com/davidcit646/Grove/issues/79) tracks documentation alignment.
+The [PR #73](https://github.com/davidcit646/Grove/pull/73) MainActivity lane split is on `main`; its Android device verification remains tracked by [#6](https://github.com/davidcit646/Grove/issues/6) and [#34](https://github.com/davidcit646/Grove/issues/34). [TESTING.md](TESTING.md) and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) distinguish source checks from pending Android device evidence. [#79](https://github.com/davidcit646/Grove/issues/79) tracks documentation alignment.
 
 ## The rules in plain language
 
