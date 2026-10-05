@@ -40,13 +40,19 @@ internal class WallpaperPresentationController(private val activity: MainActivit
     private fun applySelection(index: Int, which: Int) {
         with(activity) {
             wallpaperController.apply(index, which) { applied ->
-                if (applied && which and WallpaperManager.FLAG_SYSTEM != 0) {
+                if (!applied) {
+                    GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_APPLY) {
+                        applySelection(index, which)
+                    }
+                    return@apply
+                }
+                if (which and WallpaperManager.FLAG_SYSTEM != 0) {
                     if (configController.commitConfig(configController.config.copy(wallpaper = index))) {
                         homeController.pendingWallpaper = null
                         homeController.artworkStyle = -1
                     } else {
                         GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_SYNC) {
-                            applySelection(index, which)
+                            configController.commitConfig(configController.config.copy(wallpaper = index))
                         }
                     }
                     homeController.showHome()
