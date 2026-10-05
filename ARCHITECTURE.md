@@ -1,5 +1,7 @@
 # Grove architecture
 
+For the full current system and invariant inventory with source line references, see [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md). This page is the shorter ownership overview.
+
 Status: the integrated source refactor is on main, including setup presentation and optional search/widget orchestration. The further MainActivity lane split is in [PR #73](https://github.com/davidcit646/Grove/pull/73), not on main. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior; [FAILURE-POLICY.md](FAILURE-POLICY.md) defines the capability outcomes, and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) separates source checks from Android device work.
 
 `MainActivity` owns Activity lifecycle, ActivityResult launchers, Home/search/drawer navigation, and the root Android view. `SearchSources` owns optional contact/file indexes and cancellation; `WidgetFlow` owns the widget setup sequence while the Activity retains result launchers. `FirstRunSetup` owns the full-screen shell and navigation; `FirstRunPages` renders page content with `FirstRunComponents` visual primitives and `FirstRunState` provisional answers. The Activity is about 1,145 lines after this extraction; remaining drawer and navigation coordination is tracked by #6. It delegates work and decisions to these owners:
