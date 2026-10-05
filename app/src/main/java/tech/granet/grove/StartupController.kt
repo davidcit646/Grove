@@ -107,12 +107,12 @@ internal class StartupController(private val activity: MainActivity) {
         contactSearchEnabled = configController.config.search.contacts,
         contactsGranted = searchController.hasContactAccess(),
         lastContactRefreshMs = searchController.lastContactRefresh,
-        searchController.indexingContacts = searchController.indexingContacts,
-        searchController.contactLoadFailed = searchController.contactLoadFailed,
+        indexingContacts = searchController.indexingContacts,
+        contactLoadFailed = searchController.contactLoadFailed,
         fileSearchEnabled = configController.config.search.files,
         filesGranted = Environment.isExternalStorageManager(),
         hasFiles = searchController.files.isNotEmpty(),
-        searchController.indexingFiles = searchController.indexingFiles,
+        indexingFiles = searchController.indexingFiles,
     )
     }
 
