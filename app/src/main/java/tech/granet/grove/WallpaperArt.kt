@@ -73,7 +73,6 @@ internal object WallpaperArt {
 
     fun source(index: Int): WallpaperSource? = sources.firstOrNull { it.legacyIndex == index }
     fun indexForId(id: String): Int? = sources.firstOrNull { it.id == id }?.legacyIndex
-    fun cachedFile(filesDir: File, index: Int) = File(filesDir, "wallpapers/commons-${index - 3}.jpg")
     fun customFile(filesDir: File) = File(filesDir, "wallpapers/custom-image")
 
     private const val ART_WIDTH = 1080
