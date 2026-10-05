@@ -88,9 +88,12 @@ internal object GroveErrorPresenter {
             .setNegativeButton(route.dismissLabel, null)
         if (retry != null) builder.setPositiveButton(route.actionLabel) { _, _ -> retry() }
         builder.setNeutralButton("Report") { _, _ ->
-            CrashReporter.reportNonFatal(activity, error, null)
-            activity.message("Problem report saved for your review")
-            CrashReporter.promptIfPending(activity)
+            if (CrashReporter.reportUserRequested(activity, error, null)) {
+                activity.message("Problem report saved for your review")
+                CrashReporter.reviewPending(activity)
+            } else {
+                activity.message("Could not save the problem report")
+            }
         }
         builder.show()
     }
