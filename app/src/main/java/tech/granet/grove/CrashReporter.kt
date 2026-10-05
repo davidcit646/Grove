@@ -184,13 +184,9 @@ object CrashReporter {
 
     private fun showCopyFallback(activity: Activity, body: String) {
         val e = GroveErrorRegistry.REPORT_HANDOFF
-        val codeLine = buildString {
-            append("Code ").append(e.code)
-            e.gws?.let { append(" · ").append(it) }
-        }
         MaterialAlertDialogBuilder(activity)
             .setTitle("No email app found")
-            .setMessage("$codeLine\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
+            .setMessage("${e.codeLine()}\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Copy report") { _, _ ->
                 val clipboard = activity.getSystemService(ClipboardManager::class.java)
