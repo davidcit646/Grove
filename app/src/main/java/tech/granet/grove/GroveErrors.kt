@@ -84,13 +84,7 @@ internal object GroveErrorPresenter {
             .setTitle("Grove problem")
             .setMessage(body)
             .setNegativeButton(route.dismissLabel, null)
-        if (retry != null) builder.setPositiveButton(route.actionLabel, null).create().also { dialog ->
-            dialog.setOnShowListener {
-                dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener { retry() }
-            }
-            dialog.show()
-            return
-        }
+        if (retry != null) builder.setPositiveButton(route.actionLabel) { _, _ -> retry() }
         builder.setNeutralButton("Report") { _, _ ->
             CrashReporter.reportNonFatal(activity, error, null)
             activity.message("Problem report saved for your review")
