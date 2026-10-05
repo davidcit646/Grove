@@ -41,6 +41,9 @@ class MainActivity : AppCompatActivity() {
         setupController.firstRunSetup?.refreshPermissions()
     }
     internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
+    internal val chooseWallpaperImage = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) wallpaperPresentationController.importCustom(uri)
+    }
     internal val uninstallNext = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         catalogController.loadApps()
         if (result.resultCode == RESULT_OK) actionController.launchNextUninstall(actionController.uninstallBatch.accepted())
