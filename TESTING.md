@@ -5,6 +5,7 @@
 Record build SHA, device/API, and result for each case. Do not mark source review or JVM tests as Android proof.
 
 - Upgrade v7 settings with both search flags on: both indexing flags remain off, live search still returns contacts/files with current grants, and Home remains responsive. Export/import v8, including the combinations where search is off but indexing is on.
+- Regression #84: with the native library loaded, save a v8 configuration, change a wallpaper or ordinary setting, recreate/restart Grove, and verify the v8 configuration reloads without entering fallback recovery; malformed v8 and v9 must still enter the normal rejection/recovery path without erasing the preserved raw configuration.
 - Grant, deny, and revoke contacts and All files access while a query and background build are running. No protected row may remain visible or be committed after revocation; restoring a grant alone must not enable a Grove switch.
 - Turn indexing off during a build and verify worker cancellation, private cache deletion and permitted live search; turn search off independently and verify no rows while explicitly enabled indexing may refresh. App search and Home must work throughout.
 - Force unavailable, empty, corrupt, oversize, stale and partially scanned caches; force provider null/throw and a failed/low-storage atomic write. Check scoped status, retry/fallback, no false Indexed result, and isolation of the other source.
