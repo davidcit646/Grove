@@ -39,14 +39,14 @@ internal class WallpaperPresentationController(private val activity: MainActivit
 
     private fun commitHomeSelection(index: Int): Boolean = with(activity) {
         if (!configController.commitConfig(configController.config.copy(wallpaper = index))) return@with false
-        homeController.pendingWallpaper = null
-        homeController.artworkStyle = -1
+        presentationController.refresh()
         true
     }
 
     private fun applySelection(index: Int, which: Int) {
         with(activity) {
             wallpaperController.apply(index, which) applyDone@{ outcome ->
+                presentationController.refresh()
                 when (outcome) {
                     WallpaperApplyOutcome.PLATFORM_FAILED -> {
                         GroveErrorPresenter.show(this, GroveErrorRegistry.WALLPAPER_APPLY) {

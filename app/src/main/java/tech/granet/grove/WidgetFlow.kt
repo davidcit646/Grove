@@ -54,7 +54,8 @@ internal class WidgetFlow(
                 info to label
             }.sortedBy { it.second.lowercase() }
         }.onFailure { Log.w("Grove", "Widget providers unavailable", it) }.getOrNull()
-        if (providers.isNullOrEmpty()) { message("No widgets available"); return }
+        if (providers == null) { message("Widget providers unavailable; try again"); return }
+        if (providers.isEmpty()) { message("No widgets available"); return }
         activity.listDialog("Add widget", providers.map { it.second }, negative = "Cancel") { index ->
             val provider = providers.getOrNull(index)?.first ?: return@listDialog
             val id = runCatching { widgets.allocate() }

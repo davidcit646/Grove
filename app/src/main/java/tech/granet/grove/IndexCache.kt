@@ -26,11 +26,11 @@ internal object IndexCache {
         return write(context, "files", rows, result.skippedDirectories + if (result.truncated) 1 else 0, allowed)
     }
 
-    fun writeContacts(context: Context, contacts: List<ContactIndex.Contact>, allowed: () -> Boolean): Boolean {
+    fun writeContacts(context: Context, scan: ContactIndex.ScanResult, allowed: () -> Boolean): Boolean {
         val rows = JSONArray()
-        contacts.forEach { item -> rows.put(JSONObject().put("id", item.id)
+        scan.contacts.forEach { item -> rows.put(JSONObject().put("id", item.id)
             .put("key", item.lookupKey.take(512)).put("name", item.name.take(512))) }
-        return write(context, "contacts", rows, 0, allowed)
+        return write(context, "contacts", rows, if (scan.truncated) 1 else 0, allowed)
     }
 
     private fun write(context: Context, kind: String, rows: JSONArray, skipped: Int, allowed: () -> Boolean): Boolean {
@@ -75,6 +75,6 @@ internal object IndexCache {
         require(rows.length() <= 50_000) { "Invalid contact count" }
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
             ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"))
-        } }, 0, value.getLong("writtenAt"))
+        } }, maxOf(value.getInt("skipped"), if (rows.length() >= 50_000) 1 else 0), value.getLong("writtenAt"))
     }
 }

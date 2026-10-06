@@ -70,16 +70,14 @@ object CrashReporter {
     fun isEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_ENABLED, true)
 
-    fun setEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
-    }
+    fun setEnabled(context: Context, enabled: Boolean): Boolean =
+        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).commit()
 
     fun developerEmail(context: Context): String =
         prefs(context).getString(KEY_EMAIL, DEFAULT_EMAIL).orEmpty().ifBlank { DEFAULT_EMAIL }
 
-    fun setDeveloperEmail(context: Context, email: String) {
-        prefs(context).edit().putString(KEY_EMAIL, email.trim()).apply()
-    }
+    fun setDeveloperEmail(context: Context, email: String): Boolean =
+        prefs(context).edit().putString(KEY_EMAIL, email.trim()).commit()
 
     /** File a report for a caught exception; surfaced at the next [promptIfPending]. */
     fun reportNonFatal(context: Context, tag: String, throwable: Throwable) {
@@ -143,11 +141,11 @@ object CrashReporter {
         0
     }
 
-    fun deleteAll(context: Context) {
-        try {
-            reportsDir(context).listFiles()?.forEach { it.delete() }
-        } catch (_: Exception) {
-        }
+    fun deleteAll(context: Context): Boolean = try {
+        val reports = reportsDir(context).listFiles() ?: error("Cannot read reports")
+        reports.fold(true) { removed, file -> (file.delete() || !file.exists()) && removed }
+    } catch (_: Exception) {
+        false
     }
 
     private fun sendReports(activity: Activity, reports: List<File>) {
@@ -190,8 +188,10 @@ object CrashReporter {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Copy report") { _, _ ->
                 val clipboard = activity.getSystemService(ClipboardManager::class.java)
-                clipboard?.setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
-                activity.message("Problem report copied")
+                val copied = runCatching {
+                    checkNotNull(clipboard).setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
+                }.isSuccess
+                activity.message(if (copied) "Problem report copied" else "Could not copy report")
             }
             .show()
     }

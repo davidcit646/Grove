@@ -39,7 +39,7 @@ internal object GroveErrorRegistry {
     val CONFIG_EXPORT = GroveError(111, GroveErrorOwner.CONFIGURATION, null, "Configuration export", ErrorSeverity.DEGRADE,
         "The configuration could not be exported.")
     val CONFIG_PERSIST = GroveError(112, GroveErrorOwner.CONFIGURATION, null, "Configuration", ErrorSeverity.RECOVER,
-        "Grove could not save the requested configuration change.")
+        "Grove could not save the requested configuration change. Retry the change from its original screen.")
     val CONFIG_LOAD = GroveError(113, GroveErrorOwner.CONFIGURATION, null, "Configuration", ErrorSeverity.RECOVER,
         "Grove could not load its saved configuration.")
 

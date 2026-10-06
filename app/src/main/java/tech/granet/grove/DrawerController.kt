@@ -38,7 +38,7 @@ internal class DrawerController(private val activity: MainActivity) {
             if (isDestroyed || startupController.coreRecoveryVisible) return
             homeController.rememberHomeScroll()
             clearAppSelection()
-            drawer = true; searchMode = false; homeController.base()
+            drawer = true; searchMode = false; homeController.base(readableBackdrop = true)
             root.requestFocus()
             val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             header.addView(wallpaperLabel("All apps", 30f), LinearLayout.LayoutParams(0, -2, 1f))

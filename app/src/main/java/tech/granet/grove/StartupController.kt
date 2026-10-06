@@ -56,6 +56,7 @@ internal class StartupController(private val activity: MainActivity) {
                 return
             }
             configController.config = loaded
+            presentationController.applyTheme(loaded.themeMode)
             // Widget metadata is optional. Keep the app list and Home available if it is damaged.
             runCatching { widgets.restore(startupState) }
                 .onFailure { Log.w("Grove", "Widget state unavailable", it) }

@@ -19,6 +19,22 @@ internal class ContactActions(
     private val installed: (String) -> Boolean,
     private val showActionMenu: (String, List<Triple<String, Int, () -> Unit>>) -> Unit,
 ) {
+    private fun menu(title: String, actions: List<Triple<String, Int, () -> Unit>>) {
+        if (!current().search.contacts || !hasAccess()) return
+        showActionMenu(title, actions.map { (label, icon, action) -> Triple(label, icon) {
+            if (current().search.contacts && hasAccess()) action()
+            else activity.message("Contact access is unavailable")
+        } })
+    }
+
+    private fun launch(intent: Intent) {
+        if (!current().search.contacts || !hasAccess()) {
+            activity.message("Contact access is unavailable")
+            return
+        }
+        activity.startActivity(intent)
+    }
+
     fun show(contact: ContactIndex.Contact) {
         if (!current().search.contacts || !hasAccess()) return
         worker.execute {
@@ -30,7 +46,7 @@ internal class ContactActions(
                 val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
                 fun action(label: String, icon: Int, intent: () -> Intent) {
                     actions.add(Triple(label, icon) {
-                        runCatching { activity.startActivity(intent()) }.onFailure { activity.message("No compatible app is available") }
+                        runCatching { launch(intent()) }.onFailure { activity.message("No compatible app is available") }
                     })
                 }
                 val waTargets = ContactIndex.whatsAppTargets(details.channels) { pkg ->
@@ -39,14 +55,14 @@ internal class ContactActions(
                 val numbers = details.numbers
                 fun callRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_call) {
                     runCatching {
-                        activity.startActivity(Intent.createChooser(
+                        launch(Intent.createChooser(
                             Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number.value, null)), "Call with"))
                     }.onFailure { activity.message("No compatible app is available") }
                     Unit
                 }
                 fun textRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_message) {
                     runCatching {
-                        activity.startActivity(Intent.createChooser(
+                        launch(Intent.createChooser(
                             Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number.value, null)), "Message with"))
                     }.onFailure { activity.message("No compatible app is available") }
                     Unit
@@ -61,11 +77,11 @@ internal class ContactActions(
                     }
                     numbers.size > 1 -> {
                         actions.add(Triple("Call", R.drawable.ic_call) {
-                            showActionMenu("Call ${contact.name}", numbers.map(::callRow))
+                            menu("Call ${contact.name}", numbers.map(::callRow))
                             Unit
                         })
                         actions.add(Triple("Text", R.drawable.ic_message) {
-                            showActionMenu("Text ${contact.name}", numbers.map(::textRow))
+                            menu("Text ${contact.name}", numbers.map(::textRow))
                             Unit
                         })
                     }
@@ -98,7 +114,7 @@ internal class ContactActions(
                 action("Edit contact", R.drawable.ic_edit) {
                     Intent(Intent.ACTION_EDIT).setDataAndType(contact.uri, ContactsContract.Contacts.CONTENT_ITEM_TYPE)
                 }
-                showActionMenu(contact.name, actions)
+                menu(contact.name, actions)
             }
         }
     }

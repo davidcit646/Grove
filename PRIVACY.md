@@ -4,6 +4,12 @@ Last updated: October 5, 2026
 
 Grove Launcher is developed by GraNet IT Solutions (CITARE HOLDINGS LLC). Questions about this policy can be sent through https://granet.tech/.
 
+## Wallpaper and appearance on the PR #87 review branch
+
+Android displays the applied Home wallpaper directly, including static and live wallpapers. Grove reads Android's wallpaper ID and color metadata locally to refresh optional button colors; it does not read/copy the system wallpaper image for Home rendering, upload it, or request additional storage access for appearance. System/Light/Dark/Wallpaper colors preferences remain on device. Grove's previously selected library item is a remembered preference, not a record guaranteed to match an externally changed wallpaper.
+
+Contact searches and indexes that reach their bound are partial; private contact-cache coverage metadata records that limitation. No phone numbers or file contents were added to caches by this change.
+
 ## Information Grove uses on your device
 
 - Grove lists installed launchable apps to display its app drawer, search results, and pinned apps. Your layout and settings are stored locally on your device.

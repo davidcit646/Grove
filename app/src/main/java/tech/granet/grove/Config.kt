@@ -43,9 +43,11 @@ data class Config(
     val homeScreen: HomeScreenSettings = HomeScreenSettings(),
     val folders: List<AppFolder> = emptyList(),
     val search: SearchSettings = SearchSettings(),
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
     fun json(): String = JSONObject()
-        .put("version", 9)
+        .put("version", 10)
+        .put("themeMode", themeMode.id)
         .put("wallpaper", WallpaperArt.source(wallpaper)?.id ?: error("Wallpaper selection is invalid"))
         .put("favorites", JSONArray(favorites))
         .put("folders", JSONArray().apply { folders.forEach { folder ->
@@ -79,7 +81,7 @@ data class Config(
         fun parse(text: String): Config {
             val root = JSONObject(text)
             val version = root.getInt("version")
-            require(version in 1..9) { "Unsupported configuration version" }
+            require(version in 1..10) { "Unsupported configuration version" }
 
             val wallpaper = if (version >= 9) {
                 val value = root.get("wallpaper")
@@ -156,7 +158,12 @@ data class Config(
                     require(list.flatMap { it.apps }.distinct().size == list.sumOf { it.apps.size }) { "App in multiple folders" }
                 }
             } else emptyList()
-            return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders, search)
+            val themeMode = if (version >= 10) {
+                val value = root.get("themeMode")
+                require(value is String) { "Theme mode must be a string" }
+                ThemeMode.parse(value)
+            } else ThemeMode.SYSTEM
+            return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders, search, themeMode)
         }
     }
 }

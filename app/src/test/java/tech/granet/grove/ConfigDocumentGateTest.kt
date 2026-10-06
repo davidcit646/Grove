@@ -1,0 +1,30 @@
+package tech.granet.grove
+
+import java.io.ByteArrayInputStream
+import java.io.InputStream
+import org.junit.Assert.*
+import org.junit.Test
+
+class ConfigDocumentGateTest {
+    @Test fun slowImportCannotReplaceNewerUserChoices() {
+        val started = Config(themeMode = ThemeMode.SYSTEM)
+        val changed = started.copy(themeMode = ThemeMode.DARK)
+        assertFalse(ConfigDocumentGate.canActivate(started, changed))
+        assertFalse(ConfigDocumentGate.canActivate(started, started.copy(search = SearchSettings(files = true))))
+        assertTrue(ConfigDocumentGate.canActivate(started, started.copy()))
+    }
+    @Test fun zeroLengthChunkReadDoesNotSpinOrLoseInput() {
+        val original = Config(themeMode = ThemeMode.WALLPAPER)
+        val bytes = ByteArrayInputStream(original.json().toByteArray())
+        val input = object : InputStream() {
+            override fun read(): Int = bytes.read()
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int = 0
+        }
+        assertEquals(original, ConfigDocuments.read(input))
+    }
+    @Test fun boundedContactCoverageIsNeverLabeledComplete() {
+        assertFalse(ContactCoverage.isPartial(49_999, 50_000))
+        assertTrue(ContactCoverage.isPartial(50_000, 50_000))
+        assertTrue(ContactCoverage.isPartial(50_001, 50_000))
+    }
+}

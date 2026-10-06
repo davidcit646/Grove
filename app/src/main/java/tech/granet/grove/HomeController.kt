@@ -3,9 +3,6 @@ package tech.granet.grove
 import android.content.*
 import android.content.res.ColorStateList
 import android.graphics.*
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.LayerDrawable
 import android.provider.AlarmClock
 import android.os.*
 import android.view.*
@@ -15,24 +12,17 @@ import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
 import java.util.*
 
-/** Home rendering, scrolling and backdrop ownership. Wallpaper failure keeps the gradient; stale bitmaps are recycled. */
+/** Home rendering and scrolling. Android owns the unmodified wallpaper behind transparent Home. */
 internal class HomeController(private val activity: MainActivity) {
     internal lateinit var body: LinearLayout
     internal var homeScrollY = 0
-    internal var artworkStyle = -1
-    internal var artwork: Bitmap? = null
-    internal var backdrop: Bitmap? = null
-    internal var backdropWidth = 0
-    internal var backdropHeight = 0
-    internal var wallpaperButtonColors: Pair<Int, Int>? = null
-    internal var pendingWallpaper: Triple<Int, Int, Int>? = null
     fun bodyInitialized() = ::body.isInitialized
 
     fun button(text: String, action: () -> Unit): MaterialButton = with(activity) { MaterialButton(this).apply {
         this.text = text
         val themeColors = ThemeColors.buttonSurface(activity) to ThemeColors.onButtonSurface(activity)
-        val colors = if (configController.config.homeScreen.useWallpaperButtonColors && artworkStyle == configController.config.wallpaper)
-            wallpaperButtonColors ?: themeColors
+        val colors = if (PresentationPolicy.wallpaperColors(configController.config.themeMode, configController.config.homeScreen.useWallpaperButtonColors))
+            presentationController.buttonColors ?: themeColors
         else themeColors
         backgroundTintList = ColorStateList.valueOf(colors.first)
         setTextColor(colors.second)
@@ -52,54 +42,16 @@ internal class HomeController(private val activity: MainActivity) {
     }
     }
 
-    fun base() {
+    fun base(readableBackdrop: Boolean = false) {
         with(activity) {
             searchController.cancelPending()
             searchController.searchField = null; searchController.searchResults = null; drawerController.drawerAdapter = null; drawerController.drawerEmpty = null; drawerController.drawerGrid = null
             root.animate().cancel(); root.translationY = 0f; root.alpha = 1f
             root.removeAllViews()
-            val width = surface.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-            val height = surface.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-            val key = Triple(configController.config.wallpaper, width, height)
-            if (artworkStyle != key.first || backdropWidth != width || backdropHeight != height || backdrop == null) {
-                if (pendingWallpaper != key) {
-                    pendingWallpaper = key
-                    wallpaperController.background(key.first, width, height) { prepared, colors ->
-                        if (isDestroyed || pendingWallpaper != key || configController.config.wallpaper != key.first) {
-                            prepared?.recycle()
-                        } else {
-                            pendingWallpaper = null
-                            if (prepared == null) {
-                                message("Home wallpaper unavailable")
-                            } else {
-                                val previous = artwork
-                                artwork = prepared
-                                backdrop = prepared
-                                artworkStyle = key.first
-                                backdropWidth = width
-                                backdropHeight = height
-                                wallpaperButtonColors = colors
-                                showWallpaperBackground(prepared)
-                                if (previous !== prepared) previous?.recycle()
-                                if (!drawer && !searchMode && !startupController.coreRecoveryVisible) showHome()
-                            }
-                        }
-                    }
-                }
-                surface.background = GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0xff416e60.toInt(), 0xff142f30.toInt()),
-                )
-            } else showWallpaperBackground(backdrop!!)
-        }
-    }
-
-    fun showWallpaperBackground(image: Bitmap) {
-        with(activity) {
-            surface.background = LayerDrawable(arrayOf(
-                BitmapDrawable(resources, image).apply { gravity = Gravity.FILL },
-                GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x66000000, 0xaa000000.toInt()))
-            ))
+            // The Android wallpaper window is authoritative, including external/live changes.
+            // Home stays undimmed. Drawer/search use their own readable translucent surface.
+            surface.background = if (readableBackdrop)
+                android.graphics.drawable.ColorDrawable(0xb3000000.toInt()) else null
         }
     }
 

@@ -31,6 +31,7 @@ internal class SearchSources(
     var indexingFiles = false; private set
     var fileLoadFailed = false; private set
     var fileScanSkipped = 0; private set
+    var contactScanSkipped = 0; private set
     var contactCacheReady = false; private set
     var fileCacheReady = false; private set
     private var contactCorrupt = false
@@ -100,8 +101,11 @@ internal class SearchSources(
                     if (snapshot != null && prepared != null) {
                         contactCorrupt = false
                         contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(15L * 60_000)
-                        contacts = snapshot.items
-                        contactSearch = prepared
+                        contactScanSkipped = snapshot.skipped
+                        if (contacts != snapshot.items) {
+                            contacts = snapshot.items
+                            contactSearch = prepared
+                        }
                         lastContactRefresh = android.os.SystemClock.elapsedRealtime()
                     }
                 }.onFailure {
@@ -129,8 +133,10 @@ internal class SearchSources(
                     if (snapshot != null && prepared != null) {
                         fileCorrupt = false
                         fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(24L * 60 * 60_000)
-                        files = snapshot.items
-                        fileSearch = prepared
+                        if (files != snapshot.items) {
+                            files = snapshot.items
+                            fileSearch = prepared
+                        }
                         fileScanSkipped = snapshot.skipped
                     }
                 }.onFailure {
@@ -148,6 +154,7 @@ internal class SearchSources(
         contactGeneration++
         contacts = emptyList(); contactSearch = SearchResults.prepare(contacts) { it.searchName }
         contactCacheReady = false
+        contactScanSkipped = 0
         contactCorrupt = false
         indexingContacts = false; contactLoadFailed = false; lastContactRefresh = 0
         handler.removeCallbacks(contactChange)
@@ -186,7 +193,7 @@ internal class SearchSources(
             if (files) indexingFiles else indexingContacts,
             if (files) fileLoadFailed else contactLoadFailed,
             if (files) fileCorrupt else contactCorrupt,
-            partial = files && fileScanSkipped > 0)
+            partial = if (files) fileScanSkipped > 0 else contactScanSkipped > 0)
         return if (enabled && !permitted) "Permission required" else state.label
     }
 }

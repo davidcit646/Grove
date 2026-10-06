@@ -17,7 +17,13 @@ internal object ConfigDocuments {
         while (true) {
             val count = input.read(chunk, 0, minOf(chunk.size, LIMIT + 1 - bytes.size()))
             if (count < 0) break
-            if (count == 0) continue
+            if (count == 0) {
+                val byte = input.read()
+                if (byte < 0) break
+                bytes.write(byte)
+                require(bytes.size() <= LIMIT) { "Configuration exceeds 64 KB" }
+                continue
+            }
             bytes.write(chunk, 0, count)
             require(bytes.size() <= LIMIT) { "Configuration exceeds 64 KB" }
         }

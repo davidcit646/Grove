@@ -2,12 +2,22 @@
 
 An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.30 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
 
-[SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its [implementation status](GROVE-STATUS.md#implementation-status-on-main) distinguishes shipped code from proposals, including separate live search/indexing, durable index caches, custom/black wallpaper choices, theme modes, and error codes. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
+[SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its historical [implementation status](GROVE-STATUS.md#implementation-status-on-main) is preserved by user instruction; current source changes and evidence are recorded in this README, SYSTEM-CATALOG, BUILD-STATUS and TESTING. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
+
+## PR #87 review changes
+
+The review branch addresses #31, #77 and #85; these changes are not yet merged into main.
+
+- Search no longer blanks rows during debounce. Unchanged source notifications preserve existing rows, while revoked/disabled sources are cleared and stale query generations cannot publish.
+- Android displays the actual Home wallpaper, including external and live wallpaper changes, behind a transparent Home, with localized text shadows and system-bar protection. Grove's saved wallpaper choice is a library preference, not proof of Android's applied image.
+- Launcher settings → Appearance offers System, Light, Dark and Wallpaper colors. Wallpaper colors follows the system's night mode and uses Android's Home-wallpaper color for launcher buttons, with a theme fallback. Lock-only changes do not alter Home selection/colors.
+- Configuration documents run on a dedicated worker; a delayed import cannot replace settings changed while it was reading. Failed saves keep original UI recovery paths and roll settings switches back.
+- Contact scans at their bound report partial coverage. Contact actions recheck access, mail-handler visibility is declared, and report copy/delete/save and widget-provider failures expose truthful outcomes.
 
 ## 0.1.30 changes
 
 - Search and background indexing are independent for contacts and shared-storage files; durable private caches can rebuild without making permission or user-setting decisions for themselves.
-- Configuration import/export/recovery uses bounded document I/O outside Activity UI. Schema v9 persists wallpapers by stable source ID while remaining compatible with legacy v1–v8 documents.
+- Configuration import/export/recovery uses bounded document I/O outside Activity UI. Schema v10 persists explicit theme modes and stable wallpaper source IDs while remaining compatible with legacy v1–v9 documents.
 - Launcher settings → Tutorials owns a single replay request. Existing completed setup remains completed while replay is queued, and replay Skip preserves the current launcher configuration.
 - The wallpaper library is fully local for built-ins: three generated designs, ten packaged Commons images with offline credits, a true solid-black option, and a bounded user-selected image copy. Built-ins no longer require runtime Wikimedia downloads.
 - Grove errors use reserved numeric ranges plus assigned wallpaper GWS diagnostics, Degrade/Recover/Stop routing, privacy-bounded reports addressed to `support@granet.tech`, and a copy fallback when no mail app handles the draft.

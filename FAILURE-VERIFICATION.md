@@ -30,3 +30,9 @@ These Android-only rows are outstanding work, not passing claims. They remain ev
 ## Implemented source behavior awaiting Android proof
 
 PR #83 now has deterministic source coverage for separate indexing/live GFS-GCS (#74), durable GFI/GCI caches and states (#75), bounded configuration workflow/recovery (#27), single-request tutorial replay (#81), user/black/offline bundled wallpaper behavior with stable v9 source IDs (#82 incorporating #76), and the Grove/GWS code-severity-report workflow (#78). Production/test head `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567. These tests prove repository logic only; they do not substitute for the dated device cases in TESTING.md. External Android wallpaper and theme reconciliation remains tracked separately in #77.
+
+## PR #87 source verification (2026-10-05)
+
+Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
+
+PR #87's deterministic additions cover duplicate search-frame suppression and publication authorization, v10 theme migration/rejection and lock-only/Home decisions, stale-import protection, zero-byte document-read progress, and conservative partial contact coverage. Actual wallpaper-window rendering, Android color-listener fallback, failed-setting UI rollback, provider delay/cancel, mail visibility and contact action-time revocation are listed separately in TESTING. Historical #32/#33 issue closure records user acceptance, not newly executed device evidence.

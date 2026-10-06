@@ -43,8 +43,10 @@ internal object ContactIndex {
         ).filter { (target, contactHasIt) -> contactHasIt && installed(target.packageName) }
             .map { (target, _) -> target }
 
+    data class ScanResult(val contacts: List<Contact>, val truncated: Boolean)
+
     fun load(resolver: ContentResolver, shouldContinue: () -> Boolean = { true },
-             cancellation: CancellationSignal? = null): List<Contact> {
+             cancellation: CancellationSignal? = null): ScanResult {
         val result = ArrayList<Contact>()
         resolver.query(ContactsContract.Contacts.CONTENT_URI,
             arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY,
@@ -55,7 +57,8 @@ internal object ContactIndex {
                 if (name.isNotEmpty() && !key.isNullOrEmpty()) result.add(Contact(cursor.getLong(0), key, name))
             }
         } ?: error("The device's contacts provider is unavailable")
-        return result
+        // Reaching the bound is conservatively partial, never a complete-index claim.
+        return ScanResult(result, ContactCoverage.isPartial(result.size, 50_000))
     }
 
     fun details(resolver: ContentResolver, resources: Resources, contact: Contact): Details {
@@ -88,4 +91,8 @@ internal object ContactIndex {
         } ?: error("The device's contact details provider is unavailable")
         return Details(numbers.toList(), channels.toList())
     }
+}
+
+internal object ContactCoverage {
+    fun isPartial(count: Int, limit: Int): Boolean = count >= limit
 }

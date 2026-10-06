@@ -16,7 +16,7 @@ internal object ThemeColors {
     fun wallpaperButtonColors(bitmap: Bitmap): Pair<Int, Int> {
         return runCatching {
             val background = WallpaperColors.fromBitmap(bitmap).primaryColor.toArgb()
-            val foreground = if (Color.luminance(background) > 0.42f) Color.BLACK else Color.WHITE
+            val foreground = if (Color.luminance(background) > 0.179f) Color.BLACK else Color.WHITE
             background to foreground
         }.getOrDefault(0xff416e60.toInt() to Color.WHITE)
     }
