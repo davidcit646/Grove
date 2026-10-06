@@ -33,6 +33,6 @@ class GridPolicyTest {
     @Test fun pageClampsAfterShrinkAndEmptyInventoryIsUsable() {
         assertEquals(0, GridPolicy.page(99, 0, IconGrid(10, 10)))
         assertEquals(2, GridPolicy.page(99, 3, IconGrid(1, 1)))
-        assertEquals(emptyList<Int>(), GridPolicy.items(emptyList(), -1, IconGrid(1, 1)))
+        assertEquals(emptyList<Int>(), GridPolicy.items(emptyList<Int>(), -1, IconGrid(1, 1)))
     }
 }
