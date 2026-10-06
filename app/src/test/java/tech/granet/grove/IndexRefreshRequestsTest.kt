@@ -28,11 +28,11 @@ class IndexRefreshRequestsTest {
 
     @Test fun sequentialProviderEventsWaitForWindowButManualRetryRemainsImmediate() {
         val completedScanStartedAt = 100_000L
-        assertEquals(29_900L, IndexRefreshRequests.delayMillis(true, completedScanStartedAt, 100_100))
-        assertEquals(0L, IndexRefreshRequests.delayMillis(true, completedScanStartedAt, 130_000))
-        assertEquals(0L, IndexRefreshRequests.delayMillis(false, completedScanStartedAt, 100_100))
-        assertEquals(0L, IndexRefreshRequests.delayMillis(true, 0, 100_100))
-        assertEquals(30_000L, IndexRefreshRequests.delayMillis(true, completedScanStartedAt, 99_000))
+        assertEquals(29_900L, IndexRefreshRequests.delayMillis(IndexRefreshCause.PROVIDER_CHANGE, completedScanStartedAt, 100_100))
+        assertEquals(0L, IndexRefreshRequests.delayMillis(IndexRefreshCause.PROVIDER_CHANGE, completedScanStartedAt, 130_000))
+        assertEquals(0L, IndexRefreshRequests.delayMillis(IndexRefreshCause.MANUAL, completedScanStartedAt, 100_100))
+        assertEquals(0L, IndexRefreshRequests.delayMillis(IndexRefreshCause.PROVIDER_CHANGE, 0, 100_100))
+        assertEquals(30_000L, IndexRefreshRequests.delayMillis(IndexRefreshCause.PROVIDER_CHANGE, completedScanStartedAt, 99_000))
     }
 
     @Test fun failedSchedulingOrDeferredMarkerNeverClaimsAcceptance() {
