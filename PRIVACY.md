@@ -1,6 +1,6 @@
 # Grove Launcher Privacy Policy
 
-Last updated: October 5, 2026
+Last updated: October 6, 2026
 
 Grove Launcher is developed by GraNet IT Solutions (CITARE HOLDINGS LLC). Questions about this policy can be sent through https://granet.tech/.
 
@@ -31,3 +31,7 @@ Grove does not sell your personal data. Android permissions remain under your co
 New installations default the separate contact/file indexing preferences on, while both optional search sources remain off until chosen. No protected indexing runs unless that source's search is enabled and Android currently permits access. Indexing can be disabled in Launcher settings. Existing saved choices, legacy imports and recovery defaults are preserved; permission denial does not reset the saved indexing preference.
 
 Setup uses Android's local dynamic-color palette when available, with a theme fallback. Its fresh-install Fern background is generated locally and does not apply or upload a wallpaper. Tutorial replay keeps Android's existing wallpaper. Provisional onboarding answers and page/practice state are included in Android's local Activity saved-state bundle so recreation can restore setup; preferences activate only after successful Finish. No telemetry, upload or new Android permission is introduced.
+
+## Juniper settings preview
+
+Home and drawer grid choices are portable configuration stored locally with the existing settings JSON. The same application owns both Home and the dedicated Settings screen. Provisional editor/grid/email drafts can be retained in Android saved instance state for recreation; a draft does not activate settings. Imported configuration requires review and explicit Apply and does not grant Android permission or apply a wallpaper through Android. Export excludes widget IDs, reports, device grants and replay markers. Juniper adds no permissions, network requests, accounts or automatic transmission.

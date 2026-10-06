@@ -43,4 +43,4 @@ Google Material Symbols Rounded
 The bundled ic_setup_* vectors (apps, arrow_back, arrow_forward, folder, home, person, search, settings and star) are Google's Material Symbols Rounded, redistributed under Apache License 2.0.
 Source: https://github.com/google/material-design-icons/tree/master/symbols/android
 License: https://github.com/google/material-design-icons/blob/master/LICENSE
-The upstream vector paths are retained; resource names are scoped to onboarding.
+The upstream vector paths are retained; resource names use the ic_setup prefix and are reused by onboarding and Juniper settings.

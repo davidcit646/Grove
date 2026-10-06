@@ -1,5 +1,24 @@
 # Grove architecture
 
+## Juniper settings architecture — PR #92
+
+Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37404896738): eight Rust tests, 163 JVM tests, debug APK assembly, Android lint and the missing-signing negative gate. Signed release steps were skipped. PR #92 is stacked on unmerged PR #90; Juniper device acceptance remains pending. GROVE-STATUS.md is unchanged.
+
+| Owner | Incoming source → outgoing consumer | Authority, commit and failure boundary |
+| --- | --- | --- |
+| `SettingsRepository` in `GroveApp` | ConfigStore load + typed changes → revisioned snapshot → both hosts | Sole active Config authority. Validate complete candidate; persist before publishing. Invalid, Conflict and Unavailable leave prior snapshot/revision intact. No views or feature work. |
+| `SettingsCommands` | UI intent → latest repository transform → existing feature owners | Boolean/theme/grid mutations never replace stale UI snapshots. Index reconciliation runs after persistence; scheduling failure reports saved preference with unavailable refresh. Reports and replay retain separate stores. |
+| `SettingsActivity`, `SettingsPages`, `SettingsGridPage`, `SettingsDocumentPages` | Committed snapshot + current platform access → categorized views; UI intent → commands | Host owns lifecycle, result launchers, navigation and Material presentation. Views do not write preferences. Retained drafts are provisional. The Settings Activity is packaged in the same APK/process, with an opaque theme; Home wallpaper transparency remains in MainActivity. |
+| `SettingsSession`, `ConfigDocuments` | Editor/document → bounded worker read/parse → reviewed candidate → explicit Apply | No retained Activity. Generation invalidation cancels queued/publication effects. Candidate captures config and revision; concurrent changes require re-review. Failed writes preserve draft and active configuration. Rotation retains jobs/drafts; process death requires explicit re-review/reimport. |
+| `ConfigController`, `MainActivity` | Shared committed snapshot → Home/search/theme reconciliation | ConfigController is a host adapter, not an independent Config store. Main refreshes on return/resume and observes committed changes while active. Saved preference and unavailable feature refresh remain distinguishable. |
+| `SetupController`, `SetupMergePolicy` | Original base + provisional setup lanes + current snapshot → checked Finish | Merge only modified setup lanes; retain current grids/theme/folders/wallpaper. Same-lane conflict restarts review; failed save retains setup. Marker writes are checked. |
+| `GridPolicy`, `HomeController`, `DrawerController`, `DrawerTiles` | Optional validated home/drawer grid + actual items → pages and accessible tiles | Schema v11 reads v1–v10 as automatic grid. Columns and rows independently accept integers 1–10. Page capacity = columns × rows; shrink/filter clamps pages without dropping items. Dense grids scroll with minimum touch/font sizing. Existing folder grids and automatic behavior remain unchanged. |
+| Existing feature owners | Settings routes → Main feature entry/platform adapter | WidgetFlow/Registry retain ID ownership; FolderActions retains selected-app mutations; wallpaper owners retain Android apply-before-preference; SearchSources/IndexWork retain permission, generation, cache and scheduling gates. Reports, email and tutorial markers remain outside portable Config. |
+
+The categorized workflow replaces the Grove settings modal and configuration dialogs. Home/drawer/search remain in MainActivity. Widget, wallpaper and folder entry routes delegate to their existing owners; their contextual dialogs are retained. There is no second APK, duplicated preference store or exported backend service. The APPLICATION_PREFERENCES route opens SettingsActivity directly.
+
+Portable Config schema v11 includes nullable `homeGrid` and `drawerGrid`. Kotlin and native preflight agree on integral dimensions 1–10; legacy automatic grids and unrelated preferences are preserved. Local widget IDs, report settings and replay markers keep their existing separate ownership.
+
 For the full current system and invariant inventory with source line references, see [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md). This page is the shorter ownership overview.
 
 ## PR #87 presentation and failure-boundary changes
@@ -50,7 +69,7 @@ drawer, and search retains the existing task/lifecycle behavior.
 | HomeController | Home rendering, scroll, animation, wallpaper backdrop | Android owns the unmodified wallpaper; local text shadows and system-bar regions supply contrast without a global overlay. |
 | DrawerController | Grid, filtering, selection, folders/drag | Folder/pin mutation passes through successful config commit before selection is cleared. |
 | SearchController | Search worker, query generation, source snapshots/permissions, publication gate | Source/access changes cancel before reconciliation; stale, revoked, inactive or cache-superseded output cannot publish; app/contact/file outcomes stay distinct. |
-| ConfigController | Active config, store, import/export/editor/recovery | Parse before activation; persistence before publication; failed save keeps editor/recovery open. |
+| ConfigController | MainActivity adapter to shared SettingsRepository; settings workflow routing | Persistence before publication; reconcile committed state on resume; SettingsSession owns documents/drafts. |
 | SetupController | Setup instance, settings and permission explanations | Failed config save retains setup for retry; optional permissions do not block Home. |
 | ActionController | External actions, menus, uninstall queue | File/contact adapters recheck access; canceled/failed uninstall stops the batch. |
 | WallpaperPresentationController | Picker and applied preference | System apply must succeed before wallpaper preference commit. |

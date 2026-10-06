@@ -1,5 +1,13 @@
 # Grove Launcher
 
+## Juniper settings preview — PR #92
+
+Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37404896738): eight Rust tests, 163 JVM tests, debug APK assembly, Android lint and the missing-signing negative gate. Signed release steps were skipped. PR #92 is stacked on unmerged PR #90; Juniper device acceptance remains pending. GROVE-STATUS.md is unchanged.
+
+Launcher settings now opens a full-screen Material workflow: Home screen, App drawer, Search, Appearance, Configuration, Help & diagnostics, and About. Home screen → Icon grid and App drawer → Icon grid each offer columns and rows from 1–10, a preview, Apply, and Automatic. Larger grids use scrolling and paging to preserve reachable icons and labels.
+
+Configuration provides editor, import review, explicit Apply, export and recovery pages. A concurrent settings change requires a new review. Tutorials and reporting are under Help & diagnostics. Widget, wallpaper and folder actions still use their existing feature owners. Settings is an Activity in the main APK, sharing the same settings backend. Schema v11 preserves automatic grids for older saved/imported documents.
+
 An Android 12+ home launcher by GraNet IT Solutions. Current source version: 0.1.30 alpha. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
 
 [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its historical [implementation status](GROVE-STATUS.md#implementation-status-on-main) is preserved by user instruction; current source changes and evidence are recorded in this README, SYSTEM-CATALOG, BUILD-STATUS and TESTING. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
