@@ -60,6 +60,7 @@ internal class SearchController(private val activity: MainActivity) {
     private val groveMatcher = SettingsMatcher(SettingsLabels.localize(activity, SettingsCatalogue.grove))
     private var androidSettings = emptyList<SettingsEntry>()
     private var androidMatcher = SettingsMatcher(emptyList())
+    private var androidSettingsFailed = false
     private var settingsRefreshGeneration = 0
     private var settingsMatches = SettingsMatches(emptyList(), emptyList())
     private var settingsQuery = ""
@@ -68,10 +69,12 @@ internal class SearchController(private val activity: MainActivity) {
         val generation = ++settingsRefreshGeneration
         if (searchWorker.isShutdown) return
         searchWorker.execute {
-            val snapshot = SettingsLabels.localize(activity, settingsRouter.snapshot())
+            val capabilities = settingsRouter.snapshot()
+            val snapshot = SettingsLabels.localize(activity, capabilities.entries)
             activity.runOnUiThread {
                 if (generation != settingsRefreshGeneration || activity.isDestroyed || !activity.searchMode) return@runOnUiThread
-                if (androidSettings != snapshot) {
+                if (androidSettings != snapshot || androidSettingsFailed != capabilities.failed) {
+                    androidSettingsFailed = capabilities.failed
                     androidSettings = snapshot
                     androidMatcher = SettingsMatcher(snapshot)
                     renderSearch(searchField?.text?.toString().orEmpty())
@@ -338,6 +341,7 @@ internal class SearchController(private val activity: MainActivity) {
                             .onFailure { message("This app is unavailable"); catalogController.loadApps() }
                     }, menu = { actionController.appMenu(app) }) },
                 catalogController.state, retryApps = { catalogController.loadApps() },
+                settingsUnavailable = androidSettingsFailed, retrySettings = { refreshSettings() },
                 groveSettings = (if (query == settingsQuery) settingsMatches.grove else emptyList()).map { SettingsSearchPresentation.row(this, settingsRouter, it) },
                 androidSettings = (if (query == settingsQuery) settingsMatches.android else emptyList()).map { SettingsSearchPresentation.row(this, settingsRouter, it) },
                 (if (configController.config.search.contacts && hasContactAccess()) {

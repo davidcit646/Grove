@@ -63,14 +63,21 @@ class SettingsDiscoveryTest {
         assertFalse(SearchPublicationGate.allowed(2, 2, false, true, true))
     }
     @Test fun availabilityFailureClosesOnlyAffectedDestinations() {
-        val available = SettingsCapabilities.available(SettingsCatalogue.android) {
+        val available = SettingsCapabilities.snapshot(SettingsCatalogue.android) {
             when (it.id) {
                 "android-wifi" -> true
                 "android-bluetooth" -> throw SecurityException("Unavailable")
                 else -> false
             }
         }
-        assertEquals(listOf("android-wifi"), available.map { it.id })
+        assertEquals(listOf("android-wifi"), available.entries.map { it.id })
+        assertEquals(SettingsCapabilities.Availability.READY, available.states["android-wifi"])
+        assertEquals(SettingsCapabilities.Availability.FAILED, available.states["android-bluetooth"])
+        assertEquals(SettingsCapabilities.Availability.UNAVAILABLE, available.states["android-airplane"])
+        assertTrue(available.failed)
+        val unsupported = SettingsCapabilities.snapshot(SettingsCatalogue.android) { false }
+        assertTrue(unsupported.entries.isEmpty())
+        assertFalse(unsupported.failed)
     }
     @Test fun systemHandlerMustBeEnabledExportedPermittedAndInSettingsPackage() {
         val valid = SettingsHandler("system.settings", true, true, true, true, true)

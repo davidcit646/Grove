@@ -7,8 +7,16 @@ internal object SettingsCapabilities {
         handler.exported && handler.system && handler.permitted
     fun allowed(handler: SettingsHandler, settingsPackages: Set<String>) =
         trusted(handler) && handler.packageName in settingsPackages
-    fun available(entries: List<SettingsEntry>, resolve: (SettingsEntry) -> Boolean): List<SettingsEntry> =
-        entries.filter { try { resolve(it) } catch (_: Exception) { false } }
+    enum class Availability { READY, UNAVAILABLE, FAILED }
+    data class Snapshot(val entries: List<SettingsEntry>, val states: Map<String, Availability>) {
+        val failed get() = states.values.any { it == Availability.FAILED }
+    }
+    fun snapshot(entries: List<SettingsEntry>, resolve: (SettingsEntry) -> Boolean): Snapshot {
+        val states = entries.associate { entry -> entry.id to try {
+            if (resolve(entry)) Availability.READY else Availability.UNAVAILABLE
+        } catch (_: Exception) { Availability.FAILED } }
+        return Snapshot(entries.filter { states[it.id] == Availability.READY }, states)
+    }
     enum class Launch { OPENED, UNAVAILABLE, FAILED }
     fun <T> launch(resolve: () -> T?, open: (T) -> Unit): Launch = try {
         val target = resolve()

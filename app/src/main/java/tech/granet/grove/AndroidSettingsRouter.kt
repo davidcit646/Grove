@@ -26,11 +26,19 @@ internal class AndroidSettingsRouter(private val activity: Activity) {
         info.applicationInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
         info.permission == null || activity.checkSelfPermission(info.permission) == PackageManager.PERMISSION_GRANTED)
 
-    fun snapshot(): List<SettingsEntry> {
-        val packages = try { settingsPackages() } catch (_: Exception) { emptySet() }
-        return SettingsCapabilities.available(SettingsCatalogue.android) { entry ->
-            resolve((entry.destination as SettingsDestination.Android).action, packages) != null
+    fun snapshot(): SettingsCapabilities.Snapshot {
+        val packages = try { settingsPackages() } catch (_: Exception) {
+            logFailure("root")
+            return SettingsCapabilities.Snapshot(emptyList(), SettingsCatalogue.android.associate { it.id to SettingsCapabilities.Availability.FAILED })
         }
+        return SettingsCapabilities.snapshot(SettingsCatalogue.android) { entry ->
+            try { resolve((entry.destination as SettingsDestination.Android).action, packages) != null }
+            catch (error: Exception) { logFailure(entry.id); throw error }
+        }
+    }
+    private val failures = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private fun logFailure(operation: String) {
+        if (failures.add(operation)) android.util.Log.w("Grove", "Android settings capability unavailable: $operation")
     }
     fun open(entry: SettingsEntry) {
         val target = entry.destination as? SettingsDestination.Android ?: return
@@ -40,7 +48,7 @@ internal class AndroidSettingsRouter(private val activity: Activity) {
         }) {
             SettingsCapabilities.Launch.OPENED -> Unit
             SettingsCapabilities.Launch.UNAVAILABLE -> activity.message("This Android settings page is unavailable")
-            SettingsCapabilities.Launch.FAILED -> activity.message("Android settings could not open. Try again from Settings.")
+            SettingsCapabilities.Launch.FAILED -> { logFailure(entry.id); activity.message("Android settings could not open. Try again from Settings.") }
         }
     }
 }

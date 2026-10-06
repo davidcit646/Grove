@@ -143,4 +143,6 @@
     <string name="settings_search_description">Search apps, Grove settings, Android settings, contacts, files, Google, and Play Store</string>
     <string name="settings_search_grove_heading">GROVE SETTINGS</string>
     <string name="settings_search_android_heading">ANDROID SETTINGS</string>
+    <string name="settings_search_retry">Retry Android settings</string>
+    <string name="settings_search_unavailable">Some Android settings could not be checked</string>
 </resources>

@@ -41,13 +41,14 @@ internal class SearchScreen(private val context: Context) {
     fun render(target: LinearLayout, query: String, apps: List<AppRow>,
                appState: CatalogState, retryApps: () -> Unit,
                groveSettings: List<SettingsRow>, androidSettings: List<SettingsRow>,
+               settingsUnavailable: Boolean, retrySettings: () -> Unit,
                contacts: List<ContactRow>, files: List<FileRow>,
                contactState: SearchSourceState, requestContactAccess: () -> Unit,
                retryContacts: () -> Unit, fileState: SearchSourceState,
                requestFileAccess: () -> Unit, retryFiles: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
-        val fingerprint = listOf(query.trim(), appState, contactState, fileState,
+        val fingerprint = listOf(query.trim(), appState, contactState, fileState, settingsUnavailable,
             apps.map { Triple(it.key, it.label, it.icon) },
             contacts.map { it.id to it.name }, files.map { it.file },
             groveSettings.map { listOf(it.id, it.title, it.breadcrumb, it.icon) },
@@ -70,9 +71,11 @@ internal class SearchScreen(private val context: Context) {
             else -> Unit
         }
         listOf(context.getString(R.string.settings_search_grove_heading) to groveSettings, context.getString(R.string.settings_search_android_heading) to androidSettings).forEach { (title, entries) ->
-            if (entries.isNotEmpty()) target.addView(heading(title, R.drawable.ic_setup_settings))
+            if (entries.isNotEmpty() || (entries === androidSettings && settingsUnavailable)) target.addView(heading(title, R.drawable.ic_setup_settings))
             entries.forEach { entry -> target.addView(row(entry.title, entry.icon, entry.breadcrumb, action = entry.open)) }
         }
+        if (settingsUnavailable) target.addView(row(context.getString(R.string.settings_search_retry), R.drawable.ic_setup_settings,
+            context.getString(R.string.settings_search_unavailable), action = retrySettings))
         if (contactState !is SearchSourceState.Disabled &&
             (contacts.isNotEmpty() || contactState !is SearchSourceState.Ready))
             target.addView(heading("CONTACTS", R.drawable.ic_contact))

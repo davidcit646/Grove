@@ -157,12 +157,14 @@ class SettingsActivity : AppCompatActivity() {
     }
     private fun navigate(route: String) {
         if (motion.busy || route !in SettingsPages.routes) return
+        pendingDestination = null
         val existing = routes.indexOf(route)
         if (existing >= 0) { while (routes.lastIndex > existing) routes.removeAt(routes.lastIndex) }
         else routes.add(route)
         render(true)
     }
     private fun back() {
+        pendingDestination = null
         motion.finish()
         session.cancelDocument()
         if (routes.last() in listOf("homeGrid", "drawerGrid")) { session.gridColumns = null; session.gridRows = null }
