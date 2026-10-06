@@ -91,6 +91,7 @@ class SettingsActivity : AppCompatActivity() {
                 else if (routes.last() == "editor") render()
             }
         }
+        (application as GroveApp).contactChanges.failure.observe(this) { pages.refreshStatus() }
         IndexCache.metadataChanges.observe(this) { pages.refreshStatus() }
         IndexWork.failures.observe(this) { pages.refreshStatus() }
         for (kind in listOf("contacts", "files")) try {

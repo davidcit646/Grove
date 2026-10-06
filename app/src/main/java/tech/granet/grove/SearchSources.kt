@@ -98,7 +98,7 @@ internal class SearchSources(
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { contact -> contact.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
-                if (generation != contactGeneration || activity.isDestroyed || !IndexAccessPolicy.contacts(settings(), hasContactAccess())) return@runOnUiThread
+                if (generation != contactGeneration || revision != IndexCache.generation("contacts") || activity.isDestroyed || !IndexAccessPolicy.contacts(settings(), hasContactAccess())) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         contactCorrupt = false
@@ -133,7 +133,7 @@ internal class SearchSources(
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { file -> file.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
-                if (generation != fileGeneration || activity.isDestroyed || !IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return@runOnUiThread
+                if (generation != fileGeneration || revision != IndexCache.generation("files") || activity.isDestroyed || !IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         fileCorrupt = false

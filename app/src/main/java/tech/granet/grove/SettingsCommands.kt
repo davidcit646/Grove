@@ -83,6 +83,7 @@ internal class SettingsCommands(private val context: Context, private val reposi
         val setting = repository.snapshot().config.search
         val eligible = if (kind == "files") IndexAccessPolicy.files(setting, permitted) else IndexAccessPolicy.contacts(setting, permitted)
         if (!eligible) return "Background refresh: Off"
+        if (kind == "contacts") (context.applicationContext as GroveApp).contactChanges.failure.value?.let { return it }
         IndexWork.failures.value?.get(kind)?.let { return "Background refresh: $it" }
         val work = workStates[kind]
         return "Background refresh: " + when (work?.state) {

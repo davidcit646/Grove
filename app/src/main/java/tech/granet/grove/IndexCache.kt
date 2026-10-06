@@ -31,7 +31,7 @@ internal object IndexCache {
         val writtenAt = value.getLong("writtenAt")
         val skipped = value.getInt("skipped")
         require(writtenAt > 0 && skipped >= 0) { "Invalid cache metadata" }
-        record(kind, IndexMetadata(IndexValidity.AVAILABLE, writtenAt, skipped > 0))
+        record(kind, IndexMetadata(IndexValidity.AVAILABLE, writtenAt, skipped > 0 || value.getJSONArray("items").length() >= (if (kind == "files") 15_000 else 50_000)))
     }
     val changes = androidx.lifecycle.MutableLiveData<Map<String, Long>>(emptyMap())
     private val generations = mutableMapOf<String, Long>()
@@ -105,7 +105,7 @@ internal object IndexCache {
         require(rows.length() <= 15_000) { "Invalid file count" }
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
             IndexedFile(row.getString("name"), row.getString("mime"), File(row.getString("path")), row.getString("category"))
-        } }, value.getInt("skipped"), value.getLong("writtenAt")).also { verified("files", value) }
+        } }, maxOf(value.getInt("skipped"), if (rows.length() >= 15_000) 1 else 0), value.getLong("writtenAt")).also { verified("files", value) }
     }
 
     }
