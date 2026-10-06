@@ -19,6 +19,8 @@ internal object IndexWork {
     private fun prefs(context: Context) = context.getSharedPreferences("grove", Context.MODE_PRIVATE)
     fun name(kind: String) = "grove-$kind-index"
     private fun token(kind: String) = "index-token-$kind"
+    private fun started(kind: String) = "index-started-$kind"
+    private fun pending(kind: String) = "index-refresh-pending-$kind"
     private fun workId(kind: String) = "index-work-id-$kind"
     fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
     private fun enabled(context: Context, kind: String): Boolean = try {
@@ -30,40 +32,61 @@ internal object IndexWork {
     fun allowed(context: Context, kind: String, expected: String): Boolean =
         prefs(context).getString(token(kind), null) == expected && enabled(context, kind)
 
-    fun finished(context: Context, kind: String, expected: String) {
-        if (prefs(context).getString(token(kind), null) == expected)
-            prefs(context).edit().remove(token(kind)).commit()
+    @Synchronized fun begin(context: Context, kind: String, expected: String): Boolean {
+        if (!allowed(context, kind, expected)) return false
+        // This scan covers all notifications received before it starts.
+        return prefs(context).edit().putString(started(kind), expected).remove(pending(kind)).commit()
     }
 
-    fun enqueue(context: Context, kind: String): Boolean {
+    @Synchronized fun finished(context: Context, kind: String, expected: String) {
+        val store = prefs(context)
+        if (store.getString(token(kind), null) != expected) return
+        val followUp = store.getString(pending(kind), null) == expected
+        if (!store.edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()) return
+        if (followUp && enabled(context, kind)) {
+            // Append one delayed scan after this worker; never cancel a scan to refresh it.
+            schedule(context, kind, followUp = true)
+        }
+    }
+
+    @Synchronized fun enqueue(context: Context, kind: String): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return false }
+        val store = prefs(context)
+        val active = store.getString(token(kind), null)
+        return IndexRefreshRequests.request(active, store.getString(started(kind), null), store.getString(pending(kind), null),
+            schedule = { schedule(context, kind, followUp = false) },
+            defer = { store.edit().putString(pending(kind), active).commit() })
+    }
+
+    private fun schedule(context: Context, kind: String, followUp: Boolean): Boolean {
         val id = UUID.randomUUID().toString()
         val request = OneTimeWorkRequestBuilder<IndexWorker>()
             .setInputData(androidx.work.workDataOf("kind" to kind, "token" to id))
             .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build())
+            .setInitialDelay(if (followUp) 30 else 0, TimeUnit.SECONDS)
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         if (!prefs(context).edit().putString(token(kind), id)
                 .putString(workId(kind), request.id.toString()).commit()) return false
         return try {
-            WorkManager.getInstance(context).enqueueUniqueWork(name(kind), ExistingWorkPolicy.REPLACE, request)
+            WorkManager.getInstance(context).enqueueUniqueWork(name(kind), if (followUp) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, request)
             true
         } catch (error: Exception) {
             if (prefs(context).getString(token(kind), null) == id)
-                prefs(context).edit().remove(token(kind)).remove(workId(kind)).commit()
+                prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit()
             Log.w("Grove", "Could not schedule $kind index: ${error.javaClass.simpleName}")
             false
         }
     }
 
-    fun cancel(context: Context, kind: String) {
+    @Synchronized fun cancel(context: Context, kind: String) {
         // Invalidate before cancellation/clearing: a worker already finishing must fail closed.
         val active = prefs(context).contains(token(kind))
         val tracked = prefs(context).contains(workId(kind))
         val cache = java.io.File(context.filesDir, "grove-$kind-index.json").exists()
         if (!active && !tracked && !cache) return
         if (active || tracked) {
-            prefs(context).edit().remove(token(kind)).remove(workId(kind)).commit()
+            prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit()
             try { WorkManager.getInstance(context).cancelUniqueWork(name(kind)) }
             catch (error: Exception) { Log.w("Grove", "Could not cancel $kind index: ${error.javaClass.simpleName}") }
         }
@@ -71,7 +94,7 @@ internal object IndexWork {
             catch (error: Exception) { Log.w("Grove", "Could not delete $kind index: ${error.javaClass.simpleName}") }
     }
 
-    fun reconcile(context: Context, kind: String): Boolean {
+    @Synchronized fun reconcile(context: Context, kind: String): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return true }
         // Reschedule only absent/stale caches; events and explicit Retry enqueue directly.
         val file = java.io.File(context.filesDir, "grove-$kind-index.json")
@@ -99,6 +122,7 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
             IndexWork.finished(context, kind, token)
             return Result.success()
         }
+        if (!IndexWork.begin(context, kind, token)) return if (allowed()) Result.retry() else Result.success()
         var retry = false
         val outcome = try {
             val saved = if (kind == "files") {
