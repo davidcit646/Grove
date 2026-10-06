@@ -99,7 +99,7 @@ internal class SearchController(private val activity: MainActivity) {
     fun indexFiles(): Unit = with(activity) { sources.indexFiles()
     }
 
-    fun refreshContacts(): Unit = with(activity) { sources.refreshContacts()
+    fun refreshContacts(): Unit = with(activity) { sources.refreshContacts(IndexRefreshCause.MANUAL)
     }
 
     fun hasContactAccess(): Boolean = with(activity) {

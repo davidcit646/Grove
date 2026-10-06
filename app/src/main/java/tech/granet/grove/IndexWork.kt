@@ -76,7 +76,7 @@ internal object IndexWork {
         scheduler.execute {
             try {
                 recover(app, kind)
-                synchronized(this) { enqueueRecovered(app, kind, cause) }
+                synchronized(this) { if (!enqueueRecovered(app, kind, cause)) failure(kind, "Refresh unavailable; retry manually") }
             } catch (error: Exception) {
                 failure(kind, "Scheduling unavailable")
                 Log.w("Grove", "Could not reconcile $kind work", error)
@@ -157,7 +157,7 @@ internal object IndexWork {
                 recover(app, kind)
                 val metadata = IndexCache.inspect(app, kind)
                 if (!metadata.fresh(kind)) synchronized(this) {
-                    enqueueRecovered(app, kind, if (metadata.validity == IndexValidity.CORRUPT) IndexRefreshCause.REPAIR else IndexRefreshCause.STALE_CACHE)
+                    if (prefs(app).getString(token(kind), null) == null) enqueueRecovered(app, kind, if (metadata.validity == IndexValidity.CORRUPT) IndexRefreshCause.REPAIR else IndexRefreshCause.STALE_CACHE)
                 }
             } catch (error: Exception) { failure(kind, "Scheduling unavailable") }
         }
@@ -179,12 +179,12 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
         val allowed = { !isStopped && IndexWork.allowed(context, kind, token) }
         if (isStopped) return Result.retry()
         if (!allowed()) {
-            IndexWork.finished(context, kind, token)
+            IndexWork.finished(context, kind, token, false)
             return Result.success()
         }
         if (!IndexWork.begin(context, kind, token)) {
             if (allowed()) return Result.retry()
-            IndexWork.finished(context, kind, token)
+            IndexWork.finished(context, kind, token, false)
             return Result.success()
         }
         var retry = false
@@ -194,8 +194,11 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
                 val scan = FileIndex.scan(Environment.getExternalStorageDirectory(), shouldContinue = allowed)
                 allowed() && IndexCache.writeFiles(context, scan, allowed)
             } else {
+                val changes = (context as GroveApp).contactChanges.changes.value
                 val contacts = ContactIndex.load(context.contentResolver, allowed, contactCancellation)
-                allowed() && IndexCache.writeContacts(context, contacts, allowed)
+                (allowed() && IndexCache.writeContacts(context, contacts, allowed)).also { saved ->
+                    if (saved && changes != context.contactChanges.changes.value) IndexCache.invalidate("contacts")
+                }
             }
             succeeded = saved
             if (!saved && allowed()) error("Index cache was not committed")

@@ -99,7 +99,7 @@ internal object IndexCache {
         value
     }
 
-    fun files(context: Context): Snapshot<IndexedFile>? = read(context, "files")?.let { value ->
+    fun files(context: Context): Snapshot<IndexedFile>? = synchronized(lock) { read(context, "files")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 15_000) { "Invalid file count" }
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
@@ -107,11 +107,14 @@ internal object IndexCache {
         } }, value.getInt("skipped"), value.getLong("writtenAt")).also { verified("files", value) }
     }
 
-    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? = read(context, "contacts")?.let { value ->
+    }
+    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? = synchronized(lock) { read(context, "contacts")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 50_000) { "Invalid contact count" }
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
+            require(row.getLong("id") > 0 && row.getString("key").isNotBlank() && row.getString("name").isNotBlank()) { "Invalid contact row" }
             ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"))
         } }, maxOf(value.getInt("skipped"), if (rows.length() >= 50_000) 1 else 0), value.getLong("writtenAt")).also { verified("contacts", value) }
+    }
     }
 }

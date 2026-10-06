@@ -84,7 +84,7 @@ internal class SearchSources(
     }
 
     fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files", IndexRefreshCause.MANUAL)) { fileLoadFailed = true; redraw() } }
-    fun refreshContacts(cause: IndexRefreshCause = IndexRefreshCause.MANUAL) { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts", cause)) { contactLoadFailed = true; redraw() } }
+    fun refreshContacts(cause: IndexRefreshCause) { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts", cause)) { contactLoadFailed = true; redraw() } }
 
     private fun loadContacts() {
         if (!IndexAccessPolicy.contacts(settings(), hasContactAccess())) return
