@@ -13,10 +13,10 @@ tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V 
 [[ -n "$tools_dir" ]] || { echo 'apksigner missing' >&2; exit 1; }
 tools_dir="$(dirname "$tools_dir")"
 "$tools_dir/apksigner" verify --print-certs "$apk" |
-  grep -Fi '6e34977d69ed454a5b8ac6b234cb2d2403903b33ed19a6be1c5abd044fae6397'
+  grep -Fi 'eec2c5ab1ff523112a52e5830d5b50169b7f7475b17daa5b7422c0f497147ff3'
 jarsigner -verify "$aab" | grep -F 'jar verified.'
 keytool -printcert -jarfile "$aab" |
-  grep -Fi '6E:34:97:7D:69:ED:45:4A:5B:8A:C6:B2:34:CB:2D:24:03:90:3B:33:ED:19:A6:BE:1C:5A:BD:04:4F:AE:63:97'
+  grep -Fi 'EE:C2:C5:AB:1F:F5:23:11:2A:52:E5:83:0D:5B:50:16:9B:7F:74:75:B1:7D:AA:5B:74:22:C0:F4:97:14:7F:F3'
 "$tools_dir/zipalign" -c -P 16 -v 4 "$apk"
 readelf="$ANDROID_HOME/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
 test -x "$readelf"
@@ -35,6 +35,6 @@ done
 sha256sum "$apk" "$aab" > release-checksums.txt
 {
   echo "commit=$(git rev-parse HEAD)"
-  echo "certificate_sha256=6E:34:97:7D:69:ED:45:4A:5B:8A:C6:B2:34:CB:2D:24:03:90:3B:33:ED:19:A6:BE:1C:5A:BD:04:4F:AE:63:97"
+  echo "certificate_sha256=EE:C2:C5:AB:1F:F5:23:11:2A:52:E5:83:0D:5B:50:16:9B:7F:74:75:B1:7D:AA:5B:74:22:C0:F4:97:14:7F:F3"
   cat release-checksums.txt
 } > release-provenance.txt

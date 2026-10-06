@@ -15,7 +15,7 @@ with a different temporary key on each runner and cannot update an installed
 release APK.
 
 The signing alias is `grove`. The certificate SHA-256 fingerprint is
-`6E:34:97:7D:69:ED:45:4A:5B:8A:C6:B2:34:CB:2D:24:03:90:3B:33:ED:19:A6:BE:1C:5A:BD:04:4F:AE:63:97`.
+`EE:C2:C5:AB:1F:F5:23:11:2A:52:E5:83:0D:5B:50:16:9B:7F:74:75:B1:7D:AA:5B:74:22:C0:F4:97:14:7F:F3`.
 
 The previous 0.1.29-alpha release was signed with an ephemeral debug key.
 Installing the first build with this key requires exporting settings and
@@ -25,3 +25,9 @@ will update in place. The exported configuration does not include widgets.
 The upload/local release certificate below may differ from Play App Signing's
 app-signing certificate. Verify clean install and in-place update on a device
 before distribution. A release run cannot substitute for those device checks.
+
+## User-authorized replacement — October 6, 2026
+
+The original key password was unavailable, and the user explicitly authorized replacing the key. This is a new RSA-4096 release key (PKCS12, alias grove), protected by the user-selected password. Set GROVE_SIGNING_PASSWORD to that exact password; its plaintext must stay outside Git and build logs. Previous-key signed installations cannot update directly to this key: export configuration, uninstall/reinstall, then import. Widget bindings need separate reconfiguration. This is replacement, not Android signing-certificate rotation or recovery of the old key.
+
+Source `d8ad0c95b03c02b30edb2f971d0b2e970f2221d5` passed [CI](https://github.com/davidcit646/Grove/actions/runs/37487799875): Rust/JVM tests, debug assembly, lint and missing-signing gate. Local checks confirmed that the exact selected 512-character password decrypts the private key, RSA signing/verifying succeeds, a wrong password is rejected and the verification/provenance certificate pins agree. This is not signed Android artifact proof: APK/AAB certificate and alignment checks still require a main build with the Actions secret set. GROVE-STATUS.md is unchanged.

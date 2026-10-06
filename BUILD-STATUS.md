@@ -69,3 +69,7 @@ Source `f1bce9b98f92d1b5322121a0764e041de592b254` passed [Android CI](https://gi
 This run skips signed release steps; production APK/AAB delivery remains conditional on main CI's existing certificate, ABI, alignment and checksum gates. The previous main release attempt lacked GROVE_SIGNING_PASSWORD. Do not label a debug Grove Test APK as a signed production release.
 
 Verified debug APK: `Grove-1.0.0-test.apk`, SHA-256 `a0a94fa31c08e7c4d5054c84b3e4d08b152335eb295c10d1557b1f0a9a452140`; archive digest, APK integrity, 1.0.0/test manifest and three Rust ABIs verified.
+
+## Grove 1.0 signing-key replacement — October 6, 2026
+
+The user explicitly authorized replacing the unavailable-password release key. Source `d8ad0c95b03c02b30edb2f971d0b2e970f2221d5` passed [CI](https://github.com/davidcit646/Grove/actions/runs/37487799875): nine Rust tests, JVM suite, debug APK assembly, lint and missing-signing negative gate. Local cryptographic checks confirmed the selected password unlocks the new private key, signing/verification works and a wrong password fails. The release script pins the new certificate in APK/AAB checks and provenance. Old-key production installs require exporting settings and reinstalling; no old-key update continuity is claimed. Signed production generation remains blocked until GROVE_SIGNING_PASSWORD is configured with the selected password. GROVE-STATUS.md is unchanged.
