@@ -229,3 +229,12 @@ Pending device check: inspect every grouped page in light/dark and dynamic color
 Source `3bc0b75f4a6f897886996c54bce4055b3c2f2853` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37457299182): Rust/JVM tests, debug APK assembly, lint and missing-signing gate. Signed release steps were skipped. Widgets is the first card in Home screen settings; the Widget controls acknowledgment has only Got It! (Not now removed). Acknowledgment persistence, provider picker cancellation, bind/configure and interrupted-setup recovery are unchanged. GROVE-STATUS.md is unchanged.
 
 Pending device check: open Home screen settings and reach Add widget without scrolling. With tutorial acknowledgment unset, verify only Got It! is shown and a confirmed acknowledgment opens the picker; failed acknowledgment persistence reports failure. Add/configure a widget and verify picker/Android cancellation and pending-widget Retry/Remove still work.
+
+
+### Settings scroll preservation — 2026-10-06
+
+Source `f1666e7fd338b3ca89a3f4191b61bbb3a495ff3c` passed CI run 37459613835: Rust tests, JVM suite (175 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. `SettingsScrollStateTest` covers independent routes, refresh/Back positions, known-route recreation, negative clamping and snapshot independence.
+
+Device checks pending: scroll down and toggle several options; verify the same position remains after repository refresh, returning from a child page, rotation and external permission/settings return. Rapid changes before layout must not replace a remembered position with zero. Shorter content should clamp normally.
+
+Debug Grove Test APK: `Grove-Juniper-scroll-f1666e7.apk`, SHA-256 `df4c2ba1643721541630d33db6e51e093b9a4924489db9dfecaaa883d5dde00c`. Verified GitHub archive digest, ZIP integrity, manifest and all three Rust ABIs.

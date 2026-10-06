@@ -117,3 +117,8 @@ The current owner/caller/consumer and failure inventory is [CONTACT-REVIEW.md](C
 Source `42984548fd4c6211bde60df7871acd20a421c9fb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37456480396): Rust tests, the JVM suite, debug APK assembly, lint and the missing-signing gate. Signed release steps were skipped. This is source/build verification; visual device acceptance is pending. GROVE-STATUS.md is unchanged.
 
 `SettingsGroups` owns only Material card surfaces, spacing and accessibility headings. `SettingsPages` and `SettingsDocumentPages` place their existing controls inside these groups; SettingsCommands, the shared repository and platform/feature owners retain all actions and settings authority. Search uses the same helper. Home groups are Buttons, Clock and date, Pinned apps, Gestures, Widgets and Default launcher; Drawer, Appearance, Configuration, Help, About and artwork credits also use labeled cards. No setting keys, navigation routes, platform actions or command calls were removed.
+
+
+### Settings scroll ownership
+
+`SettingsActivity` owns transient per-route scroll positions through `SettingsScrollState`, outside configuration and `SettingsRepository`. Before a render it remembers the laid-out displayed route; after the replacement ScrollView lays out it restores that route's position. The layout guard prevents rapid repository updates from saving a newly created view's zero position before restoration. Saved-instance state preserves allowlisted route positions across recreation. The ScrollView receives focus to prevent newly constructed controls from pulling the viewport to the first row. Existing page motion finishes before capture; Android clamps positions when content shrinks.
