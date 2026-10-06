@@ -34,7 +34,7 @@ class ConfigTest {
         assertEquals(GestureSettings(), migrated.gestures)
         assertEquals(HomeScreenSettings(), migrated.homeScreen)
         assertTrue(migrated.homeScreen.showPinnedAppsHint)
-        assertTrue(migrated.json().contains("\"version\": 10"))
+        assertTrue(migrated.json().contains("\"version\": 11"))
         assertEquals(SearchSettings(contacts = true, files = true), migrated.search)
         assertFalse(migrated.search.contactIndexing)
         assertFalse(migrated.search.fileIndexing)
