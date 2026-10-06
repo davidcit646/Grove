@@ -9,7 +9,7 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("version")
         .and_then(Value::as_i64)
         .ok_or("Missing configuration version")?;
-    if !(1..=11).contains(&version) {
+    if !(1..=12).contains(&version) {
         return Err("Unsupported configuration version");
     }
     if version >= 11 {
@@ -106,6 +106,9 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
                 "files",
                 "contactIndexing",
                 "fileIndexing",
+                "calculator",
+                "androidSettings",
+                "groveSettings",
             ][..],
         ),
     ] {

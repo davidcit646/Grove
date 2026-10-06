@@ -13,4 +13,3 @@ internal object SearchSettingsEffects {
         return contactsReady && filesReady
     }
 }
-
