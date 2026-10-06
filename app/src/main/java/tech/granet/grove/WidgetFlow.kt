@@ -40,7 +40,6 @@ internal class WidgetFlow(
                     if (prefs.edit().putBoolean("widget_tutorial_seen", true).commit()) showPicker()
                     else message("Could not save tutorial acknowledgment; try again")
                 }
-                .setNegativeButton("Not now", null)
                 .show()
             return
         }

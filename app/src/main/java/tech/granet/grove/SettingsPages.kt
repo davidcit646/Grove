@@ -56,6 +56,8 @@ internal class SettingsPages(
                 row(content, "About", "Version, privacy and credits", R.drawable.ic_settings_info) { navigate("about") }
             }
             "home" -> {
+                val widgets = SettingsGroups.card(content, "Widgets")
+                row(widgets, "Add widget", "Choose and configure on Home", R.drawable.ic_settings_widgets) { platform("widget") }
                 val buttons = SettingsGroups.card(content, "Buttons")
                 toggle(buttons, "Show Apps button", config.homeScreen.showAppsButton, SettingKey.APPS_BUTTON)
                 toggle(buttons, "Show Search button", config.homeScreen.showSearchButton, SettingKey.SEARCH_BUTTON)
@@ -72,8 +74,6 @@ internal class SettingsPages(
                 toggle(gestures, "Swipe up for app drawer", config.gestures.swipeUpAppDrawer, SettingKey.SWIPE_DRAWER)
                 toggle(gestures, "Tap empty space for settings", config.gestures.tapHomeContextMenu, SettingKey.TAP_MENU)
                 toggle(gestures, "Hold empty space for settings", config.gestures.longPressHomeContextMenu, SettingKey.HOLD_MENU)
-                val widgets = SettingsGroups.card(content, "Widgets")
-                row(widgets, "Add widget", "Choose and configure on Home", R.drawable.ic_settings_widgets) { platform("widget") }
                 val launcher = SettingsGroups.card(content, "Default launcher")
                 statuses["role"] = activity.bodyText("").also(launcher::addView)
                 row(launcher, "Choose launcher", "Choose Grove in Android", R.drawable.ic_setup_home, chooseHome)
