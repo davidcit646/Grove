@@ -39,6 +39,7 @@ internal class SearchScreen(private val context: Context) {
     }
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>,
+               calculation: SearchCalculator.Result, openCalculator: () -> Unit,
                appState: CatalogState, retryApps: () -> Unit,
                groveSettings: List<SettingsRow>, androidSettings: List<SettingsRow>,
                settingsUnavailable: Boolean, retrySettings: () -> Unit,
@@ -48,7 +49,7 @@ internal class SearchScreen(private val context: Context) {
                requestFileAccess: () -> Unit, retryFiles: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
-        val fingerprint = listOf(query.trim(), appState, contactState, fileState, settingsUnavailable,
+        val fingerprint = listOf(query.trim(), calculation, appState, contactState, fileState, settingsUnavailable,
             apps.map { Triple(it.key, it.label, it.icon) },
             contacts.map { it.id to it.name }, files.map { it.file },
             groveSettings.map { listOf(it.id, it.title, it.breadcrumb, it.icon) },
@@ -56,6 +57,23 @@ internal class SearchScreen(private val context: Context) {
         if (!frames.shouldRender(target, fingerprint)) return
         target.removeAllViews()
         if (Search.prepare(query).text.isEmpty()) return
+        when (calculation) {
+            is SearchCalculator.Result.Answer -> {
+                target.addView(heading(context.getString(R.string.calculator_heading), R.drawable.ic_calculate))
+                val value = if (calculation.approximate) context.getString(R.string.calculator_approximate, calculation.value) else calculation.value
+                target.addView(row(value, R.drawable.ic_calculate,
+                    context.getString(R.string.calculator_open, calculation.expression), action = openCalculator))
+            }
+            is SearchCalculator.Result.Invalid -> {
+                target.addView(heading(context.getString(R.string.calculator_heading), R.drawable.ic_calculate))
+                target.addView(context.wallpaperLabel(context.getString(when (calculation.reason) {
+                    SearchCalculator.Reason.SYNTAX -> R.string.calculator_syntax
+                    SearchCalculator.Reason.DIVISION_BY_ZERO -> R.string.calculator_zero
+                    SearchCalculator.Reason.LIMIT -> R.string.calculator_limit
+                }), 14f))
+            }
+            SearchCalculator.Result.NotCalculation -> Unit
+        }
         if (apps.isNotEmpty() || appState is CatalogState.Loading || appState is CatalogState.Failed ||
             appState is CatalogState.Degraded) target.addView(heading("APPS", R.drawable.ic_grid))
         apps.forEach { app ->

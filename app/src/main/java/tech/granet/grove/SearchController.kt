@@ -64,6 +64,8 @@ internal class SearchController(private val activity: MainActivity) {
     private var settingsRefreshGeneration = 0
     private var settingsMatches = SettingsMatches(emptyList(), emptyList())
     private var settingsQuery = ""
+    private var calculation: SearchCalculator.Result = SearchCalculator.Result.NotCalculation
+    private val calculatorActions by lazy { CalculatorActions(activity) }
 
     internal fun refreshSettings() {
         val generation = ++settingsRefreshGeneration
@@ -251,6 +253,7 @@ internal class SearchController(private val activity: MainActivity) {
                 if (searchWorker.isShutdown) return@Runnable
                 searchWorker.execute {
                     if (generation != searchGeneration) return@execute
+                    val calculated = SearchCalculator.calculate(query)
                     val groveMatches = groveMatcher.matching(query)
                     val androidMatches = SettingsSearchFallback.rows(matcherSnapshot.matching(query), settingsSnapshot)
                     val matchingApps = SearchResults.matching(appSnapshot, prepared, 12)
@@ -263,7 +266,7 @@ internal class SearchController(private val activity: MainActivity) {
                     runOnUiThread {
                         if (generation != searchGeneration || !searchMode || searchResults !== target) return@runOnUiThread
                         pendingSearch = null
-                        settingsQuery = query; settingsMatches = SettingsMatches(groveMatches, androidMatches)
+                        settingsQuery = query; calculation = calculated; settingsMatches = SettingsMatches(groveMatches, androidMatches)
                         lastApps = matchingApps; lastContacts = matchingContacts; lastFiles = matchingFiles
                         displaySearch(target, query, matchingApps, matchingContacts, matchingFiles)
                         if (contactLive) queryLiveContacts(generation, query, prepared)
@@ -335,6 +338,8 @@ internal class SearchController(private val activity: MainActivity) {
         with(activity) {
             searchScreen.render(
                 target = target, query = query,
+                calculation = if (query == settingsQuery) calculation else SearchCalculator.Result.NotCalculation,
+                openCalculator = { calculatorActions.open() },
                 apps = matchingApps.map { app -> SearchScreen.AppRow(app.key, app.label, catalogController.iconCache[app.key],
                     open = {
                         runCatching { launcher.startMainActivity(app.component, android.os.Process.myUserHandle(), null, null) }

@@ -1,0 +1,10 @@
+<resources>
+    <string name="calculator_heading">CALCULATOR</string>
+    <string name="calculator_open">%1$s = · Tap to open Calculator</string>
+    <string name="calculator_approximate">≈ %1$s</string>
+    <string name="calculator_syntax">Check the expression</string>
+    <string name="calculator_zero">Cannot divide by zero</string>
+    <string name="calculator_limit">Try a shorter or smaller calculation</string>
+    <string name="calculator_missing">No calculator app is available. Your answer is still shown here.</string>
+    <string name="calculator_unavailable">Calculator could not open. Try opening it from the app drawer.</string>
+</resources>
