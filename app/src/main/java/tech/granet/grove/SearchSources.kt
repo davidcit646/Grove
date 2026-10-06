@@ -39,7 +39,7 @@ internal class SearchSources(
     @Volatile private var contactGeneration = 0
     @Volatile private var fileGeneration = 0
     private val handler = Handler(Looper.getMainLooper())
-    private val contactChange = Runnable { refreshContacts(event = true) }
+    private val contactChange = Runnable { refreshContacts(IndexRefreshCause.PROVIDER_CHANGE) }
     private val observer = object : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean) {
             handler.removeCallbacks(contactChange)
@@ -84,8 +84,8 @@ internal class SearchSources(
         } else clearFiles()
     }
 
-    fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files")) { fileLoadFailed = true; redraw() } }
-    fun refreshContacts(event: Boolean = false) { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts", event)) { contactLoadFailed = true; redraw() } }
+    fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files", IndexRefreshCause.MANUAL)) { fileLoadFailed = true; redraw() } }
+    fun refreshContacts(cause: IndexRefreshCause = IndexRefreshCause.MANUAL) { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts", cause)) { contactLoadFailed = true; redraw() } }
 
     private fun loadContacts() {
         if (!IndexAccessPolicy.contacts(settings(), hasContactAccess())) return
@@ -112,7 +112,7 @@ internal class SearchSources(
                     contactLoadFailed = true
                     contactCorrupt = true
                     IndexCache.clear(activity, "contacts")
-                    refreshContacts()
+                    refreshContacts(IndexRefreshCause.REPAIR)
                 }
                 redraw()
             }

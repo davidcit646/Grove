@@ -91,7 +91,7 @@ internal class SettingsCommands(private val context: Context, private val reposi
     }
     fun retryIndex(kind: String): CommandFeedback = try {
         if (kind !in listOf("contacts", "files")) CommandFeedback(false, "Unknown index")
-        else if (IndexWork.enqueue(context, kind)) CommandFeedback(true, "Index refresh queued")
+        else if (IndexWork.enqueue(context, kind, IndexRefreshCause.MANUAL)) CommandFeedback(true, "Index refresh requested")
         else CommandFeedback(false, "Enable search and indexing, and allow Android access first.")
     } catch (_: Exception) { CommandFeedback(false, "Index refresh unavailable") }
 }

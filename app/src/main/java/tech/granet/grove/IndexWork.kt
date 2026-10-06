@@ -50,12 +50,12 @@ internal object IndexWork {
         }
     }
 
-    @Synchronized fun enqueue(context: Context, kind: String, event: Boolean = false): Boolean {
+    @Synchronized fun enqueue(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return false }
         val store = prefs(context)
         val active = store.getString(token(kind), null)
         return IndexRefreshRequests.request(active, store.getString(started(kind), null), store.getString(pending(kind), null),
-            schedule = { schedule(context, kind, followUp = false, delayMillis = IndexRefreshRequests.delayMillis(event, store.getLong(lastStarted(kind), 0), System.currentTimeMillis())) },
+            schedule = { schedule(context, kind, followUp = false, delayMillis = IndexRefreshRequests.delayMillis(cause, store.getLong(lastStarted(kind), 0), System.currentTimeMillis())) },
             defer = { store.edit().putString(pending(kind), active).commit() })
     }
 
@@ -102,7 +102,7 @@ internal object IndexWork {
         val age = System.currentTimeMillis() - file.lastModified()
         val stale = !file.exists() || age < 0 || age >
             (if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000)
-        return if (stale && prefs(context).getString(token(kind), null) == null) enqueue(context, kind) else true
+        return if (stale && prefs(context).getString(token(kind), null) == null) enqueue(context, kind, IndexRefreshCause.STALE_CACHE) else true
     }
 }
 
