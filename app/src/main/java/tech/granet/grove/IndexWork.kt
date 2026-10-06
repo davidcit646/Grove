@@ -44,7 +44,7 @@ internal object IndexWork {
     private fun workId(kind: String) = "index-work-id-$kind"
     fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
     private fun enabled(context: Context, kind: String): Boolean = try {
-        val setting = ConfigStore(prefs(context)).load().search
+        val setting = (context.applicationContext as GroveApp).settingsRepository.snapshot().config.search
         when (kind) { "files" -> IndexAccessPolicy.files(setting, Environment.isExternalStorageManager())
             else -> IndexAccessPolicy.contacts(setting, context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) }
     } catch (_: Exception) { false }
