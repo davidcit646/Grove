@@ -45,20 +45,38 @@ internal object ContactIndex {
 
     data class ScanResult(val contacts: List<Contact>, val truncated: Boolean)
 
+    private val deadlines = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
     fun load(resolver: ContentResolver, shouldContinue: () -> Boolean = { true },
-             cancellation: CancellationSignal? = null): ScanResult {
+             cancellation: CancellationSignal? = null, maxDurationMs: Long = Long.MAX_VALUE,
+             maxRawRows: Int = 100_000): ScanResult {
         val result = ArrayList<Contact>()
-        resolver.query(ContactsContract.Contacts.CONTENT_URI,
-            arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY,
-                ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null, cancellation)?.use { cursor ->
-            while (shouldContinue() && cursor.moveToNext() && result.size < 50_000) {
-                val name = cursor.getString(2)?.take(512)?.trim().orEmpty()
-                val key = cursor.getString(1)
-                if (name.isNotEmpty() && !key.isNullOrEmpty()) result.add(Contact(cursor.getLong(0), key, name))
-            }
-        } ?: error("The device's contacts provider is unavailable")
-        // Reaching the bound is conservatively partial, never a complete-index claim.
-        return ScanResult(result, ContactCoverage.isPartial(result.size, 50_000))
+        val signal = cancellation ?: CancellationSignal()
+        val budget = ContactScanBudget(maxRawRows, maxDurationMs, android.os.SystemClock::elapsedRealtime)
+        val deadline = if (maxDurationMs == Long.MAX_VALUE) null else
+            deadlines.schedule({ signal.cancel() }, maxDurationMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        var partial = false
+        try {
+            if (!shouldContinue()) throw android.os.OperationCanceledException()
+            resolver.query(ContactsContract.Contacts.CONTENT_URI,
+                arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY,
+                    ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null, signal)?.use { cursor ->
+                while (true) {
+                    if (!shouldContinue()) throw android.os.OperationCanceledException()
+                    signal.throwIfCanceled()
+                    if (budget.exhausted() || result.size >= 50_000) { partial = true; break }
+                    if (!cursor.moveToNext()) break
+                    budget.visited()
+                    val name = cursor.getString(2)?.take(512)?.trim().orEmpty()
+                    val key = cursor.getString(1)
+                    if (name.isNotEmpty() && !key.isNullOrEmpty()) result.add(Contact(cursor.getLong(0), key, name))
+                }
+            } ?: error("The device's contacts provider is unavailable")
+        } catch (error: android.os.OperationCanceledException) {
+            if (!shouldContinue() || !budget.expired()) throw error
+            partial = true // Deadline reached: useful rows are partial, never Ready(empty).
+        } finally { deadline?.cancel(false) }
+        if (!shouldContinue()) throw android.os.OperationCanceledException()
+        return ScanResult(result, partial)
     }
 
     fun details(resolver: ContentResolver, resources: Resources, contact: Contact): Details {

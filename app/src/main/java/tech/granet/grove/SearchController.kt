@@ -250,7 +250,7 @@ internal class SearchController(private val activity: MainActivity) {
         liveContactWorker.execute {
             val result = runCatching { ContactIndex.load(activity.contentResolver, {
                 generation == searchGeneration && activity.configController.config.search.contacts && hasContactAccess()
-            }, cancellation).let { scan -> scan to SearchResults.matching(scan.contacts, prepared, 12) { contact -> contact.searchName } } }
+            }, cancellation, maxDurationMs = 2500L, maxRawRows = 50_000).let { scan -> scan to SearchResults.matching(scan.contacts, prepared, 12) { contact -> contact.searchName } } }
             activity.runOnUiThread {
                 if (!SearchPublicationGate.allowed(
                         generation, searchGeneration, !activity.isDestroyed && activity.searchMode,
@@ -261,7 +261,9 @@ internal class SearchController(private val activity: MainActivity) {
                     liveContacts = it.second
                     liveContactState = if (it.first.truncated) SearchSourceState.Partial(liveContacts.size, 1)
                         else SearchSourceState.Ready(liveContacts.size)
-                }.onFailure { liveContactState = SearchSourceState.Failed }
+                }.onFailure { error ->
+                    if (error !is android.os.OperationCanceledException) liveContactState = SearchSourceState.Failed
+                }
                 refreshLiveDisplay(query)
             }
         }
