@@ -287,3 +287,11 @@ The user confirmed the preceding tutorial APK works in their tested workflows. T
 GROVE-STATUS.md is unchanged. PR #92 remains unmerged and stacked on PR #90.
 
 Debug APK: `Grove-Juniper-audit-60f8f7f.apk`, SHA-256 `ea51e905f61909741ef52bff096d29c2fdb6ef6c015e71e049ee5f10571090e5`. Verified artifact archive digest, APK ZIP integrity, manifest and three Rust ABIs.
+
+## Grove 1.0.0 preparation — October 6, 2026
+
+Source `f1bce9b98f92d1b5322121a0764e041de592b254` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37481707804): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, lint and the missing-signing negative gate. The only production change after the device-accepted audit build is versionName 1.0.0 and versionCode 32. The user confirmed that APK works, then authorized merging for 1.0. Functional device acceptance does not establish every Android/OEM/accessibility/fault-injection case in the historical matrix. PR #90 is merged; PR #92 is authorized for main. GROVE-STATUS.md is unchanged.
+
+This run skips signed release steps; production APK/AAB delivery remains conditional on main CI's existing certificate, ABI, alignment and checksum gates. The previous main release attempt lacked GROVE_SIGNING_PASSWORD. Do not label a debug Grove Test APK as a signed production release.
+
+Verified debug APK: `Grove-1.0.0-test.apk`, SHA-256 `a0a94fa31c08e7c4d5054c84b3e4d08b152335eb295c10d1557b1f0a9a452140`; archive digest, APK integrity, 1.0.0/test manifest and three Rust ABIs verified.
