@@ -106,3 +106,10 @@ The APK under `app/build` is a development build, not a release signed distribut
 ## License
 
 Apache-2.0 for original source and artwork. Third party dependencies and Commons wallpapers retain their respective licenses; see [NOTICE](NOTICE).
+
+
+## PR #90 onboarding implementation — October 5, 2026
+
+Production/test source `026be7f0314c355f0449fe23796a557ee0417e22` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37399253894): seven Rust tests, debug APK assembly, JVM tests, lint, and the missing-signing negative gate. This is source/build verification; PR #90 remains unmerged and its Android device acceptance is pending. GROVE-STATUS.md is unchanged. Issue #89 explicitly requests fresh-install indexing defaults and Settings-only indexing controls; this overrides the older onboarding indexing-choice description without editing that contract.
+
+On the PR #90 branch, onboarding uses a concise Material You setup with rounded symbols, direct one-sentence permission choices, page slides and an initial foreground fade. Fresh-install indexing defaults on but requires enabled search and Android access. Indexing switches stay in Launcher settings. Existing users can preview the redesign through Launcher settings → Tutorials → Replay first-run setup; saved choices are preserved until successful Finish.

@@ -148,6 +148,7 @@ class MainActivity : AppCompatActivity() {
                 // view here would unexpectedly jump a scrolled layout to top.
             }
         })
+        setupController.restore(savedInstanceState)
         startupController.startupState = savedInstanceState
         runCatching {
             if (!prefs.getBoolean("setup_complete", false) && !setupController.setupPending()) {
@@ -176,6 +177,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        setupController.firstRunSetup?.settleMotion()
         pinDragController.releaseHold(); touchRouter.cancel()
         runCatching { host.stopListening() }.onFailure { Log.w("Grove", "Widget stop failed", it) }
         drawerController.clearAppSelection()
@@ -183,6 +185,7 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
     }
     override fun onDestroy() {
+        setupController.destroy()
         if (startupController.launcherCallbackRegistered) {
             try { launcher.unregisterCallback(changes) }
             catch (error: Exception) { Log.w("Grove", "Could not unregister launcher callback", error) }
@@ -200,6 +203,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
     override fun onSaveInstanceState(outState: Bundle) {
+        setupController.saveState(outState)
         homeController.rememberHomeScroll()
         outState.putInt("pending", widgets.pending)
         outState.putInt("homeScrollY", homeController.homeScrollY)

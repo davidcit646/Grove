@@ -4,7 +4,7 @@ Last updated: October 5, 2026
 
 Grove Launcher is developed by GraNet IT Solutions (CITARE HOLDINGS LLC). Questions about this policy can be sent through https://granet.tech/.
 
-## Wallpaper and appearance on the PR #87 review branch
+## Wallpaper and appearance
 
 Android displays the applied Home wallpaper directly, including static and live wallpapers. Grove reads Android's wallpaper ID and color metadata locally to refresh optional button colors; it does not read/copy the system wallpaper image for Home rendering, upload it, or request additional storage access for appearance. System/Light/Dark/Wallpaper colors preferences remain on device. Grove's previously selected library item is a remembered preference, not a record guaranteed to match an externally changed wallpaper.
 
@@ -13,9 +13,9 @@ Contact searches and indexes that reach their bound are partial; private contact
 ## Information Grove uses on your device
 
 - Grove lists installed launchable apps to display its app drawer, search results, and pinned apps. Your layout and settings are stored locally on your device.
-- If you enable Contact search and grant Android's Contacts permission, Grove reads names and lookup IDs from Android's Contacts Provider for local search. If you separately enable Contact indexing, those names and IDs are stored in Grove's private on-device cache to speed search; phone numbers and messaging channels are read from Android only when you choose a contact action. Grove does not upload a contact copy.
-- If you enable File search and grant Android's All files access, Android grants broad access to shared storage. Grove searches names and paths; if you separately enable File indexing, those names and paths plus file type and scan coverage are stored in Grove's private on-device cache. Grove does not read file contents, change files, or upload the index. Opening a result grants the selected app access to that one file.
-- Search and indexing have separate switches for each source. Search with indexing off reads the permitted Android source live; bounded file searches can be partial. Turning search off hides that source's results. Turning indexing off cancels that indexer and deletes its cache; Android permission remains until you revoke it in system settings. Revocation stops protected reads and hides existing results.
+- If you enable Contact search and grant Android's Contacts permission, Grove reads names and lookup IDs from Android's Contacts Provider for local search. If Contact indexing is on, those names and IDs are stored in Grove's private on-device cache to speed search; phone numbers and messaging channels are read from Android only when you choose a contact action. Grove does not upload a contact copy.
+- If you enable File search and grant Android's All files access, Android grants broad access to shared storage. Grove searches names and paths; if File indexing is on, those names and paths plus file type and scan coverage are stored in Grove's private on-device cache. Grove does not read file contents, change files, or upload the index. Opening a result grants the selected app access to that one file.
+- Search and indexing have separate switches for each source. Search with indexing off reads the permitted Android source live; bounded file searches can be partial. Turning search off hides that source's results, stops its indexer and deletes its cache. Turning indexing off cancels that indexer and deletes its cache; Android permission remains until you revoke it in system settings. Revocation stops protected reads and hides existing results.
 
 ## Reports, network requests, and retention
 
@@ -25,3 +25,9 @@ Contact searches and indexes that reach their bound are partial; private contact
 - Local settings and committed custom-wallpaper copies remain until you replace/remove them or uninstall Grove; abandoned staged custom-wallpaper data is not promoted to the committed slot. Enabled contact/file indexes are stored separately in app-private files and refreshed when stale (contacts after about 15 minutes, files after about one day), on relevant change events, or on retry. Disabling indexing or revoking access deletes the affected cache; uninstalling Grove removes both. Android backup and device transfer of Grove's app data are disabled. Pending reports are retained locally until you delete them, Grove removes older reports under its ten-report limit, or you uninstall Grove. Opening the email composer does not prove a message was sent and does not delete those reports.
 
 Grove does not sell your personal data. Android permissions remain under your control in system settings. This policy should be updated if Grove's behavior changes.
+
+## Onboarding defaults on the PR #90 review branch
+
+New installations default the separate contact/file indexing preferences on, while both optional search sources remain off until chosen. No protected indexing runs unless that source's search is enabled and Android currently permits access. Indexing can be disabled in Launcher settings. Existing saved choices, legacy imports and recovery defaults are preserved; permission denial does not reset the saved indexing preference.
+
+Setup uses Android's local dynamic-color palette when available, with a theme fallback. Its fresh-install Fern background is generated locally and does not apply or upload a wallpaper. Tutorial replay keeps Android's existing wallpaper. Provisional onboarding answers and page/practice state are included in Android's local Activity saved-state bundle so recreation can restore setup; preferences activate only after successful Finish. No telemetry, upload or new Android permission is introduced.

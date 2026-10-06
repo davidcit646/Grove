@@ -6,8 +6,9 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.MotionEvent
-import android.widget.CheckBox
-import android.widget.EditText
+import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -20,8 +21,6 @@ internal class FirstRunPages(
     private val apps: List<Pair<String, String>>,
     private val hasContacts: () -> Boolean,
     private val hasFiles: () -> Boolean,
-    private val contactState: () -> SearchSourceState,
-    private val fileState: () -> SearchSourceState,
     private val requestContacts: () -> Unit,
     private val requestFiles: () -> Unit,
     private val rerender: () -> Unit,
@@ -31,33 +30,23 @@ internal class FirstRunPages(
     fun render(page: Int, content: LinearLayout) = with(ui) {
         when (page) {
             0 -> {
-                heading(content, "Welcome", "Make Home yours.",
-                    "A calmer home screen, set up your way. This takes just a minute.")
+                heading(content, "Welcome to Grove", "Make Home yours.")
                 card(content, true) { box ->
-                    box.minimumHeight = context.dp(270)
-                    box.addView(icon(R.drawable.ic_grove, onAccent, 64))
-                    box.addView(text("Your phone. Your pace.", 24f, true, onAccent),
-                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(24) })
-                    box.addView(text("Choose how to move around, what appears on Home, and what Grove can search.",
-                        16f, color = onAccent), LinearLayout.LayoutParams(-1, -2).apply {
-                        topMargin = context.dp(10)
-                    })
+                    box.addView(icon(R.drawable.ic_setup_home, onAccent, 64))
+                    box.addView(text("Change any choice later in Launcher settings.", 18f, color = onAccent),
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(20) })
                 }
-                feature(content, R.drawable.ic_settings, "You stay in control",
-                    "Choose Grove as your Home app at the end. You can change every choice later in Launcher settings.")
             }
             1 -> {
-                heading(content, "Navigation", "Make it a gesture.",
-                    "Choose the swipes you want on Home. The on-screen buttons still work.")
-                choice(content, R.drawable.ic_search, "Swipe down", "Open Search",
+                heading(content, "Make it a gesture.",
+                    "Choose your swipes.")
+                choice(content, R.drawable.ic_setup_search, "Swipe down", "Open Search",
                     state.gestures.swipeDownSearch) { state.gestures = state.gestures.copy(swipeDownSearch = it) }
-                choice(content, R.drawable.ic_grid, "Swipe up", "Open all apps",
+                choice(content, R.drawable.ic_setup_apps, "Swipe up", "Open all apps",
                     state.gestures.swipeUpAppDrawer) { state.gestures = state.gestures.copy(swipeUpAppDrawer = it) }
-                feature(content, R.drawable.ic_info, "Prefer buttons?",
-                    "Turn both swipes off and we'll skip the practice step.")
             }
             2 -> {
-                heading(content, "Practice", "Try your swipes.",
+                heading(content, "Try your swipes.",
                     "Swipe inside the card. You can continue without practicing.")
                 card(content, true) { box ->
                     val status = text("", 16f, true, onAccent)
@@ -99,18 +88,16 @@ internal class FirstRunPages(
                 }
             }
             3 -> {
-                heading(content, "Quick access", "Settings are a hold away.",
-                    "Press and hold empty Home space to open Grove settings, even if you hide the buttons.")
+                heading(content, "Settings are a hold away.",
+                    "Hold empty Home space to open settings.")
                 card(content, true) { box ->
                     box.minimumHeight = context.dp(220)
-                    box.addView(icon(R.drawable.ic_settings, onAccent, 48))
+                    box.addView(icon(R.drawable.ic_setup_settings, onAccent, 48))
                     val feedback = text(if (state.practicedHold) "You got it!" else "Try holding this card",
                         20f, true, onAccent)
                     box.addView(feedback, LinearLayout.LayoutParams(-1, -2).apply {
                         topMargin = context.dp(24)
                     })
-                    box.addView(text("Press and hold anywhere in this space.", 15f, color = onAccent),
-                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(8) })
                     box.contentDescription = "Practice holding empty Home space to open launcher settings"
                     box.isLongClickable = true
                     box.setOnLongClickListener {
@@ -121,19 +108,19 @@ internal class FirstRunPages(
                 }
             }
             4 -> {
-                heading(content, "Home", "Keep what matters.",
-                    "Choose what appears when you unlock your phone.")
-                choice(content, R.drawable.ic_search, "Search button", "Find apps and more",
+                heading(content, "Keep what matters.",
+                    "Choose what appears on Home.")
+                choice(content, R.drawable.ic_setup_search, "Search button", "Find apps and more",
                     state.home.showSearchButton) { state.home = state.home.copy(showSearchButton = it) }
-                choice(content, R.drawable.ic_grid, "All apps button", "Open the app drawer",
+                choice(content, R.drawable.ic_setup_apps, "All apps button", "Open the app drawer",
                     state.home.showAppsButton) { state.home = state.home.copy(showAppsButton = it) }
-                choice(content, R.drawable.ic_home, "Clock and date", "Time at a glance",
+                choice(content, R.drawable.ic_setup_home, "Clock and date", "Time at a glance",
                     state.home.showClock) { state.home = state.home.copy(showClock = it) }
-                choice(content, R.drawable.ic_star, "Pinned apps", "Your chosen shortcuts",
+                choice(content, R.drawable.ic_setup_star, "Pinned apps", "Your chosen shortcuts",
                     state.home.showPinnedApps) { state.home = state.home.copy(showPinnedApps = it) }
             }
             5 -> {
-                heading(content, "Shortcuts", "Pin your favorites.",
+                heading(content, "Pin your favorites.",
                     "Choose up to 12 apps. Hold and drag them into place later.")
                 val counter = text("", 15f, true, primary)
                 fun updateCounter() { counter.text = "${state.pins.size} of 12 selected" }
@@ -142,16 +129,17 @@ internal class FirstRunPages(
                     topMargin = context.dp(8); bottomMargin = context.dp(12)
                 })
                 val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-                val search = EditText(context).apply {
+                val input = TextInputLayout(context).apply {
                     hint = "Find an app"
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                val search = TextInputEditText(input.context).apply {
                     setSingleLine()
                     contentDescription = "Find an app to pin"
                     setPadding(context.dp(16), context.dp(12), context.dp(16), context.dp(12))
-                    background = GradientDrawable().apply {
-                        setColor(surface); cornerRadius = context.dp(18).toFloat()
-                    }
                 }
-                content.addView(search)
+                input.addView(search, LinearLayout.LayoutParams(-1, -2))
+                content.addView(input)
                 fun updateList(query: String) {
                     list.removeAllViews()
                     apps.filter { it.second.contains(query, ignoreCase = true) }
@@ -166,7 +154,7 @@ internal class FirstRunPages(
                             row.addView(ImageView(context).apply { setImageBitmap(bitmap) },
                                 LinearLayout.LayoutParams(context.dp(36), context.dp(36)))
                         }
-                        row.addView(CheckBox(context).apply {
+                        row.addView(MaterialCheckBox(context).apply {
                             text = name
                             textSize = 16f
                             isChecked = key in state.pins
@@ -193,67 +181,31 @@ internal class FirstRunPages(
                     topMargin = context.dp(12)
                 })
             }
-            6 -> {
-                heading(content, "Recommended", "People, one search away.",
-                    "Type a name to call, text, or open a contact card. Android sends the selected number to the app you choose.")
-                feature(content, R.drawable.ic_contact, "Why enable it?",
-                    "Reach people without opening your contacts app.", true)
-                feature(content, R.drawable.ic_info, "Why leave it off?",
-                    "Fewer results can mean faster searches and less battery use.")
-                feature(content, R.drawable.ic_home, "Private and on your device",
-                    "Grove searches names on your device. If you separately enable indexing, names and lookup IDs are saved privately on this device. Phone numbers are read only for actions; no copy is uploaded.")
-                if (!state.search.contacts || !hasContacts()) action(content, "Enable contact search") {
-                    state.search = state.search.copy(contacts = true)
-                    rerender()
-                    if (!hasContacts()) requestContacts()
-                } else {
-                    val status = contactState()
-                    feature(content, R.drawable.ic_contact,
-                        if (status == SearchSourceState.Failed) "Contact source unavailable" else "Contact permission granted",
-                        if (status == SearchSourceState.Failed) "Grove could not read contacts. Retry from Search after setup."
-                        else "Grove will refresh contact results after setup.", true)
-                }
-                if (state.search.contacts) action(content, "Don't use contact search") {
-                    state.search = state.search.copy(contacts = false); rerender()
-                }
-                action(content, if (state.search.contactIndexing) "Turn contact indexing off" else "Enable background contact indexing") {
-                    state.search = state.search.copy(contactIndexing = !state.search.contactIndexing)
-                    rerender()
-                    if (state.search.contactIndexing && !hasContacts()) requestContacts()
-                }
-                content.addView(text("Indexing is optional. Search works live without it, possibly slower. Turning search off hides results; indexing follows its own switch. Android keeps a granted permission until you revoke it in system settings.",
-                    14f, color = muted), LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
+            6 -> permissionPage(content, contacts = true)
+            7 -> permissionPage(content, contacts = false)
+        }
+    }
+
+    private fun permissionPage(content: LinearLayout, contacts: Boolean) = with(ui) {
+        val enabled = if (contacts) state.search.contacts else state.search.files
+        val granted = if (contacts) hasContacts() else hasFiles()
+        val title = if (contacts) "Contact search" else "File search"
+        heading(content, title, if (contacts)
+            "We need contact access for contact search to work."
+            else "We need file access for file search to work.")
+        choice(content, if (contacts) R.drawable.ic_setup_person else R.drawable.ic_setup_folder,
+            title, "", enabled) { selected ->
+            state.search = if (contacts) state.search.copy(contacts = selected)
+                else state.search.copy(files = selected)
+            rerender()
+            if (selected && !granted) {
+                if (contacts) requestContacts() else requestFiles()
             }
-            7 -> {
-                heading(content, "Optional", "Search files on your phone.",
-                    "You probably don't need this. It's here for on-device music, documents, and other files you want to find by name.")
-                feature(content, R.drawable.ic_document, "When it helps",
-                    "Find local files without browsing folders.", true)
-                feature(content, R.drawable.ic_info, "Why leave it off?",
-                    "Skipping storage scans can make searches faster and use less battery.")
-                feature(content, R.drawable.ic_home, "What Android grants",
-                    "All files access grants broad access to shared storage, but not app-private data or system partitions. Grove searches names and paths without reading contents or uploading them. Optional indexing saves metadata privately on this device.")
-                if (!state.search.files || !hasFiles()) action(content, "Enable file search") {
-                    state.search = state.search.copy(files = true)
-                    rerender()
-                    if (!hasFiles()) requestFiles()
-                } else {
-                    val status = fileState()
-                    feature(content, R.drawable.ic_document,
-                        if (status == SearchSourceState.Failed) "File source unavailable" else "File access granted",
-                        if (status == SearchSourceState.Failed) "Grove could not index files. Retry from Search after setup."
-                        else "Grove will scan file names after setup.", true)
-                }
-                if (state.search.files) action(content, "Don't use file search") {
-                    state.search = state.search.copy(files = false); rerender()
-                }
-                action(content, if (state.search.fileIndexing) "Turn file indexing off" else "Enable background file indexing") {
-                    state.search = state.search.copy(fileIndexing = !state.search.fileIndexing)
-                    rerender()
-                    if (state.search.fileIndexing && !hasFiles()) requestFiles()
-                }
-                content.addView(text("Indexing is optional. Live file search can be slower or partial. Turning search off hides results; indexing follows its own switch. Android keeps a granted permission until you revoke it in system settings.",
-                    14f, color = muted), LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(16) })
+        }
+        if (enabled) {
+            content.addView(text(if (granted) "Access granted" else "Access needed", 14f, color = muted))
+            if (!granted) action(content, "Allow access") {
+                if (contacts) requestContacts() else requestFiles()
             }
         }
     }

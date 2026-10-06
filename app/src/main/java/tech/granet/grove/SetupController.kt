@@ -18,6 +18,10 @@ import java.util.*
 /** Settings and first-run setup. Failed config persistence preserves the setup instance and reopens it for retry. */
 internal class SetupController(private val activity: MainActivity) {
     internal var firstRunSetup: FirstRunSetup? = null
+    private var restoredSetup: Bundle? = null
+    fun restore(state: Bundle?) { restoredSetup = state?.getBundle("firstRun") }
+    fun saveState(state: Bundle) { (firstRunSetup?.saveState() ?: restoredSetup)?.let { state.putBundle("firstRun", it) } }
+    fun destroy() { firstRunSetup?.destroy(); firstRunSetup = null }
 
     fun setupPending(): Boolean = with(activity) { runCatching { prefs.getBoolean("setup_pending", false) }
         .onFailure { Log.w("Grove", "Setup flag unavailable", it) }.getOrDefault(false)
@@ -66,13 +70,12 @@ internal class SetupController(private val activity: MainActivity) {
                 .getOrDefault(false)
             prefs.edit().remove("widget_tutorial_seen").apply()
             firstRunSetup = FirstRunSetup(
-                this, surface, configController.config, catalogController.apps.map { it.key to it.label },
+                this, surface, root, configController.config, catalogController.apps.map { it.key to it.label },
                 searchController::hasContactAccess, { Environment.isExternalStorageManager() },
-                { SearchSourceState.resolve(true, searchController.hasContactAccess(), searchController.indexingContacts,
-                    searchController.contactLoadFailed, searchController.contacts.size) },
-                { SearchSourceState.resolve(true, Environment.isExternalStorageManager(), searchController.indexingFiles,
-                    searchController.fileLoadFailed, searchController.files.size, searchController.fileScanSkipped) },
-                searchController::explainContactAccess, searchController::explainFileAccess,
+                searchController::requestContactAccess, searchController::requestFileAccess,
+                !setupPreviouslyCompleted, restoredSetup,
+                { done -> wallpaperController.background(0, resources.displayMetrics.widthPixels,
+                    resources.displayMetrics.heightPixels) { bitmap, _ -> done(bitmap) } },
                 finishSetup@{ next ->
                     if (!configController.commitConfig(next)) {
                         firstRunSetup?.show()
@@ -106,7 +109,7 @@ internal class SetupController(private val activity: MainActivity) {
                     firstRunSetup = null
                     prefs.edit().putBoolean("setup_complete", true).remove("setup_pending").apply()
                 },
-            ).also { it.show() }
+            ).also { restoredSetup = null; it.show() }
         }
     }
 

@@ -41,7 +41,8 @@ class ConfigStore(private val prefs: SharedPreferences) {
             return runCatching { parse(prefs.getString("fallback_config", "") ?: "") }
                 .getOrDefault(Config())
         }
-        if (raw.isNullOrBlank()) return Config()
+        if (raw.isNullOrBlank()) return SetupDefaults.configuration(
+            prefs.contains("config"), prefs.contains("initialized"), prefs.contains("setup_complete"))
         return runCatching { parse(raw) }.getOrElse {
             usingFallback = true
             brokenCustomConfig = raw

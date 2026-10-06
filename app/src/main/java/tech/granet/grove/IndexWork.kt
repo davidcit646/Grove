@@ -23,8 +23,8 @@ internal object IndexWork {
     fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
     private fun enabled(context: Context, kind: String): Boolean = try {
         val setting = ConfigStore(prefs(context)).load().search
-        when (kind) { "files" -> setting.fileIndexing && Environment.isExternalStorageManager()
-            else -> setting.contactIndexing && context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED }
+        when (kind) { "files" -> IndexAccessPolicy.files(setting, Environment.isExternalStorageManager())
+            else -> IndexAccessPolicy.contacts(setting, context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) }
     } catch (_: Exception) { false }
 
     fun allowed(context: Context, kind: String, expected: String): Boolean =

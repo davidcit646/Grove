@@ -88,7 +88,7 @@ internal class LauncherSettingsScreen(
         content.addView(activity.bodyText("Contacts: ${indexStatus("contacts")} · Files: ${indexStatus("files")}"))
         content.addView(activity.settingsButton("Retry contact index", R.drawable.ic_contact) { retryIndex("contacts") })
         content.addView(activity.settingsButton("Retry file index", R.drawable.ic_folder) { retryIndex("files") })
-        content.addView(activity.bodyText("Indexes store names and file paths in Grove's private storage for faster search. They run in the background when Android permits access. Search can still work without an index, though file lookup may be slower or partial. Turning indexing off deletes that index. Android permissions stay granted until you revoke them in system settings."))
+        content.addView(activity.bodyText("Indexes store names and file paths in Grove's private storage for faster search. They run when the matching search source is enabled and Android permits access. Search can still work without an index, though file lookup may be slower or partial. Turning indexing off deletes that index. Android permissions stay granted until you revoke them in system settings."))
         content.addSection("Home screen")
         toggle("Show Apps button", config.homeScreen.showAppsButton) { enabled ->
             commit(current().copy(homeScreen = current().homeScreen.copy(showAppsButton = enabled)))
