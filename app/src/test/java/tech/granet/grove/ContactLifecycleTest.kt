@@ -43,6 +43,26 @@ class ContactLifecycleTest {
         assertTrue(cache.copy(partial = true).fresh("contacts", 1_001))
     }
 
+    @Test fun orphanRecoveryPreservesRealWorkAndCannotReleaseNewerReservation() {
+        assertTrue(IndexRecoveryPolicy.release("old", "old", false, false))
+        assertTrue(IndexRecoveryPolicy.release("old", "old", true, true))
+        assertFalse(IndexRecoveryPolicy.release("old", "old", true, false))
+        assertFalse(IndexRecoveryPolicy.release("old", "new", false, false))
+        assertFalse(IndexRecoveryPolicy.release("old", null, true, true))
+    }
+
+    @Test fun exhaustedRepairBlocksNewAutomaticJobsButAllowsManualRecoveryAndRunningFollowUp() {
+        for (cause in IndexRefreshCause.values()) {
+            assertTrue(IndexRecoveryPolicy.repairAllowed(cause, false))
+            assertEquals(cause == IndexRefreshCause.MANUAL, IndexRecoveryPolicy.repairAllowed(cause, true))
+        }
+        var deferred = false
+        assertTrue(IndexRefreshRequests.request("repair", "repair", null,
+            schedule = { throw AssertionError("Running repair must not start another job") },
+            defer = { deferred = true; true }))
+        assertTrue(deferred)
+    }
+
     @Test fun automaticCausesNeverInheritManualRefreshDelayPolicy() {
         for (cause in IndexRefreshCause.values()) {
             assertEquals(if (cause == IndexRefreshCause.PROVIDER_CHANGE) 29_900L else 0L,

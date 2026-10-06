@@ -29,7 +29,7 @@ internal object IndexWork {
         val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWork(name(kind)).get(30, TimeUnit.SECONDS)
         val state = infos.firstOrNull { it.id.toString() == id }?.state
         synchronized(this) {
-            if (prefs(context).getString(token(kind), null) == expected && (state == null || state.isFinished)) {
+            if (IndexRecoveryPolicy.release(expected, prefs(context).getString(token(kind), null), state != null, state?.isFinished == true)) {
                 prefs(context).edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()
             }
         }
@@ -88,16 +88,16 @@ internal object IndexWork {
     private fun enqueueRecovered(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return false }
         val store = prefs(context)
-        if (cause == IndexRefreshCause.MANUAL) {
-            if (!store.edit().remove(repair(kind)).commit()) return false
-        } else if (store.getBoolean(repair(kind), false)) {
-            failure(kind, "Automatic repair exhausted; retry manually")
-            return false
-        }
-        if (cause == IndexRefreshCause.REPAIR && !store.edit().putBoolean(repair(kind), true).commit()) return false
+        if (cause == IndexRefreshCause.MANUAL && !store.edit().remove(repair(kind)).commit()) return false
         val active = store.getString(token(kind), null)
         return IndexRefreshRequests.request(active, store.getString(started(kind), null), store.getString(pending(kind), null),
-            schedule = { schedule(context, kind, followUp = false, delayMillis = IndexRefreshRequests.delayMillis(cause, store.getLong(lastStarted(kind), 0), System.currentTimeMillis())) },
+            schedule = {
+                if (!IndexRecoveryPolicy.repairAllowed(cause, store.getBoolean(repair(kind), false))) {
+                    failure(kind, "Automatic repair exhausted; retry manually")
+                    false
+                } else if (cause == IndexRefreshCause.REPAIR && !store.edit().putBoolean(repair(kind), true).commit()) false
+                else schedule(context, kind, followUp = false, delayMillis = IndexRefreshRequests.delayMillis(cause, store.getLong(lastStarted(kind), 0), System.currentTimeMillis()))
+            },
             defer = { store.edit().putString(pending(kind), active).commit() })
     }
 
