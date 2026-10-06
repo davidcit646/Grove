@@ -38,12 +38,12 @@ internal object IndexWork {
         return prefs(context).edit().putString(started(kind), expected).remove(pending(kind)).commit()
     }
 
-    @Synchronized fun finished(context: Context, kind: String, expected: String) {
+    @Synchronized fun finished(context: Context, kind: String, expected: String, succeeded: Boolean = true) {
         val store = prefs(context)
         if (store.getString(token(kind), null) != expected) return
         val followUp = store.getString(pending(kind), null) == expected
         if (!store.edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()) return
-        if (followUp && enabled(context, kind)) {
+        if (succeeded && followUp && enabled(context, kind)) {
             // Append one delayed scan after this worker; never cancel a scan to refresh it.
             schedule(context, kind, followUp = true)
         }
@@ -128,6 +128,7 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
             return Result.success()
         }
         var retry = false
+        var succeeded = true
         val outcome = try {
             val saved = if (kind == "files") {
                 val scan = FileIndex.scan(Environment.getExternalStorageDirectory(), shouldContinue = allowed)
@@ -145,9 +146,9 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
             } else if (!allowed()) Result.success() else if (runAttemptCount < 2) {
                 retry = true
                 Result.retry()
-            } else Result.failure()
+            } else { succeeded = false; Result.failure() }
         }
-        if (!retry) IndexWork.finished(context, kind, token)
+        if (!retry) IndexWork.finished(context, kind, token, succeeded)
         return outcome
     }
 }
