@@ -11,12 +11,13 @@ internal object IndexCache {
     private const val MAX_BYTES = 12 * 1024 * 1024
     private const val VERSION = 1
     private val lock = Any()
+    private val stateLock = Any()
     val metadataChanges = androidx.lifecycle.MutableLiveData<Map<String, IndexMetadata>>(emptyMap())
     private val metadata = mutableMapOf<String, IndexMetadata>()
-    fun metadata(kind: String): IndexMetadata = synchronized(lock) {
+    fun metadata(kind: String): IndexMetadata = synchronized(stateLock) {
         (metadata[kind] ?: IndexMetadata()).let { if (kind in invalid) it.copy(invalidated = true) else it }
     }
-    private fun record(kind: String, value: IndexMetadata) = synchronized(lock) {
+    private fun record(kind: String, value: IndexMetadata) = synchronized(stateLock) {
         metadata[kind] = value
         metadataChanges.postValue(metadata.toMap())
     }
@@ -35,10 +36,10 @@ internal object IndexCache {
     val changes = androidx.lifecycle.MutableLiveData<Map<String, Long>>(emptyMap())
     private val generations = mutableMapOf<String, Long>()
     private val invalid = mutableSetOf<String>()
-    fun invalidate(kind: String) = synchronized(lock) { invalid.add(kind); metadataChanges.postValue(metadata.toMap()); Unit }
-    fun invalidated(kind: String): Boolean = synchronized(lock) { kind in invalid }
-    fun generation(kind: String): Long = synchronized(lock) { generations[kind] ?: 0L }
-    private fun published(kind: String) {
+    fun invalidate(kind: String) = synchronized(stateLock) { invalid.add(kind); metadataChanges.postValue(metadata.toMap()); Unit }
+    fun invalidated(kind: String): Boolean = synchronized(stateLock) { kind in invalid }
+    fun generation(kind: String): Long = synchronized(stateLock) { generations[kind] ?: 0L }
+    private fun published(kind: String) = synchronized(stateLock) {
         generations[kind] = (generations[kind] ?: 0L) + 1L
         changes.postValue(generations.toMap())
     }
@@ -79,7 +80,7 @@ internal object IndexCache {
                 stream.write(bytes)
                 if (!allowed()) { file.failWrite(stream); return false }
                 file.finishWrite(stream)
-                invalid.remove(kind)
+                synchronized(stateLock) { invalid.remove(kind) }
                 verified(kind, value)
                 published(kind)
                 return true

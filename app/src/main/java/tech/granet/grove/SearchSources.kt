@@ -114,7 +114,6 @@ internal class SearchSources(
                 }.onFailure {
                     contactLoadFailed = true
                     contactCorrupt = true
-                    IndexCache.clear(activity, "contacts")
                     refreshContacts(IndexRefreshCause.REPAIR)
                 }
                 redraw()
@@ -149,7 +148,6 @@ internal class SearchSources(
                 }.onFailure {
                     fileLoadFailed = true
                     fileCorrupt = true
-                    IndexCache.clear(activity, "files")
                     IndexWork.enqueue(activity, "files", IndexRefreshCause.REPAIR)
                 }
                 redraw()
