@@ -157,7 +157,7 @@ internal class SearchSources(
                     fileLoadFailed = true
                     fileCorrupt = true
                     IndexCache.clear(activity, "files")
-                    indexFiles()
+                    IndexWork.enqueue(activity, "files", IndexRefreshCause.REPAIR)
                 }
                 redraw()
             }

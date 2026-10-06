@@ -40,6 +40,7 @@ internal object IndexWork {
     private fun started(kind: String) = "index-started-$kind"
     private fun lastStarted(kind: String) = "index-last-started-$kind"
     private fun pending(kind: String) = "index-refresh-pending-$kind"
+    private fun repair(kind: String) = "index-repair-attempted-$kind"
     private fun workId(kind: String) = "index-work-id-$kind"
     fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
     private fun enabled(context: Context, kind: String): Boolean = try {
@@ -62,6 +63,7 @@ internal object IndexWork {
         if (store.getString(token(kind), null) != expected) return
         val followUp = store.getString(pending(kind), null) == expected
         if (!store.edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()) return
+        if (succeeded) store.edit().remove(repair(kind)).commit()
         if (succeeded && followUp && enabled(context, kind)) {
             // Append one delayed scan after this worker; never cancel a scan to refresh it.
             schedule(context, kind, followUp = true, delayMillis = 30_000)
@@ -86,6 +88,13 @@ internal object IndexWork {
     private fun enqueueRecovered(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return false }
         val store = prefs(context)
+        if (cause == IndexRefreshCause.MANUAL) {
+            if (!store.edit().remove(repair(kind)).commit()) return false
+        } else if (store.getBoolean(repair(kind), false)) {
+            failure(kind, "Automatic repair exhausted; retry manually")
+            return false
+        }
+        if (cause == IndexRefreshCause.REPAIR && !store.edit().putBoolean(repair(kind), true).commit()) return false
         val active = store.getString(token(kind), null)
         return IndexRefreshRequests.request(active, store.getString(started(kind), null), store.getString(pending(kind), null),
             schedule = { schedule(context, kind, followUp = false, delayMillis = IndexRefreshRequests.delayMillis(cause, store.getLong(lastStarted(kind), 0), System.currentTimeMillis())) },
@@ -185,7 +194,9 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
                 val contacts = ContactIndex.load(context.contentResolver, allowed, contactCancellation)
                 allowed() && IndexCache.writeContacts(context, contacts, allowed)
             }
-            if (saved) Result.success() else Result.success() // Superseded is cancellation, not failure.
+            succeeded = saved
+            if (!saved && allowed()) error("Index cache was not committed")
+            Result.success() // Superseded is cancellation, not failure.
         } catch (error: Exception) {
             Log.w("Grove", "Background $kind index unavailable: ${error.javaClass.simpleName}")
             if (isStopped) {
