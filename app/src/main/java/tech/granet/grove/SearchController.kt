@@ -164,7 +164,7 @@ internal class SearchController(private val activity: MainActivity) {
             if (isDestroyed || startupController.coreRecoveryVisible) return
             homeController.rememberHomeScroll()
             drawerController.clearAppSelection()
-            drawer = false; searchMode = true; homeController.base()
+            drawer = false; searchMode = true; homeController.base(readableBackdrop = true)
             root.addView(wallpaperLabel("Search", 30f))
             val field = EditText(this).apply {
                 hint = "Apps, contacts, files, web, and Play Store"

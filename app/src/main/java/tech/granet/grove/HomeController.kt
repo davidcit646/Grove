@@ -42,15 +42,16 @@ internal class HomeController(private val activity: MainActivity) {
     }
     }
 
-    fun base() {
+    fun base(readableBackdrop: Boolean = false) {
         with(activity) {
             searchController.cancelPending()
             searchController.searchField = null; searchController.searchResults = null; drawerController.drawerAdapter = null; drawerController.drawerEmpty = null; drawerController.drawerGrid = null
             root.animate().cancel(); root.translationY = 0f; root.alpha = 1f
             root.removeAllViews()
             // The Android wallpaper window is authoritative, including external/live changes.
-            // Keep the image unmodified; contrast belongs to text and system-bar regions.
-            surface.background = null
+            // Home stays undimmed. Drawer/search use their own readable translucent surface.
+            surface.background = if (readableBackdrop)
+                android.graphics.drawable.ColorDrawable(0xb3000000.toInt()) else null
         }
     }
 
