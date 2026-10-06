@@ -62,9 +62,9 @@ class OnboardingPolicyTest {
     }
 
     @Test fun backAndRtlReverseSlideDirection() {
-        assertEquals(320f, FirstRunMotionPolicy.offset(320, true, false))
-        assertEquals(-320f, FirstRunMotionPolicy.offset(320, false, false))
-        assertEquals(-320f, FirstRunMotionPolicy.offset(320, true, true))
-        assertEquals(320f, FirstRunMotionPolicy.offset(320, false, true))
+        assertEquals(320f, FirstRunMotionPolicy.offset(320, true, false), 0f)
+        assertEquals(-320f, FirstRunMotionPolicy.offset(320, false, false), 0f)
+        assertEquals(-320f, FirstRunMotionPolicy.offset(320, true, true), 0f)
+        assertEquals(320f, FirstRunMotionPolicy.offset(320, false, true), 0f)
     }
 }
