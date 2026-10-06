@@ -8,6 +8,7 @@ import android.os.*
 import android.view.*
 import android.widget.*
 import com.google.android.material.button.MaterialButton
+import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
 import java.util.*
@@ -132,7 +133,7 @@ internal class HomeController(private val activity: MainActivity) {
             val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val groups = displayed.chunked(columns)
             val rowCount = grid?.rows ?: groups.size
-            val height = if (grid == null) null else maxOf(dp(112), (surface.height - dp(240)) / grid.rows)
+            val height = if (grid == null) null else maxOf(drawerController.drawerTiles.minimumCellHeight(), (surface.height - dp(240)) / grid.rows)
             repeat(rowCount) { index ->
                 val row = LinearLayout(this)
                 val group = groups.getOrNull(index).orEmpty()

@@ -19,4 +19,8 @@
         <item name="colorSurfaceBright">@color/grove_surface_bright</item>
         <item name="colorSurfaceDim">@color/grove_surface_dim</item>
     </style>
+    <style name="Theme.Grove.Settings" parent="Theme.Grove">
+        <item name="android:windowBackground">?attr/colorSurface</item>
+        <item name="android:windowShowWallpaper">false</item>
+    </style>
 </resources>

@@ -24,7 +24,7 @@ internal class DrawerController(private val activity: MainActivity) {
     private var lastGridQuery = ""
     private var gridNavigation: LinearLayout? = null
     private fun tileHeight(): Int? = activity.configController.config.drawerGrid?.let {
-        maxOf(activity.dp(112), ((drawerGrid?.height ?: 0) - activity.dp(4) * (it.rows - 1)) / it.rows)
+        maxOf(drawerTiles.minimumCellHeight(), ((drawerGrid?.height ?: 0) - activity.dp(4) * (it.rows - 1)) / it.rows)
     }
     internal val drawerDragController by lazy { with(activity) { DrawerDragController(actionController::appMenu) } }
     internal val drawerTiles by lazy { with(activity) { DrawerTiles(this, this@DrawerController::launchDrawerApp, actionController::appMenu, this@DrawerController::tileHeight) } }

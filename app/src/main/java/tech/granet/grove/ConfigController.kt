@@ -14,8 +14,6 @@ import java.util.*
 
 /** Active configuration and document/editor flows. Persistence must succeed before publication or completion. */
 internal class ConfigController(private val activity: MainActivity) {
-    private val documents = java.util.concurrent.Executors.newSingleThreadExecutor()
-    private var documentGeneration = 0
     private val app get() = activity.application as GroveApp
     internal val repository get() = app.settingsRepository
     internal val config get() = repository.snapshot().config
@@ -52,6 +50,7 @@ internal class ConfigController(private val activity: MainActivity) {
                     if (previous.search != next.search) activity.searchController.applySearchSettings(previous.search)
                     activity.presentationController.applyTheme(next.themeMode)
                 } catch (error: Exception) {
+                    reconciled = previous
                     Log.e("Grove", "Saved settings; feature refresh unavailable", error)
                     activity.message("Settings saved; return Home to refresh")
                 }
@@ -70,27 +69,14 @@ internal class ConfigController(private val activity: MainActivity) {
         activity.startActivity(Intent(activity, SettingsActivity::class.java).putExtra("route", "recovery"))
     }
     fun exportDocument(uri: Uri) {
-        val snapshot = config
-        val generation = ++documentGeneration
-        documents.execute {
-            val result = runCatching {
-                activity.contentResolver.openOutputStream(uri)?.use { ConfigDocuments.write(snapshot, it) }
-                    ?: error("Cannot open file")
-            }
-            activity.runOnUiThread {
-                if (activity.isDestroyed || generation != documentGeneration) return@runOnUiThread
-                result.onSuccess { activity.message("Configuration exported") }.onFailure {
-                    GroveErrorPresenter.show(activity, GroveErrorRegistry.CONFIG_EXPORT) { activity.export.launch("grove-config.json") }
-                }
-            }
-        }
+        activity.startActivity(Intent(activity, SettingsActivity::class.java).putExtra("exportUri", uri.toString()))
     }
 
     fun importDocument(uri: Uri) {
         activity.startActivity(Intent(activity, SettingsActivity::class.java).putExtra("importUri", uri.toString()))
     }
 
-    fun shutdown() { documentGeneration++; documents.shutdownNow() }
+    fun shutdown() = Unit
 }
 
 internal object ConfigDocumentGate {

@@ -18,6 +18,7 @@ class SettingsSession(app: Application) : AndroidViewModel(app) {
     internal var draft: String? = null
     internal var editorBase: SettingsSnapshot? = null
     internal val documentResult = MutableLiveData<CommandFeedback>()
+    internal var emailDraft: String? = null
     internal var gridColumns: Int? = null
     internal var gridRows: Int? = null
     internal var busy = false
@@ -26,7 +27,7 @@ class SettingsSession(app: Application) : AndroidViewModel(app) {
     @Volatile private var generation = 0
     internal fun readDocument(uri: Uri) {
         val base = repository.snapshot()
-        runDocument {
+        runDocument("accept") {
             val config = getApplication<Application>().contentResolver.openInputStream(uri)?.use(ConfigDocuments::read)
                 ?: error("Cannot open document")
             return@runDocument { candidate = ConfigCandidate(config, base); documentResult.value = CommandFeedback(true, "Review the configuration before applying.") }
@@ -34,7 +35,7 @@ class SettingsSession(app: Application) : AndroidViewModel(app) {
     }
     internal fun export(uri: Uri) {
         val config = repository.snapshot().config
-        runDocument {
+        runDocument("export") {
             getApplication<Application>().contentResolver.openOutputStream(uri)?.use { ConfigDocuments.write(config, it) }
                 ?: error("Cannot write document")
             return@runDocument { documentResult.value = CommandFeedback(true, "Configuration exported") }
@@ -48,15 +49,17 @@ class SettingsSession(app: Application) : AndroidViewModel(app) {
             return@runDocument { candidate = ConfigCandidate(config, base); documentResult.value = CommandFeedback(true, "Review the configuration before applying.") }
         }
     }
-    private fun runDocument(work: () -> (() -> Unit)) {
+    private fun runDocument(operation: String = "accept", work: () -> (() -> Unit)) {
         val token = ++generation; busy = true
         worker.execute {
+            if (token != generation || Thread.currentThread().isInterrupted) return@execute
             val result = try { Result.success(work()) } catch (error: Exception) { Result.failure(error) }
             handler.post {
                 if (token != generation) return@post
                 busy = false
                 result.onSuccess { it() }.onFailure { documentResult.value = CommandFeedback(false,
-                    "Could not accept the document. Check its JSON, supported version and 64 KB limit.") }
+                    if (operation == "export") "Could not export the configuration. Choose a writable document and try again."
+                    else "Could not accept the document. Check its JSON, supported version and 64 KB limit.") }
             }
         }
     }

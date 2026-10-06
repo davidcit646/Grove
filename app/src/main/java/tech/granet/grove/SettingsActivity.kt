@@ -41,7 +41,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(state)
         window.setDecorFitsSystemWindows(false)
         val context = DynamicColors.wrapContextIfAvailable(this)
-        val shell = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val shell = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(ThemeColors.surface(context)) }
         toolbar = MaterialToolbar(context).apply {
             setNavigationIcon(R.drawable.ic_setup_back)
             setNavigationContentDescription("Back")
@@ -69,6 +69,9 @@ class SettingsActivity : AppCompatActivity() {
         }
         state?.getStringArrayList("routes")?.filter { it in SettingsPages.routes }?.let { if (it.isNotEmpty()) { routes.clear(); routes.addAll(it) } }
         if (state == null) intent.getStringExtra("route")?.takeIf { it in SettingsPages.routes }?.let { routes.add(it) }
+        if (session.emailDraft == null) session.emailDraft = state?.getString("emailDraft")
+        if (session.gridColumns == null && state?.containsKey("gridColumns") == true) session.gridColumns = state.getInt("gridColumns")
+        if (session.gridRows == null && state?.containsKey("gridRows") == true) session.gridRows = state.getInt("gridRows")
         if (session.draft == null) session.draft = state?.getString("draft") ?: intent.getStringExtra("draft")
         if (session.editorBase == null && state?.containsKey("draft") == true) {
             // Process death makes an old draft provisional again; review may not auto-apply it.
@@ -99,6 +102,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         applyTheme()
         render()
+        if (state == null) intent.getStringExtra("exportUri")?.let { session.export(Uri.parse(it)) }
         if (state == null) intent.getStringExtra("importUri")?.let { session.readDocument(Uri.parse(it)) }
     }
     override fun onResume() {
@@ -112,6 +116,8 @@ class SettingsActivity : AppCompatActivity() {
     override fun onDestroy() { motion.finish(); super.onDestroy() }
     override fun onSaveInstanceState(state: Bundle) {
         state.putStringArrayList("routes", ArrayList(routes)); state.putString("draft", session.draft)
+        state.putString("emailDraft", session.emailDraft)
+        session.gridColumns?.let { state.putInt("gridColumns", it) }; session.gridRows?.let { state.putInt("gridRows", it) }
         super.onSaveInstanceState(state)
     }
     private fun applyTheme() {
@@ -124,7 +130,10 @@ class SettingsActivity : AppCompatActivity() {
     }
     private fun navigate(route: String) {
         if (motion.busy || route !in SettingsPages.routes) return
-        routes.add(route); render(true)
+        val existing = routes.indexOf(route)
+        if (existing >= 0) { while (routes.lastIndex > existing) routes.removeAt(routes.lastIndex) }
+        else routes.add(route)
+        render(true)
     }
     private fun back() {
         motion.finish()

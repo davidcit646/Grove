@@ -66,6 +66,11 @@ internal class SettingsDocumentPages(
                 content.addView(editor, LinearLayout.LayoutParams(-1, -2))
                 if (session.editorBase == null) session.editorBase = snapshot
                 button(content, if (session.busy) "Validating…" else "Validate and review") { if (!session.busy) session.validateDraft() }
+                button(content, "Discard draft and load current settings") {
+                    session.draft = session.repository.snapshot().config.json()
+                    session.editorBase = session.repository.snapshot()
+                    navigate("configuration")
+                }
                 if (session.editorBase != snapshot) button(content, "Review against current settings") {
                     session.editorBase = session.repository.snapshot(); session.validateDraft()
                 }
@@ -86,7 +91,12 @@ internal class SettingsDocumentPages(
             "email" -> {
                 val editor = EditText(activity).apply {
                     inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-                    setSingleLine(); setText(CrashReporter.developerEmail(activity)); contentDescription = "Developer email"
+                    setSingleLine(); setText(session.emailDraft ?: CrashReporter.developerEmail(activity)); contentDescription = "Developer email"
+                    addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { session.emailDraft = s.toString() }
+                        override fun afterTextChanged(s: Editable?) = Unit
+                    })
                 }
                 content.addView(editor)
                 button(content, "Save email") { feedback(session.commands.email(editor.text.toString())) }

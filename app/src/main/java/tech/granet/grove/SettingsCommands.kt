@@ -37,8 +37,9 @@ internal class SettingsCommands(private val context: Context, private val reposi
     private fun feedback(outcome: SettingsOutcome): CommandFeedback = when (outcome) {
         is SettingsOutcome.Saved -> {
             try {
-                IndexWork.reconcile(context, "contacts"); IndexWork.reconcile(context, "files")
-                CommandFeedback(true)
+                val contacts = IndexWork.reconcile(context, "contacts")
+                val files = IndexWork.reconcile(context, "files")
+                CommandFeedback(true, if (contacts && files) null else "Settings saved; index scheduling unavailable")
             } catch (_: Exception) { CommandFeedback(true, "Settings saved; background refresh unavailable") }
         }
         is SettingsOutcome.Invalid -> CommandFeedback(false, outcome.reason)

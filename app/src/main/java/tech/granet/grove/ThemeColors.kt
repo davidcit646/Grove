@@ -8,6 +8,7 @@ import android.util.TypedValue
 
 /** Colors for interface glyphs and surfaces that must follow system light/dark mode. */
 internal object ThemeColors {
+    fun surface(context: Context): Int = resolve(context, com.google.android.material.R.attr.colorSurface)
     fun icon(context: Context): Int = resolve(context, com.google.android.material.R.attr.colorOnSurface)
     fun iconSurface(context: Context): Int = resolve(context, com.google.android.material.R.attr.colorSurfaceVariant)
     fun buttonSurface(context: Context): Int = resolve(context, com.google.android.material.R.attr.colorSurfaceContainerHigh)

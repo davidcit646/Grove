@@ -28,6 +28,8 @@ internal class DrawerTiles(
 
     class Tile(val layout: LinearLayout, val icon: ImageView, val name: TextView, val badge: ImageView)
 
+    fun minimumCellHeight(): Int = maxOf(activity.dp(112), activity.dp(80) + (32f * activity.resources.displayMetrics.scaledDensity).toInt())
+
     fun create(height: Int? = null): Tile {
         val layout = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL

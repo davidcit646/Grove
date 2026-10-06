@@ -47,6 +47,7 @@ internal class SetupController(private val activity: MainActivity) {
                 .onFailure { Log.w("Grove", "Setup completion state unavailable", it) }
                 .getOrDefault(false)
             prefs.edit().remove("widget_tutorial_seen").apply()
+            val setupBase = configController.config
             firstRunSetup = FirstRunSetup(
                 this, surface, root, configController.config, catalogController.apps.map { it.key to it.label },
                 searchController::hasContactAccess, { Environment.isExternalStorageManager() },
@@ -55,7 +56,15 @@ internal class SetupController(private val activity: MainActivity) {
                 { done -> wallpaperController.background(0, resources.displayMetrics.widthPixels,
                     resources.displayMetrics.heightPixels) { bitmap, _ -> done(bitmap) } },
                 finishSetup@{ next ->
-                    if (!configController.commitConfig(next)) {
+                    val merged = SetupMergePolicy.merge(setupBase, next, configController.config)
+                    if (merged == null) {
+                        firstRunSetup?.destroy(); firstRunSetup = null
+                        message("Settings changed while setup was open. Review setup again before finishing.")
+                        homeController.showHome()
+                        root.post { startFirstRunSetup() }
+                        return@finishSetup
+                    }
+                    if (!configController.commitConfig(merged)) {
                         firstRunSetup?.show()
                         return@finishSetup
                     }

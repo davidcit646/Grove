@@ -63,6 +63,8 @@ internal class FirstRunSetup(
 
     init {
         if (restored != null) try {
+            val savedBase = restored.getString("base")?.let(ConfigStore::parse)
+            require(savedBase == null || savedBase == initial) { "Settings changed since setup snapshot" }
             val config = ConfigStore.parse(requireNotNull(restored.getString("answers")))
             state.restore(config, restored.getInt("page"), restored.getBoolean("up"),
                 restored.getBoolean("down"), restored.getBoolean("hold"))
@@ -70,6 +72,7 @@ internal class FirstRunSetup(
     }
 
     fun saveState(): Bundle = Bundle().apply {
+        putString("base", initial.json())
         putString("answers", state.snapshot().json()); putInt("page", state.page)
         putBoolean("up", state.practicedUp); putBoolean("down", state.practicedDown)
         putBoolean("hold", state.practicedHold)
