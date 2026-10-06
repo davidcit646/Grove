@@ -122,7 +122,7 @@ internal class SettingsPages(
                 section(content, source.title)
                 content.addView(activity.bodyText("${source.author} · ${source.license}"))
                 source.changes?.let { content.addView(activity.bodyText(it)) }
-                source.sourcePage?.let { url -> row(content, "Source", url, R.drawable.ic_setup_star) { link(url) } }
+                source.sourcePage?.let { url -> row(content, "Source", url, R.drawable.ic_settings_public) { link(url) } }
             }
         }
         refreshStatus(); return content

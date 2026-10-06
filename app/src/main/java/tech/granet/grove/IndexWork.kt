@@ -122,7 +122,11 @@ internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(
             IndexWork.finished(context, kind, token)
             return Result.success()
         }
-        if (!IndexWork.begin(context, kind, token)) return if (allowed()) Result.retry() else Result.success()
+        if (!IndexWork.begin(context, kind, token)) {
+            if (allowed()) return Result.retry()
+            IndexWork.finished(context, kind, token)
+            return Result.success()
+        }
         var retry = false
         val outcome = try {
             val saved = if (kind == "files") {
