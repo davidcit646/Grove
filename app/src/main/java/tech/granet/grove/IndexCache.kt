@@ -13,6 +13,9 @@ internal object IndexCache {
     private val lock = Any()
     val changes = androidx.lifecycle.MutableLiveData<Map<String, Long>>(emptyMap())
     private val generations = mutableMapOf<String, Long>()
+    private val invalid = mutableSetOf<String>()
+    fun invalidate(kind: String) = synchronized(lock) { invalid.add(kind); Unit }
+    fun invalidated(kind: String): Boolean = synchronized(lock) { kind in invalid }
     fun generation(kind: String): Long = synchronized(lock) { generations[kind] ?: 0L }
     private fun published(kind: String) {
         generations[kind] = (generations[kind] ?: 0L) + 1L
@@ -53,6 +56,7 @@ internal object IndexCache {
                 stream.write(bytes)
                 if (!allowed()) { file.failWrite(stream); return false }
                 file.finishWrite(stream)
+                invalid.remove(kind)
                 published(kind)
                 return true
             } catch (error: Exception) {

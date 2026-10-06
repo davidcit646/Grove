@@ -64,7 +64,8 @@ internal class SearchController(private val activity: MainActivity) {
     private var sourceSnapshot: List<Any?> = emptyList()
     private fun sourceKey(): List<Any?> = listOf(sources.contactSearch, sources.fileSearch,
         sources.contactCacheReady, sources.fileCacheReady, sources.contactLoadFailed, sources.fileLoadFailed,
-        sources.contactScanSkipped, sources.fileScanSkipped)
+        sources.contactScanSkipped, sources.fileScanSkipped,
+        (activity.application as GroveApp).contactChanges.changes.value)
 
     private fun refreshSources() {
         val query = searchField?.text?.toString().orEmpty()

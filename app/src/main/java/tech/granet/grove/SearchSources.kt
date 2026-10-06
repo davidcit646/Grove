@@ -40,17 +40,9 @@ internal class SearchSources(
     @Volatile private var fileGeneration = 0
     private var loadedContacts = -1L
     private var loadedFiles = -1L
-    private val handler = Handler(Looper.getMainLooper())
-    private val contactChange = Runnable { refreshContacts(IndexRefreshCause.PROVIDER_CHANGE) }
-    private val observer = object : ContentObserver(handler) {
-        override fun onChange(selfChange: Boolean) {
-            handler.removeCallbacks(contactChange)
-            handler.postDelayed(contactChange, 400L)
-        }
-    }
-    private var observing = false
 
     init {
+        (activity.application as GroveApp).contactChanges.changes.observe(activity) { redraw() }
         IndexCache.changes.observe(activity) { loadContacts(); loadFiles() }
         IndexWork.failures.observe(activity) { errors ->
             if (errors.containsKey("contacts")) contactLoadFailed = true
@@ -78,11 +70,8 @@ internal class SearchSources(
     }
 
     fun reconcile() {
+        (activity.application as GroveApp).contactChanges.reconcile()
         if (IndexAccessPolicy.contacts(settings(), hasContactAccess())) {
-            if (!observing) runCatching {
-                activity.contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI, true, observer)
-                observing = true
-            }.onFailure { Log.w("Grove", "Contact observer unavailable", it) }
             loadContacts()
             if (!IndexWork.reconcile(activity, "contacts")) contactLoadFailed = true
         } else clearContacts()
@@ -172,9 +161,6 @@ internal class SearchSources(
         contactScanSkipped = 0
         contactCorrupt = false
         indexingContacts = false; contactLoadFailed = false; lastContactRefresh = 0
-        handler.removeCallbacks(contactChange)
-        if (observing) runCatching { activity.contentResolver.unregisterContentObserver(observer) }
-        observing = false
         IndexWork.cancel(activity, "contacts")
         if (notify) redraw()
     }
@@ -192,9 +178,6 @@ internal class SearchSources(
 
     fun shutdown() {
         contactGeneration++; fileGeneration++
-        handler.removeCallbacks(contactChange)
-        if (observing) runCatching { activity.contentResolver.unregisterContentObserver(observer) }
-        observing = false
         contactWorker.shutdownNow()
         // Persistent work survives Activity destruction.
     }

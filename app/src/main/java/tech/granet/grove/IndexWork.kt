@@ -149,6 +149,7 @@ internal object IndexWork {
     }
 
     @Synchronized fun reconcile(context: Context, kind: String): Boolean {
+        if (kind == "contacts") (context.applicationContext as GroveApp).contactChanges.reconcile()
         if (!enabled(context, kind)) { cancel(context, kind); return true }
         // Reschedule only absent/stale caches; events and explicit Retry enqueue directly.
         val file = java.io.File(context.filesDir, "grove-$kind-index.json")
