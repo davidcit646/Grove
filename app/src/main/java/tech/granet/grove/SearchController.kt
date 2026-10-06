@@ -334,27 +334,27 @@ internal class SearchController(private val activity: MainActivity) {
                               matchingFiles: List<IndexedFile>) {
         with(activity) {
             searchScreen.render(
-                target, query,
-                matchingApps.map { app -> SearchScreen.AppRow(app.key, app.label, catalogController.iconCache[app.key],
+                target = target, query = query,
+                apps = matchingApps.map { app -> SearchScreen.AppRow(app.key, app.label, catalogController.iconCache[app.key],
                     open = {
                         runCatching { launcher.startMainActivity(app.component, android.os.Process.myUserHandle(), null, null) }
                             .onFailure { message("This app is unavailable"); catalogController.loadApps() }
                     }, menu = { actionController.appMenu(app) }) },
-                catalogController.state, retryApps = { catalogController.loadApps() },
+                appState = catalogController.state, retryApps = { catalogController.loadApps() },
                 settingsUnavailable = androidSettingsFailed, retrySettings = { refreshSettings() },
                 groveSettings = (if (query == settingsQuery) settingsMatches.grove else emptyList()).map { SettingsSearchPresentation.row(this, settingsRouter, it) },
                 androidSettings = (if (query == settingsQuery) settingsMatches.android else emptyList()).map { SettingsSearchPresentation.row(this, settingsRouter, it) },
-                (if (configController.config.search.contacts && hasContactAccess()) {
+                contacts = (if (configController.config.search.contacts && hasContactAccess()) {
                     if (configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed) matchingContacts else liveContacts
                 } else emptyList()).map { contact -> SearchScreen.ContactRow(contact.id, contact.name) { actionController.contactMenu(contact) } },
-                (if (configController.config.search.files && Environment.isExternalStorageManager()) {
+                files = (if (configController.config.search.files && Environment.isExternalStorageManager()) {
                     if (configController.config.search.fileIndexing && sources.fileCacheReady && !sources.fileLoadFailed) matchingFiles else liveFiles
                 } else emptyList()).map { file -> SearchScreen.FileRow(file,
                     open = { actionController.openFile(file) }, menu = { actionController.searchItemMenu(file) }) },
-                (if (configController.config.search.contacts && hasContactAccess()) liveContactState else null) ?: SearchSourceState.resolve(configController.config.search.contacts, hasContactAccess(),
+                contactState = (if (configController.config.search.contacts && hasContactAccess()) liveContactState else null) ?: SearchSourceState.resolve(configController.config.search.contacts, hasContactAccess(),
                     indexingContacts && !sources.contactCacheReady, contactLoadFailed, contacts.size, sources.contactScanSkipped),
-                this@SearchController::explainContactAccess, { if (configController.config.search.contactIndexing) refreshContacts() else renderSearch(query) },
-                (if (configController.config.search.files && Environment.isExternalStorageManager()) liveFileState else null) ?: SearchSourceState.resolve(configController.config.search.files, Environment.isExternalStorageManager(),
+                requestContactAccess = this@SearchController::explainContactAccess, retryContacts = { if (configController.config.search.contactIndexing) refreshContacts() else renderSearch(query) },
+                fileState = (if (configController.config.search.files && Environment.isExternalStorageManager()) liveFileState else null) ?: SearchSourceState.resolve(configController.config.search.files, Environment.isExternalStorageManager(),
                     indexingFiles && !sources.fileCacheReady, fileLoadFailed, files.size, fileScanSkipped),
                 requestFileAccess = { explainFileAccess() }, retryFiles = { if (configController.config.search.fileIndexing) indexFiles() else renderSearch(query) },
                 searchGoogle = { actionController.openWeb("https://www.google.com/search?q=${Uri.encode(query.trim())}") },
