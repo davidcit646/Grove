@@ -29,6 +29,15 @@ class SettingsDiscoveryTest {
         assertTrue(grove.matching("clock").any { it.id == "CLOCK" })
         assertTrue(grove.matching("wifi").isEmpty())
     }
+    @Test fun providerSwitchesHaveSearchableControlsWithoutHijackingDeviceQueries() {
+        assertTrue(grove.matching("calculator").any { it.id == "CALCULATOR" })
+        assertTrue(grove.matching("android settings search").any { it.id == "ANDROID_SETTINGS" })
+        assertTrue(grove.matching("grove settings search").any { it.id == "GROVE_SETTINGS" })
+        assertTrue(grove.matching("bluetooth").isEmpty())
+        for (id in listOf("CALCULATOR", "ANDROID_SETTINGS", "GROVE_SETTINGS")) {
+            assertEquals(SettingsDestination.Grove("search", id), SettingsCatalogue.entry(id)!!.destination)
+        }
+    }
     @Test fun emptyQueriesBoundsCategoriesAndCanonicalDeduplication() {
         assertTrue(grove.matching("").isEmpty())
         assertTrue(grove.matching("  ").isEmpty())

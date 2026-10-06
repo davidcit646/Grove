@@ -30,7 +30,7 @@ internal object SettingsCatalogue {
         grove("WALLPAPER_COLORS", "Wallpaper colors for buttons", "appearance", "Appearance > Theme and colors", "material you palette colors", SettingsIcon.PALETTE, SettingKey.WALLPAPER_COLORS),
         grove("CALCULATOR", "Calculator", "search", "Search > Search features", "math arithmetic calculate answer", SettingsIcon.SETTINGS, SettingKey.CALCULATOR),
         grove("GROVE_SETTINGS", "Grove settings search", "search", "Search > Search features", "grove launcher settings search", SettingsIcon.SETTINGS, SettingKey.GROVE_SETTINGS),
-        grove("ANDROID_SETTINGS", "Android settings search", "search", "Search > Search features", "android system settings wifi bluetooth search", SettingsIcon.SETTINGS, SettingKey.ANDROID_SETTINGS),
+        grove("ANDROID_SETTINGS", "Android settings search", "search", "Search > Search features", "android system settings search", SettingsIcon.SETTINGS, SettingKey.ANDROID_SETTINGS),
         grove("CONTACTS", "Search contacts", "search", "Search > Contacts", "people contact search", SettingsIcon.SETTINGS, SettingKey.CONTACTS),
         grove("FILES", "Search files", "search", "Search > Files", "documents file search", SettingsIcon.SETTINGS, SettingKey.FILES),
         grove("CONTACT_INDEX", "Background contact indexing", "search", "Search > Contacts", "contact index refresh cache background", SettingsIcon.SETTINGS, SettingKey.CONTACT_INDEX),
