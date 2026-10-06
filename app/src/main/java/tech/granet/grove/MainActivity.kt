@@ -179,6 +179,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (!startupController.coreRecoveryVisible) configController.resume()
         presentationController.refresh()
+        searchTutorialController.refresh()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
         if (searchMode) searchController.reconcileAccess()

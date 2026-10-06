@@ -17,7 +17,7 @@ import tech.granet.grove.ui.dp
 
 /** Full-screen Material You feature guide. Samples are static; this surface owns only views/motion. */
 internal class SearchTutorial(original: Context, private val host: FrameLayout, private val underlay: View,
-    private val state: SearchTutorialState, private val availability: SearchTutorialAvailability,
+    private val state: SearchTutorialState, private var availability: SearchTutorialAvailability,
     private val forward: () -> Unit, private val back: () -> Unit) {
     private val context = try { DynamicColors.wrapContextIfAvailable(original) }
         catch (error: Exception) { android.util.Log.w("Grove", "Search tutorial colors unavailable", error); original }
@@ -123,6 +123,9 @@ internal class SearchTutorial(original: Context, private val host: FrameLayout, 
         previous.setText(if (state.page == 0) R.string.search_tutorial_close else R.string.search_tutorial_back)
         next.setText(if (state.page == 2) R.string.search_tutorial_finish else R.string.search_tutorial_next)
         previous.isEnabled = enabled; next.isEnabled = enabled
+    }
+    fun refresh(next: SearchTutorialAvailability) {
+        if (availability != next) { settle(); availability = next; page(null) }
     }
     fun settle() = motion.finish()
     fun destroy() {

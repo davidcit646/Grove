@@ -29,7 +29,7 @@ internal class SearchTutorialController(private val activity: MainActivity) {
         if (!restoreActive || activity.isDestroyed || activity.startupController.coreRecoveryVisible ||
             activity.setupController.firstRunSetup != null || activity.setupController.setupPending()) return
         restoreActive = false
-        show()
+        if (!show()) activity.searchController.showSearch(skipTutorial = true)
     }
     fun interceptEntry(): Boolean {
         if (visible) return true
@@ -47,19 +47,38 @@ internal class SearchTutorialController(private val activity: MainActivity) {
         }
         if (!shouldPresent) return false
         state = SearchTutorialState(sessionSuppressed = state.sessionSuppressed)
-        show()
-        return true
+        return show()
     }
-    private fun show() {
-        if (visible) return
-        activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-            .hideSoftInputFromWindow(activity.root.windowToken, 0)
+    private fun availability(): SearchTutorialAvailability {
         val settings = activity.configController.config.search
-        val availability = SearchTutorialAvailability(settings.calculator, settings.contacts,
+        return SearchTutorialAvailability(settings.calculator, settings.contacts,
             activity.searchController.hasContactAccess(), settings.files, Environment.isExternalStorageManager(),
             settings.groveSettings, settings.androidSettings)
-        presentation = SearchTutorial(activity, activity.surface, activity.root, state, availability,
-            ::forward, ::back).also { it.show() }
+    }
+    private fun show(): Boolean {
+        if (visible) return true
+        return try {
+            activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                .hideSoftInputFromWindow(activity.root.windowToken, 0)
+            presentation = SearchTutorial(activity, activity.surface, activity.root, state, availability(), ::forward, ::back)
+            presentation?.show()
+            true
+        } catch (error: Exception) {
+            destroy(); state.sessionSuppressed = true
+            Log.w("Grove", "Search tutorial presentation unavailable", error)
+            activity.message("Search tutorial unavailable; Search is still available.")
+            false
+        }
+    }
+    fun refresh() {
+        if (!visible) return
+        try { presentation?.refresh(availability()) }
+        catch (error: Exception) {
+            destroy(); state.sessionSuppressed = true
+            Log.w("Grove", "Search tutorial refresh unavailable", error)
+            activity.message("Search tutorial unavailable; Search is still available.")
+            activity.searchController.showSearch(skipTutorial = true)
+        }
     }
     private fun forward() {
         if (!state.forward()) { presentation?.page(true); return }
