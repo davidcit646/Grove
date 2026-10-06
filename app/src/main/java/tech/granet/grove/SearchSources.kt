@@ -32,8 +32,10 @@ internal class SearchSources(
     var fileLoadFailed = false; private set
     var fileScanSkipped = 0; private set
     var contactScanSkipped = 0; private set
-    var contactCacheReady = false; private set
-    var fileCacheReady = false; private set
+    val contactCacheReady get() = IndexCache.metadata("contacts").fresh("contacts") && contactWrittenAt == IndexCache.metadata("contacts").writtenAt
+    private var contactWrittenAt = 0L
+    val fileCacheReady get() = IndexCache.metadata("files").fresh("files") && fileWrittenAt == IndexCache.metadata("files").writtenAt
+    private var fileWrittenAt = 0L
     private var contactCorrupt = false
     private var fileCorrupt = false
     @Volatile private var contactGeneration = 0
@@ -100,7 +102,8 @@ internal class SearchSources(
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         contactCorrupt = false
-                        contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(15L * 60_000)
+                        contactWrittenAt = snapshot.writtenAt
+                        contactLoadFailed = false
                         contactScanSkipped = snapshot.skipped
                         if (contacts != snapshot.items) {
                             contacts = snapshot.items
@@ -135,7 +138,8 @@ internal class SearchSources(
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         fileCorrupt = false
-                        fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(24L * 60 * 60_000)
+                        fileWrittenAt = snapshot.writtenAt
+                        fileLoadFailed = false
                         if (files != snapshot.items) {
                             files = snapshot.items
                             fileSearch = prepared
@@ -157,7 +161,7 @@ internal class SearchSources(
         contactGeneration++
         loadedContacts = -1L
         contacts = emptyList(); contactSearch = SearchResults.prepare(contacts) { it.searchName }
-        contactCacheReady = false
+        contactWrittenAt = 0L
         contactScanSkipped = 0
         contactCorrupt = false
         indexingContacts = false; contactLoadFailed = false; lastContactRefresh = 0
@@ -169,7 +173,7 @@ internal class SearchSources(
         fileGeneration++
         loadedFiles = -1L
         files = emptyList(); fileSearch = SearchResults.prepare(files) { it.searchName }
-        fileCacheReady = false
+        fileWrittenAt = 0L
         fileCorrupt = false
         indexingFiles = false; fileLoadFailed = false; fileScanSkipped = 0
         IndexWork.cancel(activity, "files")
@@ -186,7 +190,7 @@ internal class SearchSources(
         val files = kind == "files"
         val enabled = if (files) settings().fileIndexing else settings().contactIndexing
         val permitted = if (files) Environment.isExternalStorageManager() else hasContactAccess()
-        val exists = java.io.File(activity.filesDir, "grove-$kind-index.json").exists()
+        val exists = IndexCache.metadata(kind).validity == IndexValidity.AVAILABLE
         val state = IndexState.resolve(enabled, permitted, exists,
             if (files) fileCacheReady else contactCacheReady,
             if (files) indexingFiles else indexingContacts,

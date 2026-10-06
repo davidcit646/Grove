@@ -19,8 +19,8 @@ internal class ContactChanges(private val context: Context) {
     }.getOrDefault(false)
     private val changed = Runnable {
         if (eligible()) {
-            changes.value = (changes.value ?: 0L) + 1L
             IndexCache.invalidate("contacts")
+            changes.value = (changes.value ?: 0L) + 1L
             if (settings().contactIndexing) IndexWork.enqueue(context, "contacts", IndexRefreshCause.PROVIDER_CHANGE)
         }
     }

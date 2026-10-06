@@ -66,13 +66,16 @@ internal class SettingsCommands(private val context: Context, private val reposi
         val setting = repository.snapshot().config.search
         val enabled = if (kind == "files") setting.files else setting.contacts
         val indexed = if (kind == "files") setting.fileIndexing else setting.contactIndexing
-        val file = java.io.File(context.filesDir, "grove-$kind-index.json")
+        val cache = IndexCache.metadata(kind)
         return when {
             !enabled -> "Search disabled"
             !permitted -> "Android access required"
-            !indexed -> if (file.exists()) "Live search · cache deletion pending" else "Live search · indexing off"
-            !file.exists() -> "No saved index · live search available"
-            System.currentTimeMillis() - file.lastModified() !in 0..(if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000) -> "Saved index needs a refresh"
+            !indexed -> "Live search · indexing off"
+            cache.validity == IndexValidity.UNKNOWN -> "Checking saved index"
+            cache.validity == IndexValidity.CORRUPT -> "Saved index invalid · live search available"
+            cache.validity == IndexValidity.ABSENT -> "No saved index · live search available"
+            !cache.fresh(kind) -> "Saved index needs a refresh"
+            cache.partial -> "Partial saved index · live search available"
             else -> "Saved index available"
         }
     }
@@ -80,6 +83,7 @@ internal class SettingsCommands(private val context: Context, private val reposi
         val setting = repository.snapshot().config.search
         val eligible = if (kind == "files") IndexAccessPolicy.files(setting, permitted) else IndexAccessPolicy.contacts(setting, permitted)
         if (!eligible) return "Background refresh: Off"
+        IndexWork.failures.value?.get(kind)?.let { return "Background refresh: $it" }
         val work = workStates[kind]
         return "Background refresh: " + when (work?.state) {
             androidx.work.WorkInfo.State.RUNNING -> "Running"

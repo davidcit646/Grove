@@ -151,14 +151,16 @@ internal object IndexWork {
     @Synchronized fun reconcile(context: Context, kind: String): Boolean {
         if (kind == "contacts") (context.applicationContext as GroveApp).contactChanges.reconcile()
         if (!enabled(context, kind)) { cancel(context, kind); return true }
-        // Reschedule only absent/stale caches; events and explicit Retry enqueue directly.
-        val file = java.io.File(context.filesDir, "grove-$kind-index.json")
-        val age = System.currentTimeMillis() - file.lastModified()
-        val stale = !file.exists() || age < 0 || age >
-            (if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000)
-        if (stale) return enqueue(context, kind, IndexRefreshCause.STALE_CACHE)
         val app = context.applicationContext
-        scheduler.execute { runCatching { recover(app, kind) }.onFailure { failure(kind, "Scheduling unavailable") } }
+        scheduler.execute {
+            try {
+                recover(app, kind)
+                val metadata = IndexCache.inspect(app, kind)
+                if (!metadata.fresh(kind)) synchronized(this) {
+                    enqueueRecovered(app, kind, if (metadata.validity == IndexValidity.CORRUPT) IndexRefreshCause.REPAIR else IndexRefreshCause.STALE_CACHE)
+                }
+            } catch (error: Exception) { failure(kind, "Scheduling unavailable") }
+        }
         return true
     }
 }

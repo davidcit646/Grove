@@ -91,6 +91,8 @@ class SettingsActivity : AppCompatActivity() {
                 else if (routes.last() == "editor") render()
             }
         }
+        IndexCache.metadataChanges.observe(this) { pages.refreshStatus() }
+        IndexWork.failures.observe(this) { pages.refreshStatus() }
         for (kind in listOf("contacts", "files")) try {
             WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData(IndexWork.name(kind)).observe(this) {
                 session.commands.observeIndex(kind, it)
