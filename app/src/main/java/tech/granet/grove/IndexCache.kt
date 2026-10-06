@@ -11,12 +11,20 @@ internal object IndexCache {
     private const val MAX_BYTES = 12 * 1024 * 1024
     private const val VERSION = 1
     private val lock = Any()
+    val changes = androidx.lifecycle.MutableLiveData<Map<String, Long>>(emptyMap())
+    private val generations = mutableMapOf<String, Long>()
+    fun generation(kind: String): Long = synchronized(lock) { generations[kind] ?: 0L }
+    private fun published(kind: String) {
+        generations[kind] = (generations[kind] ?: 0L) + 1L
+        changes.postValue(generations.toMap())
+    }
 
     data class Snapshot<T>(val items: List<T>, val skipped: Int, val writtenAt: Long)
     private fun target(context: Context, kind: String) = File(context.filesDir, "grove-$kind-index.json")
 
     fun clear(context: Context, kind: String) = synchronized(lock) {
         AtomicFile(target(context, kind)).delete()
+        published(kind)
     }
 
     fun writeFiles(context: Context, result: FileIndex.ScanResult, allowed: () -> Boolean): Boolean {
@@ -45,6 +53,7 @@ internal object IndexCache {
                 stream.write(bytes)
                 if (!allowed()) { file.failWrite(stream); return false }
                 file.finishWrite(stream)
+                published(kind)
                 return true
             } catch (error: Exception) {
                 file.failWrite(stream)
