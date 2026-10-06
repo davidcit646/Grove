@@ -256,3 +256,21 @@ Source `0dc18f5145478c199fb22edf879464bf89815e9e` passed CI run 37466709982: eig
 Device checks pending: enter `2+2=`, `2+3*4=`, `(2+3)*4=`, `0.1+0.2=`, `1/3=` and `1/0=`; verify top result, exact/approximate formatting and non-actionable errors. Tap an answer to open the phone calculator; return to search and check focus/query state. With no handler or a disabled calculator, the answer stays available with a scoped launch message. Check rapid edits, leaving search, rotation and normal app/settings/contact/file search. No automatic query handoff to the external calculator is promised.
 
 Debug Grove Test APK: `Grove-Juniper-calculator-0dc18f5.apk`, SHA-256 `24eac13d1016729b068c70cc2fc42abd2265e32222298d806bee37ec904c5db2`. Verified GitHub artifact archive digest, APK integrity, manifest and all three Rust ABIs.
+
+
+### Search feature controls and tutorials — 2026-10-06
+
+Source `193c30fb14775f9f885eec9e1a8548cd50345d7c` passed CI run 37472889992: nine Rust tests, JVM suite (205 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SearchFeaturesTest covers all provider flag combinations, old-schema defaults, malformed booleans, isolated protected-source effect callbacks, independent setup merging and failed preference publication. SearchTutorialStateTest covers first-entry/replay gating, exactly three forward actions, incomplete completion rejection, failed-save session suppression, successful replay and bounded restored pages. SettingsDiscoveryTest retains Wi-Fi/Bluetooth alias isolation and adds provider-control destinations. The Rust schema test covers v12 provider combinations, strict types, v11 compatibility and unsupported future versions.
+
+Pending Android device acceptance:
+
+- Replay initial setup: visible up/down dot/trail inside practice target; genuine enabled swipe yields 75ms entrance + 100ms hold + 75ms fade check feedback (250ms total at default scale), optional practice unchanged. Check cancellation, horizontal/multitouch, rapid repeats, one/both gestures off, page exit, background/resume and rotation.
+- Contact/File permission pages sit vertically in the middle with fixed progress/navigation; large text, short screens and landscape remain scrollable. Access return and denial preserve truthful state and provisional Finish-only changes.
+- First Search from button or Home swipe opens the centered three-page Material You guide. No keyboard before completion. Two page changes plus final swipe/button enter Search; Back/Close incomplete reopens next time, completed guide does not reopen on calculator/settings return. Rotate on each page; confirm restored page and explicit Help search replay independent of setup/widget guidance.
+- Check dynamic light/dark colors, TalkBack labels and announcements, large text, RTL forward/back, vertical scrolling, disabled system animations and rapid navigation. No permission prompt, provider read, index work, widget allocation or configuration mutation from samples.
+- Toggle Calculator/Grove/Android independently while queries/results are active; only affected rows disappear, including Android fallback/retry. Re-enable and verify correct rows. Persist across relaunch and import/export; Settings stays accessible when Grove discovery is off. Verify idle contact/file indexing does not restart from a provider-only preference change.
+- Exercise missing/failed Android handlers and invalid arithmetic with switches enabled; verify existing scoped failures. Rapid query edits and leaving Search cannot publish superseded output. Inspect initial setup Finish after independent settings changes and old v11 config migration on device.
+
+These issues remain open for device acceptance; no merge or release was performed.
+
+Debug Grove Test APK: `Grove-Juniper-tutorials-193c30f.apk`, SHA-256 `57be0c076c7de9824508798360c19a9ca3a6c6a2ee8ddcac9686d5e7e179dc4e`. Verified the GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.

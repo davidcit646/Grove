@@ -79,3 +79,10 @@ Static Grove discovery is independent of contact/file permissions and index avai
 ## Calculator search boundary
 
 Only bounded, parsed arithmetic ending in equals can publish an answer. Invalid syntax, division by zero and resource limits close that calculation with a short correction message; ordinary queries remain normal search. Nonterminating decimal division is explicitly approximate. Query generation/lifecycle checks reject superseded answers. External calculator launch is optional to the already calculated local answer: Android resolves the standard calculator selector at tap time; missing/failed launch leaves the answer and unrelated search available with a recovery message. Launch diagnostics are bounded and exclude expressions/results.
+
+
+## Search feature/tutor boundaries (#104–#107)
+
+Schema v12 must pass both native and Kotlin validation before preference persistence. Missing new provider fields migrate on, preserving shipped search behavior; malformed booleans remain invalid. Provider-only changes do not authorize contact/file permission requests or index reconciliation. SearchController cancels superseded queries and gates calculator, Grove discovery, Android discovery/fallback/retry and final row publication independently; disabling Grove discovery does not close SettingsActivity.
+
+Search tutorial completion is committed only at the final forward action. Back/Close/incomplete recreation does not mark it seen. A failed preference commit reports the scoped failure, keeps Search usable and suppresses repeated current-session prompting; the durable marker remains unconfirmed. Presentation failure cleans up the optional guide and falls open to Search. Static samples cannot access protected records or mutate preferences. Availability is derived from committed settings and current Android grants; tutorials do not own either. The practice guide is cosmetic, and only enabled genuine gestures set provisional practice answers. Motion is canceled on exit/stop/destroy without undoing those answers.
