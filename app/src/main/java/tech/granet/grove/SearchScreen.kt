@@ -70,8 +70,9 @@ internal class SearchScreen(private val context: Context) {
                 "Some app icons are unavailable; app names and actions still work.", 14f))
             else -> Unit
         }
-        listOf(context.getString(R.string.settings_search_grove_heading) to groveSettings, context.getString(R.string.settings_search_android_heading) to androidSettings).forEach { (title, entries) ->
-            if (entries.isNotEmpty() || (entries === androidSettings && settingsUnavailable)) target.addView(heading(title, R.drawable.ic_setup_settings))
+        listOf(Triple(context.getString(R.string.settings_search_grove_heading), groveSettings, false),
+            Triple(context.getString(R.string.settings_search_android_heading), androidSettings, settingsUnavailable)).forEach { (title, entries, unavailable) ->
+            if (entries.isNotEmpty() || unavailable) target.addView(heading(title, R.drawable.ic_setup_settings))
             entries.forEach { entry -> target.addView(row(entry.title, entry.icon, entry.breadcrumb, action = entry.open)) }
         }
         if (settingsUnavailable) target.addView(row(context.getString(R.string.settings_search_retry), R.drawable.ic_setup_settings,
