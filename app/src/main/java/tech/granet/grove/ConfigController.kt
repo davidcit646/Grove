@@ -29,8 +29,8 @@ internal class ConfigController(private val activity: MainActivity) {
         if (previous != next) {
             reconciled = next
             if (previous != null) {
-                activity.searchController.reconcileAccess()
-                if (!activity.drawer && !activity.searchMode && activity.setupController.firstRunSetup == null &&
+                if (previous.search != next.search) activity.searchController.applySearchSettings(previous.search)
+                if (!activity.drawer && !activity.searchMode && activity.setupController.firstRunSetup == null && !activity.searchTutorialController.visible &&
                     !activity.startupController.coreRecoveryVisible) activity.homeController.showHome()
                 else activity.drawerController.refreshDrawer()
             }

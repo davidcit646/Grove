@@ -24,8 +24,14 @@ internal class FirstRunPages(
     private val requestContacts: () -> Unit,
     private val requestFiles: () -> Unit,
     private val rerender: () -> Unit,
+    private val feedbackHost: () -> android.widget.FrameLayout?,
 ) {
     private val ui = FirstRunComponents(context)
+
+    private var practice: SwipePracticeMotion? = null
+    fun pausePractice() { practice?.pause() }
+    fun resumePractice() { practice?.resume() }
+    fun destroyPractice() { practice?.destroy(); practice = null }
 
     fun render(page: Int, content: LinearLayout) = with(ui) {
         when (page) {
@@ -58,33 +64,47 @@ internal class FirstRunPages(
                     }
                     update()
                     box.addView(status)
-                    box.addView(text("Swipe here", 24f, true, onAccent).apply {
-                        gravity = Gravity.CENTER
-                        contentDescription = "Practice the enabled Home swipes. Next skips practice."
-                        background = GradientDrawable().apply {
-                            setColor(surface)
-                            cornerRadius = context.dp(20).toFloat()
-                        }
-                        var startY = 0f
+                    val target = android.widget.FrameLayout(context).apply {
+                        background = GradientDrawable().apply { setColor(surface); cornerRadius = context.dp(20).toFloat() }
                         isClickable = true
-                        setOnTouchListener { view, event ->
-                            when (event.actionMasked) {
-                                MotionEvent.ACTION_DOWN -> {
-                                    view.parent.requestDisallowInterceptTouchEvent(true)
-                                    startY = event.y
-                                    true
+                        contentDescription = context.getString(R.string.swipe_practice_description)
+                    }
+                    val motion = feedbackHost()?.let { SwipePracticeMotion(context, it, state) }
+                    practice = motion
+                    motion?.guide?.let { guide ->
+                        guide.importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        target.addView(guide, android.widget.FrameLayout.LayoutParams(-1, -1))
+                    }
+                    var startX = 0f; var startY = 0f; var time = 0L; var tracking = false
+                    target.setOnTouchListener { view, event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                view.parent.requestDisallowInterceptTouchEvent(true)
+                                startX = event.x; startY = event.y; time = event.eventTime; tracking = true
+                                motion?.touched()
+                            }
+                            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> {
+                                tracking = false; motion?.released()
+                                view.parent.requestDisallowInterceptTouchEvent(false)
+                            }
+                            MotionEvent.ACTION_UP -> {
+                                val gesture = if (tracking) Gestures.resolve(event.x - startX, event.y - startY,
+                                    event.eventTime - time, context.dp(55).toFloat(), state.gestures) else HomeGesture.NONE
+                                val newPractice = when (gesture) {
+                                    HomeGesture.SEARCH -> (!state.practicedDown).also { state.practicedDown = true }
+                                    HomeGesture.APP_DRAWER -> (!state.practicedUp).also { state.practicedUp = true }
+                                    HomeGesture.NONE -> false
                                 }
-                                MotionEvent.ACTION_UP -> {
-                                    if (event.y - startY > context.dp(55) && state.gestures.swipeDownSearch) state.practicedDown = true
-                                    if (event.y - startY < -context.dp(55) && state.gestures.swipeUpAppDrawer) state.practicedUp = true
-                                    update()
-                                    view.performClick()
-                                    true
-                                }
-                                else -> true
+                                update()
+                                if (gesture != HomeGesture.NONE) motion?.success(newPractice)
+                                tracking = false; motion?.released()
+                                view.parent.requestDisallowInterceptTouchEvent(false)
+                                view.performClick()
                             }
                         }
-                    }, LinearLayout.LayoutParams(-1, context.dp(220)).apply { topMargin = context.dp(18) })
+                        true
+                    }
+                    box.addView(target, LinearLayout.LayoutParams(-1, context.dp(220)).apply { topMargin = context.dp(18) })
                 }
             }
             3 -> {

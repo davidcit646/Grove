@@ -54,7 +54,7 @@ internal class CatalogController(private val activity: MainActivity) {
                             homeController.showHome()
                         } else if (drawer) drawerController.renderApps(searchController.searchField?.text?.toString().orEmpty())
                         else if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
-                        else if (!pinDragController.busy) homeController.showHome()
+                        else if (!pinDragController.busy && !searchTutorialController.visible) homeController.showHome()
                         if (setupController.setupPending() && setupController.firstRunSetup == null &&
                             configController.configStore.brokenCustomConfig == null) root.post { if (!isDestroyed) setupController.startFirstRunSetup() }
                     }

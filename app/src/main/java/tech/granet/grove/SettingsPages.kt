@@ -49,7 +49,7 @@ internal class SettingsPages(
             "root" -> {
                 row(content, "Home screen", "Controls, gestures and pinned apps", R.drawable.ic_setup_home) { navigate("home") }
                 row(content, "App drawer", "Grid and folders", R.drawable.ic_setup_apps) { navigate("drawer") }
-                row(content, "Search", "Contacts, files and indexing", R.drawable.ic_setup_search) { navigate("search") }
+                row(content, "Search", "Search features, access and indexing", R.drawable.ic_setup_search) { navigate("search") }
                 row(content, "Appearance", "Theme, colors and wallpaper", R.drawable.ic_settings_palette) { navigate("appearance") }
                 row(content, "Configuration", "Import, export and advanced editing", R.drawable.ic_settings_description) { navigate("configuration") }
                 row(content, "Help & diagnostics", "Tutorials and local reports", R.drawable.ic_settings_help) { navigate("help") }
@@ -85,6 +85,10 @@ internal class SettingsPages(
                 row(folders, "Manage folders and apps", "Open drawer selection and folder actions", R.drawable.ic_setup_folder, "folders") { platform("folders") }
             }
             "search" -> {
+                val features = SettingsGroups.card(content, "Search features", R.drawable.ic_setup_search)
+                toggle(features, "Calculator", config.search.calculator, SettingKey.CALCULATOR)
+                toggle(features, "Grove settings search", config.search.groveSettings, SettingKey.GROVE_SETTINGS)
+                toggle(features, "Android settings search", config.search.androidSettings, SettingKey.ANDROID_SETTINGS)
                 source(content, "contacts", "Contacts", SettingKey.CONTACTS, SettingKey.CONTACT_INDEX, config.search.contacts, config.search.contactIndexing)
                 source(content, "files", "Files", SettingKey.FILES, SettingKey.FILE_INDEX, config.search.files, config.search.fileIndexing)
                 content.addView(activity.bodyText("Indexes stay on this device. Turning indexing off deletes its cache; permitted search continues live."))
@@ -111,6 +115,10 @@ internal class SettingsPages(
                 val pending = session.commands.replayPending()
                 row(tutorials, if (pending) "Cancel tutorial replay" else "Replay first-run setup", "Starts when you return Home", R.drawable.ic_settings_help, "tutorial") {
                     if (feedback(session.commands.replay(!session.commands.replayPending()))) navigate("help")
+                }
+                row(tutorials, activity.getString(if (session.commands.searchReplayPending()) R.string.search_tutorial_cancel_replay else R.string.search_tutorial_replay),
+                    activity.getString(R.string.search_tutorial_replay_detail), R.drawable.ic_setup_search, "searchTutorial") {
+                    if (feedback(session.commands.replaySearch(!session.commands.searchReplayPending()))) navigate("help")
                 }
                 val reports = SettingsGroups.card(content, "Local reports")
                 toggleAction(reports, "Automatic crash reports", CrashReporter.isEnabled(activity), "capture") { session.commands.capture(it) }
@@ -184,7 +192,7 @@ internal class SettingsPages(
     }
     private fun feedback(result: CommandFeedback): Boolean { result.message?.let(activity::message); return result.saved }
     private fun row(content: LinearLayout, title: String, subtitle: String?, icon: Int, anchor: String? = null, action: () -> Unit) {
-        content.addView(activity.iconRow(if (anchor == "tutorial") title else anchor?.let { SettingsLabels.title(activity, it) } ?: title, icon, subtitle, minHeightDp = 72, onClick = action).apply { tag = anchor; isFocusable = true })
+        content.addView(activity.iconRow(if (anchor == "tutorial" || anchor == "searchTutorial") title else anchor?.let { SettingsLabels.title(activity, it) } ?: title, icon, subtitle, minHeightDp = 72, onClick = action).apply { tag = anchor; isFocusable = true })
     }
     private fun link(url: String) = activity.openLink(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     private fun gridLabel(grid: IconGrid?) = grid?.let { "${it.columns} × ${it.rows}" } ?: "Automatic"

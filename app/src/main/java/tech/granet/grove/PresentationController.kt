@@ -58,7 +58,7 @@ internal class PresentationController(private val activity: MainActivity) {
                     buttonColors = snapshot.second?.let { color -> color to
                         (if (Color.luminance(color) > 0.179f) Color.BLACK else Color.WHITE) }
                     // Cosmetic metadata must never replace a search field or pending setup.
-                    if (!activity.drawer && !activity.searchMode && activity.setupController.firstRunSetup == null &&
+                    if (!activity.drawer && !activity.searchMode && activity.setupController.firstRunSetup == null && !activity.searchTutorialController.visible &&
                         !activity.startupController.coreRecoveryVisible) activity.homeController.showHome()
                 }
             }

@@ -13,10 +13,11 @@ class SetupMergePolicyTest {
         assertEquals(current.homeGrid, merged.homeGrid); assertEquals(current.themeMode, merged.themeMode)
         assertEquals(current.search, merged.search); assertEquals(draft.favorites, merged.favorites)
     }
-    @Test fun conflictingSearchChangesCannotOverwriteSettings() {
+    @Test fun independentSearchChangesMergeWithoutOverwrite() {
         val base = Config()
         val draft = base.copy(search = base.search.copy(contacts = true))
         val current = base.copy(search = base.search.copy(files = true))
-        assertNull(SetupMergePolicy.merge(base, draft, current))
+        val merged = requireNotNull(SetupMergePolicy.merge(base, draft, current))
+        assertTrue(merged.search.contacts); assertTrue(merged.search.files)
     }
 }

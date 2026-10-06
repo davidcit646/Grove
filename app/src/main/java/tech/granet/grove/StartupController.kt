@@ -100,6 +100,7 @@ internal class StartupController(private val activity: MainActivity) {
 
     fun showCoreRecovery(reason: CoreRecoveryReason) {
         with(activity) {
+            searchTutorialController.destroy()
             val recovery = CoreRecoveryPolicy.forReason(reason)
             coreRecoveryState = recovery
             // Supersede pending catalog/search output before showing a closed core lane.

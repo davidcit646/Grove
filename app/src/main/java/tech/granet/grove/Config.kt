@@ -33,6 +33,9 @@ data class SearchSettings(
     val files: Boolean = false,
     val contactIndexing: Boolean = false,
     val fileIndexing: Boolean = false,
+    val calculator: Boolean = true,
+    val androidSettings: Boolean = true,
+    val groveSettings: Boolean = true,
 )
 
 /** A saved indexing preference never authorizes a disabled search source. */
@@ -64,7 +67,7 @@ data class Config(
     val drawerGrid: IconGrid? = null,
 ) {
     fun json(): String = JSONObject()
-        .put("version", 11)
+        .put("version", 12)
         .put("themeMode", themeMode.id)
         .put("homeGrid", homeGrid?.let { JSONObject().put("columns", it.columns).put("rows", it.rows) } ?: JSONObject.NULL)
         .put("drawerGrid", drawerGrid?.let { JSONObject().put("columns", it.columns).put("rows", it.rows) } ?: JSONObject.NULL)
@@ -74,7 +77,9 @@ data class Config(
             put(JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps)))
         } })
         .put("search", JSONObject().put("contacts", search.contacts).put("files", search.files)
-            .put("contactIndexing", search.contactIndexing).put("fileIndexing", search.fileIndexing))
+            .put("contactIndexing", search.contactIndexing).put("fileIndexing", search.fileIndexing)
+            .put("calculator", search.calculator).put("androidSettings", search.androidSettings)
+            .put("groveSettings", search.groveSettings))
         .put(
             "gestures",
             JSONObject()
@@ -101,7 +106,7 @@ data class Config(
         fun parse(text: String): Config {
             val root = JSONObject(text)
             val version = root.getInt("version")
-            require(version in 1..11) { "Unsupported configuration version" }
+            require(version in 1..12) { "Unsupported configuration version" }
 
             val wallpaper = if (version >= 9) {
                 val value = root.get("wallpaper")
@@ -159,6 +164,9 @@ data class Config(
                 // Existing users had only search switches. Never silently opt them into durable storage.
                 contactIndexing = flag(searchJson, "contactIndexing", false),
                 fileIndexing = flag(searchJson, "fileIndexing", false),
+                calculator = flag(searchJson, "calculator", true),
+                androidSettings = flag(searchJson, "androidSettings", true),
+                groveSettings = flag(searchJson, "groveSettings", true),
             )
 
             val folders = if (root.has("folders")) {

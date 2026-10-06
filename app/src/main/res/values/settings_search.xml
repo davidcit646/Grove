@@ -145,4 +145,10 @@
     <string name="settings_search_android_heading">ANDROID SETTINGS</string>
     <string name="settings_search_retry">Retry Android settings</string>
     <string name="settings_search_unavailable">Some Android settings could not be checked</string>
+    <string name="settings_search_calculator">Calculator</string>
+    <string name="settings_search_calculator_path">Search &gt; Search features</string>
+    <string name="settings_search_grove_settings">Grove settings search</string>
+    <string name="settings_search_grove_settings_path">Search &gt; Search features</string>
+    <string name="settings_search_android_settings">Android settings search</string>
+    <string name="settings_search_android_settings_path">Search &gt; Search features</string>
 </resources>

@@ -4,7 +4,7 @@ import android.content.Context
 
 internal enum class SettingKey {
     APPS_BUTTON, SEARCH_BUTTON, CLOCK, CLOCK_ACTION, PINS, PIN_HINT, PIN_BOTTOM, WALLPAPER_COLORS,
-    SWIPE_SEARCH, SWIPE_DRAWER, TAP_MENU, HOLD_MENU, CONTACTS, FILES, CONTACT_INDEX, FILE_INDEX,
+    SWIPE_SEARCH, SWIPE_DRAWER, TAP_MENU, HOLD_MENU, CONTACTS, FILES, CONTACT_INDEX, FILE_INDEX, CALCULATOR, ANDROID_SETTINGS, GROVE_SETTINGS,
 }
 internal data class CommandFeedback(val saved: Boolean, val message: String? = null)
 
@@ -28,23 +28,44 @@ internal class SettingsCommands(private val context: Context, private val reposi
             SettingKey.FILES -> config.copy(search = config.search.copy(files = value))
             SettingKey.CONTACT_INDEX -> config.copy(search = config.search.copy(contactIndexing = value))
             SettingKey.FILE_INDEX -> config.copy(search = config.search.copy(fileIndexing = value))
+            SettingKey.CALCULATOR -> config.copy(search = config.search.copy(calculator = value))
+            SettingKey.ANDROID_SETTINGS -> config.copy(search = config.search.copy(androidSettings = value))
+            SettingKey.GROVE_SETTINGS -> config.copy(search = config.search.copy(groveSettings = value))
         }
     }
     fun theme(mode: ThemeMode) = change { it.copy(themeMode = mode) }
     fun grid(home: Boolean, grid: IconGrid?) = change { if (home) it.copy(homeGrid = grid) else it.copy(drawerGrid = grid) }
-    private fun change(transform: (Config) -> Config): CommandFeedback = feedback(repository.update(change = transform))
-    fun replace(config: Config, revision: Long): CommandFeedback = feedback(repository.update(revision, true) { config })
-    private fun feedback(outcome: SettingsOutcome): CommandFeedback = when (outcome) {
+    private fun change(transform: (Config) -> Config): CommandFeedback {
+        val before = try { repository.snapshot().config.search }
+            catch (_: Exception) { return CommandFeedback(false, "Settings unavailable. Try again.") }
+        return feedback(repository.update(change = transform), before)
+    }
+    fun replace(config: Config, revision: Long): CommandFeedback {
+        val before = try { repository.snapshot().config.search }
+            catch (_: Exception) { return CommandFeedback(false, "Settings unavailable. Try again.") }
+        return feedback(repository.update(revision, true) { config }, before)
+    }
+    private fun feedback(outcome: SettingsOutcome, before: SearchSettings): CommandFeedback = when (outcome) {
         is SettingsOutcome.Saved -> {
             try {
-                val contacts = IndexWork.reconcile(context, "contacts")
-                val files = IndexWork.reconcile(context, "files")
-                CommandFeedback(true, if (contacts && files) null else "Settings saved; index scheduling unavailable")
+                val after = outcome.snapshot.config.search
+                val ready = SearchSettingsEffects.reconcile(before, after,
+                    { IndexWork.reconcile(context, "contacts") }, { IndexWork.reconcile(context, "files") })
+                CommandFeedback(true, if (ready) null else "Settings saved; index scheduling unavailable")
             } catch (_: Exception) { CommandFeedback(true, "Settings saved; background refresh unavailable") }
         }
         is SettingsOutcome.Invalid -> CommandFeedback(false, outcome.reason)
         is SettingsOutcome.Conflict -> CommandFeedback(false, "Settings changed. Review the latest values before applying.")
         is SettingsOutcome.Unavailable -> CommandFeedback(false, "Could not save settings. Your previous settings are still active.")
+    }
+    fun searchReplayPending(): Boolean = context.getSharedPreferences("grove", Context.MODE_PRIVATE).getBoolean("search_tutorial_pending", false)
+    fun replaySearch(enabled: Boolean): CommandFeedback = checked {
+        context.getSharedPreferences("grove", Context.MODE_PRIVATE).edit().apply {
+            if (enabled) {
+                putBoolean("search_tutorial_pending", true)
+                putLong("search_tutorial_request", System.nanoTime())
+            } else remove("search_tutorial_pending")
+        }.commit()
     }
     fun replayPending(): Boolean = context.getSharedPreferences("grove", Context.MODE_PRIVATE).getBoolean("setup_pending", false)
     fun replay(enabled: Boolean): CommandFeedback = checked {
