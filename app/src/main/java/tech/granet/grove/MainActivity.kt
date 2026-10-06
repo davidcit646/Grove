@@ -87,11 +87,11 @@ class MainActivity : AppCompatActivity() {
     }
     internal val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     internal val changes = object : LauncherApps.Callback() {
-        override fun onPackageAdded(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
-        override fun onPackageRemoved(p: String, u: UserHandle) { catalogController.loadApps(); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
-        override fun onPackageChanged(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
-        override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
-        override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
+        override fun onPackageAdded(p: String, u: UserHandle) = LauncherPackageEvents.changed(p, packageName, catalogController::loadApps)
+        override fun onPackageRemoved(p: String, u: UserHandle) = LauncherPackageEvents.changed(p, packageName, catalogController::loadApps)
+        override fun onPackageChanged(p: String, u: UserHandle) = LauncherPackageEvents.changed(p, packageName, catalogController::loadApps)
+        override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) { if (p.any { it != packageName }) catalogController.loadApps() }
+        override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) { if (p.any { it != packageName }) catalogController.loadApps() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
