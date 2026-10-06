@@ -2,7 +2,7 @@
 
 ## Grove 1.0.0
 
-Production/test source `f1bce9b98f92d1b5322121a0764e041de592b254` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37481707804): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, Android lint and the missing-signing negative gate. The user accepted the preceding audit-fix APK in their tested device workflows and authorized the 1.0 merge. Version 1.0.0 uses version code 32; signed production artifacts still require successful main release verification. GROVE-STATUS.md is unchanged.
+Production/test source `f1bce9b98f92d1b5322121a0764e041de592b254` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37481707804): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, Android lint and the missing-signing negative gate. The user accepted the preceding audit-fix APK in their tested device workflows and authorized the 1.0 merge. Version 1.0.0 uses version code 32. [Stable v1.0.0](https://github.com/davidcit646/Grove/releases/tag/v1.0.0) was published October 6, 2026 from `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed signed APK/AAB certificate, ABI, alignment and checksum verification. Remaining device checks are recorded in TESTING.md.
 
 Launcher settings now opens a full-screen Material workflow: Home screen, App drawer, Search, Appearance, Configuration, Help & diagnostics, and About. Home screen → Icon grid and App drawer → Icon grid each offer columns and rows from 1–10, a preview, Apply, and Automatic. Larger grids use scrolling and paging to preserve reachable icons and labels.
 
@@ -10,17 +10,21 @@ Configuration provides editor, import review, explicit Apply, export and recover
 
 An Android 12+ home launcher by GraNet IT Solutions. Current source version: 1.0.0. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
 
-[SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its historical [implementation status](GROVE-STATUS.md#implementation-status-on-main) is preserved by user instruction; current source changes and evidence are recorded in this README, SYSTEM-CATALOG, BUILD-STATUS and TESTING. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
+[SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its [release implementation matrix](GROVE-STATUS.md#implementation-status-on-main) is authoritative for capabilities at v1.0.0, with owners, pinned source, tracking issues and test/device evidence. Supporting documents retain historical verification records and detailed pending checks. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
 
-## PR #87 review changes
+## Presentation and failure-boundary changes — merged PR #87
 
-The review branch addresses #31, #77 and #85; these changes are not yet merged into main.
+PR #87 addresses #31, #77 and #85, is merged, and is included in v1.0.0. The descriptions below summarize shipped implementation; remaining device checks are in TESTING.md.
 
 - Search no longer blanks rows during debounce. Unchanged source notifications preserve existing rows, while revoked/disabled sources are cleared and stale query generations cannot publish.
 - Android displays the actual Home wallpaper, including external and live wallpaper changes, behind a transparent Home, with localized text shadows and system-bar protection. Grove's saved wallpaper choice is a library preference, not proof of Android's applied image.
 - Launcher settings → Appearance offers System, Light, Dark and Wallpaper colors. Wallpaper colors follows the system's night mode and uses Android's Home-wallpaper color for launcher buttons, with a theme fallback. Lock-only changes do not alter Home selection/colors.
 - Configuration documents run on a dedicated worker; a delayed import cannot replace settings changed while it was reading. Failed saves keep original UI recovery paths and roll settings switches back.
 - Contact scans at their bound report partial coverage. Contact actions recheck access, mail-handler visibility is declared, and report copy/delete/save and widget-provider failures expose truthful outcomes.
+
+## Historical change log
+
+The following version and dated PR records describe their original snapshots, not current merge/build status. Current capability status is maintained in GROVE-STATUS.md; current release evidence is in BUILD-STATUS.md.
 
 ## 0.1.30 changes
 
@@ -99,7 +103,7 @@ Gradle builds the Rust core before packaging the APK. Choose Grove in Android's 
 - Dedicated search with ranked app, contact, and optional file matches, followed by Google and Play Store actions. Long press a result for its context actions.
 - Optional shared storage indexing. Android's all files access is requested only when file search is enabled; private app data and system partitions remain inaccessible. The index is bounded and never reads file contents.
 - Procedural wallpapers, ten packaged Wikimedia Commons selections, a true solid-black option, and a user-selected local image. Built-in previews/apply work offline; author/source/license details are available in the picker and [NOTICE](NOTICE).
-- Settings with recoverable JSON configuration import/export under Advanced. Widget IDs remain local and are excluded from exports.
+- Settings with recoverable JSON configuration import/export under Configuration. Widget IDs remain local and are excluded from exports.
 
 There is no account or telemetry. Built-in wallpapers do not make runtime network requests. Google and Play Store searches open external apps or web pages.
 
@@ -109,7 +113,7 @@ Android views, storage permissions, widgets, intents, and wallpaper APIs remain 
 
 File sharing uses read only, per-intent content URI grants. The provider is not exported. Configuration documents and custom wallpaper images are size/dimension bounded before activation or expensive decode. Android's broad storage access remains necessary for device-wide file search and requires Play policy review and approval before distribution; see [PLAY-READINESS.md](PLAY-READINESS.md) and [PRIVACY.md](PRIVACY.md).
 
-The APK under `app/build` is a development build, not a release signed distribution. Release signing and Play distribution are separate work.
+Debug APKs are development builds. The published v1.0.0 APK/AAB are signed production artifacts; Google Play distribution and installed-device update validation remain separate work.
 
 ## License
 

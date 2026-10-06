@@ -1,5 +1,8 @@
 # Failure-policy verification ledger
 
+**v1.0.0 documentation baseline:** `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`, published October 6, 2026. [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main) is the authoritative contract and release capability matrix; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed source and signed-artifact gates. Included implementation is separate from pending Android device proof. Dated pre-release sections below preserve evidence at their stated commits: “unmerged”, “unchanged”, “skipped” and “blocked” in those records describe that historical run, not current release status. Documentation reconciliation is tracked in [#79](https://github.com/davidcit646/Grove/issues/79).
+
+
 **Scope note (2026-10-05):** #34 and #35 were closed unrun by user scope decision. References to them below identify historical device/performance checks, not open gates or passing results. #32, #33 and #36 still track implementation and release verification.
 
 Integrated refactor source through 2026-10-04. This records executable source checks and remaining Android-only acceptance work for #32. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior; its [implementation matrix](GROVE-STATUS.md#implementation-status-on-main) marks new proposals separately. A passing JVM/CI test does not mean the default Home app, provider, signed APK, or process death was exercised on a device.
@@ -36,7 +39,6 @@ PR #83 now has deterministic source coverage for separate indexing/live GFS-GCS 
 Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
 
 PR #87's deterministic additions cover duplicate search-frame suppression and publication authorization, v10 theme migration/rejection and lock-only/Home decisions, stale-import protection, zero-byte document-read progress, and conservative partial contact coverage. Actual wallpaper-window rendering, Android color-listener fallback, failed-setting UI rollback, provider delay/cancel, mail visibility and contact action-time revocation are listed separately in TESTING. Historical #32/#33 issue closure records user acceptance, not newly executed device evidence.
-
 
 ## PR #90 onboarding implementation — October 5, 2026
 
