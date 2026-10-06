@@ -2,6 +2,10 @@ package tech.granet.grove
 
 /** Coalesce source events without replacing an active generation or repeatedly writing its marker. */
 internal object IndexRefreshRequests {
+    fun delayMillis(event: Boolean, lastStarted: Long, now: Long): Long {
+        if (!event || lastStarted <= 0) return 0
+        return (30_000L - (now - lastStarted).coerceAtLeast(0)).coerceIn(0, 30_000)
+    }
     fun request(active: String?, started: String?, pending: String?,
                 schedule: () -> Boolean, defer: () -> Boolean): Boolean = when {
         active == null -> schedule()

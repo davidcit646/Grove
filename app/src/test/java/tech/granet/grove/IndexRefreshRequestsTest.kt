@@ -26,6 +26,15 @@ class IndexRefreshRequestsTest {
         assertEquals(2, scans); assertEquals(1, markers); assertEquals("scan-2", active)
     }
 
+    @Test fun sequentialProviderEventsWaitForWindowButManualRetryRemainsImmediate() {
+        val completedScanStartedAt = 100_000L
+        assertEquals(29_900L, IndexRefreshRequests.delayMillis(true, completedScanStartedAt, 100_100))
+        assertEquals(0L, IndexRefreshRequests.delayMillis(true, completedScanStartedAt, 130_000))
+        assertEquals(0L, IndexRefreshRequests.delayMillis(false, completedScanStartedAt, 100_100))
+        assertEquals(0L, IndexRefreshRequests.delayMillis(true, 0, 100_100))
+        assertEquals(30_000L, IndexRefreshRequests.delayMillis(true, completedScanStartedAt, 99_000))
+    }
+
     @Test fun failedSchedulingOrDeferredMarkerNeverClaimsAcceptance() {
         var scheduled = false
         assertFalse(IndexRefreshRequests.request("current", "current", null,

@@ -39,7 +39,7 @@ internal class SearchSources(
     @Volatile private var contactGeneration = 0
     @Volatile private var fileGeneration = 0
     private val handler = Handler(Looper.getMainLooper())
-    private val contactChange = Runnable { refreshContacts() }
+    private val contactChange = Runnable { refreshContacts(event = true) }
     private val observer = object : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean) {
             handler.removeCallbacks(contactChange)
@@ -85,7 +85,7 @@ internal class SearchSources(
     }
 
     fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files")) { fileLoadFailed = true; redraw() } }
-    fun refreshContacts() { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts")) { contactLoadFailed = true; redraw() } }
+    fun refreshContacts(event: Boolean = false) { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts", event)) { contactLoadFailed = true; redraw() } }
 
     private fun loadContacts() {
         if (!IndexAccessPolicy.contacts(settings(), hasContactAccess())) return

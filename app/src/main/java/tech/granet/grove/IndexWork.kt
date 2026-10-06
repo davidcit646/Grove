@@ -20,6 +20,7 @@ internal object IndexWork {
     fun name(kind: String) = "grove-$kind-index"
     private fun token(kind: String) = "index-token-$kind"
     private fun started(kind: String) = "index-started-$kind"
+    private fun lastStarted(kind: String) = "index-last-started-$kind"
     private fun pending(kind: String) = "index-refresh-pending-$kind"
     private fun workId(kind: String) = "index-work-id-$kind"
     fun currentWorkId(context: Context, kind: String): String? = prefs(context).getString(workId(kind), null)
@@ -35,7 +36,7 @@ internal object IndexWork {
     @Synchronized fun begin(context: Context, kind: String, expected: String): Boolean {
         if (!allowed(context, kind, expected)) return false
         // This scan covers all notifications received before it starts.
-        return prefs(context).edit().putString(started(kind), expected).remove(pending(kind)).commit()
+        return prefs(context).edit().putString(started(kind), expected).putLong(lastStarted(kind), System.currentTimeMillis()).remove(pending(kind)).commit()
     }
 
     @Synchronized fun finished(context: Context, kind: String, expected: String, succeeded: Boolean = true) {
@@ -45,25 +46,25 @@ internal object IndexWork {
         if (!store.edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()) return
         if (succeeded && followUp && enabled(context, kind)) {
             // Append one delayed scan after this worker; never cancel a scan to refresh it.
-            schedule(context, kind, followUp = true)
+            schedule(context, kind, followUp = true, delayMillis = 30_000)
         }
     }
 
-    @Synchronized fun enqueue(context: Context, kind: String): Boolean {
+    @Synchronized fun enqueue(context: Context, kind: String, event: Boolean = false): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return false }
         val store = prefs(context)
         val active = store.getString(token(kind), null)
         return IndexRefreshRequests.request(active, store.getString(started(kind), null), store.getString(pending(kind), null),
-            schedule = { schedule(context, kind, followUp = false) },
+            schedule = { schedule(context, kind, followUp = false, delayMillis = IndexRefreshRequests.delayMillis(event, store.getLong(lastStarted(kind), 0), System.currentTimeMillis())) },
             defer = { store.edit().putString(pending(kind), active).commit() })
     }
 
-    private fun schedule(context: Context, kind: String, followUp: Boolean): Boolean {
+    private fun schedule(context: Context, kind: String, followUp: Boolean, delayMillis: Long): Boolean {
         val id = UUID.randomUUID().toString()
         val request = OneTimeWorkRequestBuilder<IndexWorker>()
             .setInputData(androidx.work.workDataOf("kind" to kind, "token" to id))
             .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build())
-            .setInitialDelay(if (followUp) 30 else 0, TimeUnit.SECONDS)
+            .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         if (!prefs(context).edit().putString(token(kind), id)
