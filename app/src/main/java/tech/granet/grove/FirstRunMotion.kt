@@ -7,7 +7,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.view.View
 import android.widget.FrameLayout
-import com.google.android.material.animation.AnimationUtils
+import android.view.animation.PathInterpolator
 
 /** Cosmetic motion owns no answers. Cancellation always settles the committed page. */
 internal class FirstRunMotion {
@@ -58,7 +58,7 @@ internal class FirstRunMotion {
         animation = AnimatorSet().apply {
             playTogether(animators)
             duration = durationMs
-            interpolator = AnimationUtils.FAST_OUT_SLOW_IN_INTERPOLATOR
+            interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) { finish() }
             })
