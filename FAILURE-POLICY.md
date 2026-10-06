@@ -74,3 +74,8 @@ MainActivity and SettingsActivity each own their lifecycle, navigation and Andro
 ## Settings discovery boundaries (#103)
 
 Static Grove discovery is independent of contact/file permissions and index availability. Unknown route/anchor combinations cannot authorize a mutation. Android discovery returns separate Ready, Unavailable and Failed states per destination; a resolver exception cannot masquerade as a valid empty catalogue. Unsupported destinations are suppressed, failed discovery presents Retry Android settings, and available destinations remain usable. The adapter logs one bounded diagnostic per operation without the user's query. At tap time Android handlers are checked again for enabled/exported/permitted system ownership and canonical public-action identity. Missing/failed launch closes that action with a scoped recovery message while Grove search stays available. A labeled Settings search/root fallback is navigation, never a claim that an unavailable exact page opened.
+
+
+## Calculator search boundary
+
+Only bounded, parsed arithmetic ending in equals can publish an answer. Invalid syntax, division by zero and resource limits close that calculation with a short correction message; ordinary queries remain normal search. Nonterminating decimal division is explicitly approximate. Query generation/lifecycle checks reject superseded answers. External calculator launch is optional to the already calculated local answer: Android resolves the standard calculator selector at tap time; missing/failed launch leaves the answer and unrelated search available with a recovery message. Launch diagnostics are bounded and exclude expressions/results.

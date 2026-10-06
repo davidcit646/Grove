@@ -247,3 +247,12 @@ Source `fa23c6d8fa79ee7d3fba026e6934501aa94832c5` passed CI run 37463688547: eig
 Device acceptance remains pending: Android 12/current Android and an OEM phone. Search widgets, Wi-Fi/wifi, Bluetooth, airplane/flight mode, dark mode, clock and grid; verify Grove rows precede Android rows and land on the correct control/page. Confirm widget navigation allocates nothing until the existing Add widget action is tapped. Check supported Android destinations, missing/disabled handlers, labeled generic fallback, rotation, Back, keyboard/focus and per-route scroll after a preference save. Settings search must still work with contact/file search and indexing disabled or permissions denied; permission and source state changes must remove protected rows. Rapid superseded queries and leaving search must not publish stale settings results.
 
 Debug Grove Test APK: `Grove-Juniper-settings-search-fa23c6d.apk`, SHA-256 `29f79d338f810a9473aafa6eacc473f3dbb07636be77450c83e966cf4e057d9c`. Verified GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.
+
+
+### Calculator search — 2026-10-06
+
+Source `0dc18f5145478c199fb22edf879464bf89815e9e` passed CI run 37466709982: eight Rust tests, JVM suite (191 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SearchCalculatorTest covers precedence, left associativity, parentheses, decimal precision, unary negatives and keyboard symbols, explicit approximate division, zero division, malformed/incomplete/non-arithmetic input, resource bounds, frame invalidation and stale query/lifecycle suppression.
+
+Device checks pending: enter `2+2=`, `2+3*4=`, `(2+3)*4=`, `0.1+0.2=`, `1/3=` and `1/0=`; verify top result, exact/approximate formatting and non-actionable errors. Tap an answer to open the phone calculator; return to search and check focus/query state. With no handler or a disabled calculator, the answer stays available with a scoped launch message. Check rapid edits, leaving search, rotation and normal app/settings/contact/file search. No automatic query handoff to the external calculator is promised.
+
+Debug Grove Test APK: `Grove-Juniper-calculator-0dc18f5.apk`, SHA-256 `24eac13d1016729b068c70cc2fc42abd2265e32222298d806bee37ec904c5db2`. Verified GitHub artifact archive digest, APK integrity, manifest and all three Rust ABIs.
