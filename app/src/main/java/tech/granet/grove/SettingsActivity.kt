@@ -55,6 +55,9 @@ class SettingsActivity : AppCompatActivity() {
             view.setPadding(edges.left, edges.top, edges.right, edges.bottom); insets
         }
         setContentView(shell)
+        val barFlags = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        val light = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK != android.content.res.Configuration.UI_MODE_NIGHT_YES
+        window.insetsController?.setSystemBarsAppearance(if (light) barFlags else 0, barFlags)
         val available = try { session.repository.snapshot(); true } catch (_: Exception) { false }
         if (!available) {
             toolbar.title = "Settings unavailable"
@@ -109,6 +112,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         if (::pages.isInitialized) {
             if (session.repository.snapshot().revision != renderedRevision) { applyTheme(); render() }
+            if (routes.last() == "help") render()
             pages.refreshStatus()
         }
     }

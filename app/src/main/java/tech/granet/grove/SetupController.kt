@@ -46,7 +46,8 @@ internal class SetupController(private val activity: MainActivity) {
             val setupPreviouslyCompleted = runCatching { prefs.getBoolean("setup_complete", false) }
                 .onFailure { Log.w("Grove", "Setup completion state unavailable", it) }
                 .getOrDefault(false)
-            prefs.edit().remove("widget_tutorial_seen").apply()
+            if (!prefs.edit().remove("widget_tutorial_seen").commit())
+                message("Widget tutorial reset unavailable; setup can continue")
             val setupBase = configController.config
             firstRunSetup = FirstRunSetup(
                 this, surface, root, configController.config, catalogController.apps.map { it.key to it.label },

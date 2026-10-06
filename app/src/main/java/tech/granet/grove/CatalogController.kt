@@ -44,7 +44,8 @@ internal class CatalogController(private val activity: MainActivity) {
                         if (!prefs.contains("initialized")) {
                             val initial = if (!setupController.setupPending() && configController.config.favorites.isEmpty())
                                 configController.config.copy(favorites = apps.take(8).map { it.key }) else configController.config
-                            if (configController.commitConfig(initial)) prefs.edit().putBoolean("initialized", true).apply()
+                            if (configController.commitConfig(initial) && !prefs.edit().putBoolean("initialized", true).commit())
+                                Log.w("Grove", "Could not persist initialization marker")
                         }
                         if (startupController.coreRecoveryState?.reason == CoreRecoveryReason.APP_CATALOG) {
                             startupController.clearCoreRecovery()

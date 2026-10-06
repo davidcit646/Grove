@@ -153,9 +153,9 @@ class MainActivity : AppCompatActivity() {
         runCatching {
             if (!prefs.getBoolean("setup_complete", false) && !setupController.setupPending()) {
                 // Existing users keep their layout and can replay setup from the menu.
-                prefs.edit().putBoolean(
+                check(prefs.edit().putBoolean(
                     if (prefs.contains("initialized")) "setup_complete" else "setup_pending", true
-                ).apply()
+                ).commit()) { "Could not persist setup state" }
             }
         }.onFailure { Log.w("Grove", "Setup state unavailable", it) }
         startupController.beginHome()
