@@ -16,6 +16,24 @@ import java.util.concurrent.TimeUnit
 
 /** Persistent per-source work; the token prevents an older canceled job from committing. */
 internal object IndexWork {
+    private val scheduler = java.util.concurrent.Executors.newSingleThreadExecutor()
+    val failures = androidx.lifecycle.MutableLiveData<Map<String, String>>(emptyMap())
+    private val errors = mutableMapOf<String, String>()
+    @Synchronized private fun failure(kind: String, message: String?) {
+        if (message == null) errors.remove(kind) else errors[kind] = message
+        failures.postValue(errors.toMap())
+    }
+    private fun recover(context: Context, kind: String) {
+        val expected = prefs(context).getString(token(kind), null) ?: return
+        val id = currentWorkId(context, kind)
+        val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWork(name(kind)).get(30, TimeUnit.SECONDS)
+        val state = infos.firstOrNull { it.id.toString() == id }?.state
+        synchronized(this) {
+            if (prefs(context).getString(token(kind), null) == expected && (state == null || state.isFinished)) {
+                prefs(context).edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()
+            }
+        }
+    }
     private fun prefs(context: Context) = context.getSharedPreferences("grove", Context.MODE_PRIVATE)
     fun name(kind: String) = "grove-$kind-index"
     private fun token(kind: String) = "index-token-$kind"
@@ -50,7 +68,22 @@ internal object IndexWork {
         }
     }
 
-    @Synchronized fun enqueue(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
+    fun enqueue(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
+        if (kind !in listOf("contacts", "files") || !enabled(context, kind)) { cancel(context, kind); return false }
+        val app = context.applicationContext
+        scheduler.execute {
+            try {
+                recover(app, kind)
+                synchronized(this) { enqueueRecovered(app, kind, cause) }
+            } catch (error: Exception) {
+                failure(kind, "Scheduling unavailable")
+                Log.w("Grove", "Could not reconcile $kind work", error)
+            }
+        }
+        return true // Accepted by our scheduler; WorkManager completion is observed separately.
+    }
+
+    private fun enqueueRecovered(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
         if (!enabled(context, kind)) { cancel(context, kind); return false }
         val store = prefs(context)
         val active = store.getString(token(kind), null)
@@ -70,7 +103,18 @@ internal object IndexWork {
         if (!prefs(context).edit().putString(token(kind), id)
                 .putString(workId(kind), request.id.toString()).commit()) return false
         return try {
-            WorkManager.getInstance(context).enqueueUniqueWork(name(kind), if (followUp) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, request)
+            val operation = WorkManager.getInstance(context).enqueueUniqueWork(name(kind), if (followUp) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, request)
+            scheduler.execute {
+                try { operation.result.get(30, TimeUnit.SECONDS); failure(kind, null) }
+                catch (error: Exception) {
+                    synchronized(this) {
+                        if (prefs(context).getString(token(kind), null) == id)
+                            prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit()
+                    }
+                    failure(kind, "Scheduling failed")
+                    Log.w("Grove", "Index enqueue failed for $kind", error)
+                }
+            }
             true
         } catch (error: Exception) {
             if (prefs(context).getString(token(kind), null) == id)
@@ -102,7 +146,10 @@ internal object IndexWork {
         val age = System.currentTimeMillis() - file.lastModified()
         val stale = !file.exists() || age < 0 || age >
             (if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000)
-        return if (stale && prefs(context).getString(token(kind), null) == null) enqueue(context, kind, IndexRefreshCause.STALE_CACHE) else true
+        if (stale) return enqueue(context, kind, IndexRefreshCause.STALE_CACHE)
+        val app = context.applicationContext
+        scheduler.execute { runCatching { recover(app, kind) }.onFailure { failure(kind, "Scheduling unavailable") } }
+        return true
     }
 }
 
