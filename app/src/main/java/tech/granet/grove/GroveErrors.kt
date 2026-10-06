@@ -57,6 +57,13 @@ internal object GroveErrorRegistry {
     val WALLPAPER_LOCAL_SYNC = GroveError(313, GroveErrorOwner.UI_UX, "GWS-WRITE-02", "Custom wallpaper", ErrorSeverity.RECOVER,
         "Android changed the wallpaper, but Grove could not commit the selected custom image locally.")
 
+    val SEARCH_TUTORIAL_PRESENTATION = GroveError(314, GroveErrorOwner.UI_UX, null, "Search tutorial", ErrorSeverity.DEGRADE,
+        "The Search tutorial could not be displayed. Search is still available. You can replay the tutorial later from Help in Settings.")
+
+    val SEARCH_TUTORIAL_STATE = GroveError(411, GroveErrorOwner.SYSTEM, null, "Search tutorial state", ErrorSeverity.DEGRADE,
+        "Grove could not read the Search tutorial state. Search is still available; tutorial completion remains unconfirmed.")
+    val SEARCH_TUTORIAL_COMPLETION = GroveError(412, GroveErrorOwner.SYSTEM, null, "Search tutorial completion", ErrorSeverity.DEGRADE,
+        "Grove could not save Search tutorial completion. Search is still available. You can replay the tutorial later from Help in Settings.")
     val TUTORIAL_REPLAY = GroveError(410, GroveErrorOwner.SYSTEM, null, "Tutorial replay", ErrorSeverity.DEGRADE,
         "Tutorial replay could not start yet.")
     val REPORT_HANDOFF = GroveError(420, GroveErrorOwner.SYSTEM, null, "Problem report", ErrorSeverity.DEGRADE,
@@ -77,6 +84,7 @@ internal object GroveErrorRegistry {
         CONFIG_IMPORT, CONFIG_EXPORT, CONFIG_PERSIST, CONFIG_LOAD,
         APP_CATALOG, LAUNCHER_SERVICE,
         WALLPAPER_PREVIEW, WALLPAPER_APPLY, WALLPAPER_SYNC, WALLPAPER_LOCAL_SYNC,
+        SEARCH_TUTORIAL_PRESENTATION, SEARCH_TUTORIAL_STATE, SEARCH_TUTORIAL_COMPLETION,
         TUTORIAL_REPLAY, REPORT_HANDOFF, NATIVE_BRIDGE, GENERIC_NONFATAL, UNCAUGHT_CRASH,
         FILE_SEARCH, CONTACT_SEARCH,
     )

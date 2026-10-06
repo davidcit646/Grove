@@ -165,6 +165,14 @@ internal class HomeController(private val activity: MainActivity) {
         }
     }
 
+    fun resetSwipeFeedback() {
+        with(activity) {
+            root.animate().cancel()
+            root.translationY = 0f
+            root.alpha = 1f
+        }
+    }
+
     fun settleSwipeFeedback() {
         with(activity) {
             root.animate().cancel()

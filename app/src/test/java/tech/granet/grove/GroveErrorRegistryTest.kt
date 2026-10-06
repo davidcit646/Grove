@@ -33,4 +33,18 @@ class GroveErrorRegistryTest {
             assertTrue(error.summary.isNotBlank())
         }
     }
+    @Test fun searchTutorialFailuresHaveDistinctAssignedCodesAndSafeContinueRoutes() {
+        val errors = listOf(GroveErrorRegistry.SEARCH_TUTORIAL_PRESENTATION,
+            GroveErrorRegistry.SEARCH_TUTORIAL_STATE, GroveErrorRegistry.SEARCH_TUTORIAL_COMPLETION)
+        assertEquals(listOf(314, 411, 412), errors.map { it.code })
+        assertEquals(GroveErrorOwner.UI_UX, errors[0].owner)
+        assertTrue(errors.drop(1).all { it.owner == GroveErrorOwner.SYSTEM })
+        errors.forEach {
+            assertEquals(it, GroveErrorRegistry.byCode(it.code))
+            assertEquals(ErrorSeverity.DEGRADE, it.severity)
+            assertEquals("Continue", GroveErrorRouting.route(it, false).dismissLabel)
+            assertTrue(it.summary.contains("Search is still available"))
+        }
+    }
+
 }
