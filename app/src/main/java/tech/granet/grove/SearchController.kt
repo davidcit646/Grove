@@ -115,7 +115,7 @@ internal class SearchController(private val activity: MainActivity) {
             if (hasContactAccess()) { sources.reconcile(); return }
             MaterialAlertDialogBuilder(this)
                 .setTitle("Contact search access")
-                .setMessage("Grove reads contact names from Android for on-device search. If you separately enable Contact indexing, names and lookup IDs are saved in Grove's private on-device cache; phone numbers are read only when you choose an action. Grove does not upload them. Android keeps the permission until you revoke it in system settings.")
+                .setMessage("Grove reads contact names from Android for on-device search. If Contact indexing is on, names and lookup IDs are saved in Grove's private on-device cache; phone numbers are read only when you choose an action. Grove does not upload them. Android keeps the permission until you revoke it in system settings.")
                 .setNegativeButton("Not now", null)
                 .setPositiveButton("Continue to Android") { _, _ -> requestContactAccess() }
                 .show()
@@ -136,7 +136,7 @@ internal class SearchController(private val activity: MainActivity) {
             if (Environment.isExternalStorageManager()) { sources.reconcile(); return }
             MaterialAlertDialogBuilder(this)
                 .setTitle("Shared-storage file search access")
-                .setMessage("Android's All files access grants Grove broad access to shared storage, but not app-private data or system partitions. Grove searches names and paths without reading contents or uploading them. If you separately enable File indexing, names and paths are saved in Grove's private on-device cache. Android keeps the permission until you revoke it in system settings.")
+                .setMessage("Android's All files access grants Grove broad access to shared storage, but not app-private data or system partitions. Grove searches names and paths without reading contents or uploading them. If File indexing is on, names and paths are saved in Grove's private on-device cache. Android keeps the permission until you revoke it in system settings.")
                 .setNegativeButton("Not now", null)
                 .setPositiveButton("Open Android settings") { _, _ -> requestFileAccess() }
                 .show()
@@ -148,10 +148,11 @@ internal class SearchController(private val activity: MainActivity) {
             val query = searchField?.text?.toString().orEmpty()
             cancelPending()
             sources.reconcile()
-            if (((configController.config.search.contacts && !previous.contacts) ||
-                    (configController.config.search.contactIndexing && !previous.contactIndexing)) && !hasContactAccess()) explainContactAccess()
-            if (((configController.config.search.files && !previous.files) ||
-                    (configController.config.search.fileIndexing && !previous.fileIndexing)) && !Environment.isExternalStorageManager()) explainFileAccess()
+            val settings = configController.config.search
+            if (settings.contacts && (!previous.contacts || (settings.contactIndexing && !previous.contactIndexing)) &&
+                !hasContactAccess()) explainContactAccess()
+            if (settings.files && (!previous.files || (settings.fileIndexing && !previous.fileIndexing)) &&
+                !Environment.isExternalStorageManager()) explainFileAccess()
             if (searchMode) {
                 displaySearch(searchResults ?: return, query, lastApps, emptyList(), emptyList())
                 renderSearch(query)

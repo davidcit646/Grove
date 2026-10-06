@@ -70,7 +70,7 @@ internal class SearchSources(
     }
 
     fun reconcile() {
-        if (settings().contactIndexing && hasContactAccess()) {
+        if (IndexAccessPolicy.contacts(settings(), hasContactAccess())) {
             if (!observing) runCatching {
                 activity.contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI, true, observer)
                 observing = true
@@ -78,17 +78,17 @@ internal class SearchSources(
             loadContacts()
             if (!IndexWork.reconcile(activity, "contacts")) contactLoadFailed = true
         } else clearContacts()
-        if (settings().fileIndexing && Environment.isExternalStorageManager()) {
+        if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) {
             loadFiles()
             if (!IndexWork.reconcile(activity, "files")) fileLoadFailed = true
         } else clearFiles()
     }
 
-    fun indexFiles() { if (settings().fileIndexing && Environment.isExternalStorageManager() && !IndexWork.enqueue(activity, "files")) { fileLoadFailed = true; redraw() } }
-    fun refreshContacts() { if (settings().contactIndexing && hasContactAccess() && !IndexWork.enqueue(activity, "contacts")) { contactLoadFailed = true; redraw() } }
+    fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files")) { fileLoadFailed = true; redraw() } }
+    fun refreshContacts() { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts")) { contactLoadFailed = true; redraw() } }
 
     private fun loadContacts() {
-        if (!settings().contactIndexing || !hasContactAccess()) return
+        if (!IndexAccessPolicy.contacts(settings(), hasContactAccess())) return
         val generation = ++contactGeneration
         contactWorker.execute {
             val cache = try { Result.success(run {
@@ -96,7 +96,7 @@ internal class SearchSources(
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { contact -> contact.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
-                if (generation != contactGeneration || activity.isDestroyed || !settings().contactIndexing || !hasContactAccess()) return@runOnUiThread
+                if (generation != contactGeneration || activity.isDestroyed || !IndexAccessPolicy.contacts(settings(), hasContactAccess())) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         contactCorrupt = false
@@ -120,7 +120,7 @@ internal class SearchSources(
     }
 
     private fun loadFiles() {
-        if (!settings().fileIndexing || !Environment.isExternalStorageManager()) return
+        if (!IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return
         val generation = ++fileGeneration
         worker.execute {
             val cache = try { Result.success(run {
@@ -128,7 +128,7 @@ internal class SearchSources(
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { file -> file.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
-                if (generation != fileGeneration || activity.isDestroyed || !settings().fileIndexing || !Environment.isExternalStorageManager()) return@runOnUiThread
+                if (generation != fileGeneration || activity.isDestroyed || !IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         fileCorrupt = false
@@ -194,6 +194,7 @@ internal class SearchSources(
             if (files) fileLoadFailed else contactLoadFailed,
             if (files) fileCorrupt else contactCorrupt,
             partial = if (files) fileScanSkipped > 0 else contactScanSkipped > 0)
-        return if (enabled && !permitted) "Permission required" else state.label
+        return if (!(if (files) settings().files else settings().contacts)) "Search disabled"
+        else if (enabled && !permitted) "Permission required" else state.label
     }
 }

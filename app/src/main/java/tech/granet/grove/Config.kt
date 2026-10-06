@@ -35,6 +35,22 @@ data class SearchSettings(
     val fileIndexing: Boolean = false,
 )
 
+/** A saved indexing preference never authorizes a disabled search source. */
+internal object IndexAccessPolicy {
+    fun contacts(settings: SearchSettings, permitted: Boolean): Boolean =
+        settings.contacts && settings.contactIndexing && permitted
+    fun files(settings: SearchSettings, permitted: Boolean): Boolean =
+        settings.files && settings.fileIndexing && permitted
+}
+
+/** New-install defaults are separate from migration and corrupt-config recovery. */
+internal object SetupDefaults {
+    fun configuration(hasConfig: Boolean, initialized: Boolean, setupCompleted: Boolean): Config =
+        if (!hasConfig && !initialized && !setupCompleted)
+            Config(search = SearchSettings(contactIndexing = true, fileIndexing = true))
+        else Config()
+}
+
 /** Persistent user settings. Widget IDs are device-local and deliberately excluded from exports. */
 data class Config(
     val favorites: List<String> = emptyList(),

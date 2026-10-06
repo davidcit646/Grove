@@ -11,7 +11,7 @@ import android.widget.TextView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
-import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.materialswitch.MaterialSwitch
 import tech.granet.grove.ui.dp
 
 /** Shared visual primitives for setup pages; no configuration is committed here. */
@@ -32,6 +32,7 @@ internal class FirstRunComponents(private val context: Context) {
             if (bold) setTypeface(typeface, Typeface.BOLD)
         }
     fun icon(id: Int, tint: Int = primary, size: Int = 32) = ImageView(context).apply {
+        importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
         setImageResource(id)
         imageTintList = ColorStateList.valueOf(tint)
         layoutParams = LinearLayout.LayoutParams(context.dp(size), context.dp(size))
@@ -50,23 +51,13 @@ internal class FirstRunComponents(private val context: Context) {
         build(body)
         parent.addView(shell, LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(12) })
     }
-    fun heading(parent: LinearLayout, eyebrow: String, title: String, summary: String) {
-        parent.addView(text(eyebrow.uppercase(), 12f, true, primary).apply { letterSpacing = .12f })
+    fun heading(parent: LinearLayout, title: String, summary: String) {
         parent.addView(text(title, 30f, true), LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = context.dp(8)
         })
-        parent.addView(text(summary, 16f, color = muted), LinearLayout.LayoutParams(-1, -2).apply {
+        if (summary.isNotBlank()) parent.addView(text(summary, 16f, color = muted), LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = context.dp(12); bottomMargin = context.dp(8)
         })
-    }
-    fun feature(parent: LinearLayout, iconId: Int, title: String, body: String, highlighted: Boolean = false) {
-        card(parent, highlighted) { box ->
-            box.addView(icon(iconId, if (highlighted) onAccent else primary))
-            box.addView(text(title, 18f, true, if (highlighted) onAccent else ink),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(14) })
-            box.addView(text(body, 15f, color = if (highlighted) onAccent else muted),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = context.dp(7) })
-        }
     }
     fun choice(parent: LinearLayout, iconId: Int, title: String, detail: String,
                        enabled: Boolean, changed: (Boolean) -> Unit) {
@@ -76,10 +67,10 @@ internal class FirstRunComponents(private val context: Context) {
             val labels = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(text(title, 17f, true))
-                addView(text(detail, 14f, color = muted))
+                if (detail.isNotBlank()) addView(text(detail, 14f, color = muted))
             }
             row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = context.dp(14) })
-            val switch = SwitchMaterial(context).apply {
+            val switch = MaterialSwitch(context).apply {
                 isChecked = enabled
                 contentDescription = title
                 setOnCheckedChangeListener { _, checked -> changed(checked) }
