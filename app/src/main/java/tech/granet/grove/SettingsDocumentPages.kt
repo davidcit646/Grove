@@ -22,16 +22,19 @@ internal class SettingsDocumentPages(
         val snapshot = session.repository.snapshot()
         when (route) {
             "configuration" -> {
-                content.addView(activity.bodyText("Import, export or edit your launcher choices. Widget IDs and Android grants remain on this device."))
-                button(content, "Import configuration", pickImport)
-                button(content, "Export configuration", pickExport)
-                button(content, "Advanced editor") {
+                val transfer = SettingsGroups.card(content, "Import and export")
+                transfer.addView(activity.bodyText("Import or export your launcher choices. Widget IDs and Android grants remain on this device."))
+                button(transfer, "Import configuration", pickImport)
+                button(transfer, "Export configuration", pickExport)
+                val advanced = SettingsGroups.card(content, "Advanced")
+                button(advanced, "Advanced editor") {
                     if (session.draft == null) { session.draft = snapshot.config.json(); session.editorBase = snapshot }
                     navigate("editor")
                 }
+                val recovery = SettingsGroups.card(content, "Recovery and defaults")
                 if ((activity.application as GroveApp).settingsStore.brokenCustomConfig != null)
-                    button(content, "Recover preserved configuration") { navigate("recovery") }
-                button(content, "Restore defaults") { navigate("defaults") }
+                    button(recovery, "Recover preserved configuration") { navigate("recovery") }
+                button(recovery, "Restore defaults") { navigate("defaults") }
             }
             "recovery" -> {
                 content.addView(activity.bodyText("Your damaged custom configuration is preserved. Grove is using a safe fallback until you replace it."))
