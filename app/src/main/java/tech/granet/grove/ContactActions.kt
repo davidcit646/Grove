@@ -43,10 +43,20 @@ internal class ContactActions(
             activity.runOnUiThread {
                 if (activity.isDestroyed || !current().search.contacts || !hasAccess()) return@runOnUiThread
                 if (details == null) { activity.message("Contact details unavailable; try again"); return@runOnUiThread }
+                fun launchCurrent(intent: Intent) {
+                    worker.execute {
+                        val fresh = runCatching { ContactIndex.details(activity.contentResolver, activity.resources, contact) }.getOrNull()
+                        activity.runOnUiThread {
+                            if (activity.isDestroyed) return@runOnUiThread
+                            if (fresh == null || fresh != details) activity.message("Contact changed. Open its menu again.")
+                            else runCatching { launch(intent) }.onFailure { activity.message("No compatible app is available") }
+                        }
+                    }
+                }
                 val actions = mutableListOf<Triple<String, Int, () -> Unit>>()
                 fun action(label: String, icon: Int, intent: () -> Intent) {
                     actions.add(Triple(label, icon) {
-                        runCatching { launch(intent()) }.onFailure { activity.message("No compatible app is available") }
+                        runCatching { launchCurrent(intent()) }.onFailure { activity.message("No compatible app is available") }
                     })
                 }
                 val waTargets = ContactIndex.whatsAppTargets(details.channels) { pkg ->
@@ -55,14 +65,14 @@ internal class ContactActions(
                 val numbers = details.numbers
                 fun callRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_call) {
                     runCatching {
-                        launch(Intent.createChooser(
+                        launchCurrent(Intent.createChooser(
                             Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number.value, null)), "Call with"))
                     }.onFailure { activity.message("No compatible app is available") }
                     Unit
                 }
                 fun textRow(number: ContactIndex.Number) = Triple("${number.label} · ${number.value}", R.drawable.ic_message) {
                     runCatching {
-                        launch(Intent.createChooser(
+                        launchCurrent(Intent.createChooser(
                             Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number.value, null)), "Message with"))
                     }.onFailure { activity.message("No compatible app is available") }
                     Unit

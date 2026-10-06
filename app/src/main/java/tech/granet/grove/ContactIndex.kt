@@ -62,13 +62,16 @@ internal object ContactIndex {
     }
 
     fun details(resolver: ContentResolver, resources: Resources, contact: Contact): Details {
+        val resolved = ContactsContract.Contacts.lookupContact(resolver, contact.uri)
+            ?: error("This contact no longer exists")
+        val currentId = ContentUris.parseId(resolved)
         val numbers = ArrayList<Number>()
         val seenNumbers = HashSet<String>()
         val channels = linkedSetOf<Channel>()
         resolver.query(ContactsContract.Data.CONTENT_URI,
             arrayOf(ContactsContract.Data._ID, ContactsContract.Data.MIMETYPE,
                 ContactsContract.Data.DATA1, ContactsContract.Data.DATA2, ContactsContract.Data.DATA3),
-            "${ContactsContract.Data.CONTACT_ID}=?", arrayOf(contact.id.toString()), null)?.use { cursor ->
+            "${ContactsContract.Data.CONTACT_ID}=?", arrayOf(currentId.toString()), null)?.use { cursor ->
             while (cursor.moveToNext() && numbers.size + channels.size < 80) {
                 val mime = cursor.getString(1) ?: continue
                 when {
