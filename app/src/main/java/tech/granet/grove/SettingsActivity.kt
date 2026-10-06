@@ -31,6 +31,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
     private lateinit var pages: SettingsPages
     private var renderedRevision = -1L
+    private var renderedRoute: String? = null
+    private val scroll = SettingsScrollState()
     private val motion = FirstRunMotion()
     private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(session::readDocument) }
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(session::export) }
@@ -69,6 +71,9 @@ class SettingsActivity : AppCompatActivity() {
                 text = "Android Home settings"; setOnClickListener { openLink(Intent(Settings.ACTION_HOME_SETTINGS)) }
             })
             host.addView(panel); return
+        }
+        state?.getBundle("scrollPositions")?.let { saved ->
+            scroll.restore(saved.keySet().associateWith { saved.getInt(it) }, SettingsPages.routes)
         }
         state?.getStringArrayList("routes")?.filter { it in SettingsPages.routes }?.let { if (it.isNotEmpty()) { routes.clear(); routes.addAll(it) } }
         if (state == null) intent.getStringExtra("route")?.takeIf { it in SettingsPages.routes }?.let { routes.add(it) }
@@ -127,6 +132,9 @@ class SettingsActivity : AppCompatActivity() {
     override fun onStop() { motion.finish(); super.onStop() }
     override fun onDestroy() { motion.finish(); super.onDestroy() }
     override fun onSaveInstanceState(state: Bundle) {
+        motion.finish()
+        rememberScroll()
+        state.putBundle("scrollPositions", Bundle().apply { scroll.snapshot().forEach { (route, y) -> putInt(route, y) } })
         state.putStringArrayList("routes", ArrayList(routes)); state.putString("draft", session.draft)
         state.putString("emailDraft", session.emailDraft)
         session.gridColumns?.let { state.putInt("gridColumns", it) }; session.gridRows?.let { state.putInt("gridRows", it) }
@@ -153,13 +161,33 @@ class SettingsActivity : AppCompatActivity() {
         if (routes.last() in listOf("homeGrid", "drawerGrid")) { session.gridColumns = null; session.gridRows = null }
         if (routes.size > 1) { routes.removeAt(routes.lastIndex); render(false) } else finish()
     }
+    private fun rememberScroll() {
+        val route = renderedRoute ?: return
+        (host.getChildAt(0) as? ScrollView)?.takeIf { it.isLaidOut }?.let { scroll.remember(route, it.scrollY) }
+    }
     private fun render(forward: Boolean? = null) {
         motion.finish()
+        rememberScroll()
         renderedRevision = session.repository.snapshot().revision
         val route = routes.last()
         toolbar.title = SettingsPages.title(route)
         val content = pages.render(route)
-        val view = ScrollView(content.context).apply { isFillViewport = true; addView(content) }
+        val view = ScrollView(content.context).apply {
+            isFillViewport = true
+            // Let the container take focus instead of scrolling to the first new switch.
+            isFocusableInTouchMode = true
+            addView(content)
+        }
+        val savedY = scroll.position(route)
+        view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, left: Int, top: Int, right: Int, bottom: Int,
+                                        oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int) {
+                view.removeOnLayoutChangeListener(this)
+                if (!isDestroyed && renderedRoute == route && host.indexOfChild(view) >= 0)
+                    view.scrollTo(0, savedY)
+            }
+        })
+        renderedRoute = route
         val outgoing = host.getChildAt(0)
         host.addView(view, FrameLayout.LayoutParams(-1, -1))
         if (forward == null) { outgoing?.let(host::removeView) }
