@@ -44,3 +44,5 @@ The bundled ic_setup_* vectors (apps, arrow_back, arrow_forward, folder, home, p
 Source: https://github.com/google/material-design-icons/tree/master/symbols/android
 License: https://github.com/google/material-design-icons/blob/master/LICENSE
 The upstream vector paths are retained; resource names use the ic_setup prefix and are reused by onboarding and Juniper settings.
+
+Juniper also bundles Google Material Symbols Rounded as ic_settings_* vectors: code, delete, description, help, image, info, mail, palette, public, refresh, shield and widgets. Their upstream Android vector paths are retained and they use the same Apache License 2.0 source/license links above.
