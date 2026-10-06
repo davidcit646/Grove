@@ -23,6 +23,7 @@ internal class CatalogController(private val activity: MainActivity) {
     fun loadApps(changedPackage: String? = null) {
         with(activity) {
             if (isDestroyed || worker.isShutdown) return
+            if (changedPackage != null && searchMode) searchController.refreshSettings()
             val generation = ++loadGeneration
             state = CatalogState.Loading
             val iconSize = dp(48)

@@ -33,6 +33,7 @@ class SettingsActivity : AppCompatActivity() {
     private var renderedRevision = -1L
     private var renderedRoute: String? = null
     private val scroll = SettingsScrollState()
+    private var pendingDestination: SettingsDestination.Grove? = null
     private val motion = FirstRunMotion()
     private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(session::readDocument) }
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(session::export) }
@@ -76,6 +77,9 @@ class SettingsActivity : AppCompatActivity() {
             scroll.restore(saved.keySet().associateWith { saved.getInt(it) }, SettingsPages.routes)
         }
         state?.getStringArrayList("routes")?.filter { it in SettingsPages.routes }?.let { if (it.isNotEmpty()) { routes.clear(); routes.addAll(it) } }
+        pendingDestination = SettingsCatalogue.destination(
+            state?.getString("destinationRoute") ?: intent.getStringExtra("route"),
+            state?.getString("destinationAnchor") ?: intent.getStringExtra("anchor"))
         if (state == null) intent.getStringExtra("route")?.takeIf { it in SettingsPages.routes }?.let { routes.add(it) }
         if (session.emailDraft == null) session.emailDraft = state?.getString("emailDraft")
         if (session.gridColumns == null && state?.containsKey("gridColumns") == true) session.gridColumns = state.getInt("gridColumns")
@@ -85,6 +89,7 @@ class SettingsActivity : AppCompatActivity() {
             // Process death makes an old draft provisional again; review may not auto-apply it.
             session.editorBase = SettingsSnapshot(session.repository.snapshot().config, -1)
         }
+        if (state?.getBoolean("destinationConsumed") == true) pendingDestination = null
         pages = SettingsPages(this, session, ::navigate, ::delegate, ::requestAccess,
             { importPicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
             { export.launch("grove-config.json") }, ::chooseHome, { applyTheme(); render() })
@@ -135,6 +140,8 @@ class SettingsActivity : AppCompatActivity() {
         motion.finish()
         rememberScroll()
         state.putBundle("scrollPositions", Bundle().apply { scroll.snapshot().forEach { (route, y) -> putInt(route, y) } })
+        pendingDestination?.let { state.putString("destinationRoute", it.route); state.putString("destinationAnchor", it.anchor) }
+        state.putBoolean("destinationConsumed", pendingDestination == null)
         state.putStringArrayList("routes", ArrayList(routes)); state.putString("draft", session.draft)
         state.putString("emailDraft", session.emailDraft)
         session.gridColumns?.let { state.putInt("gridColumns", it) }; session.gridRows?.let { state.putInt("gridRows", it) }
@@ -179,12 +186,21 @@ class SettingsActivity : AppCompatActivity() {
             addView(content)
         }
         val savedY = scroll.position(route)
+        val destination = pendingDestination?.takeIf { it.route == route }
         view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
             override fun onLayoutChange(v: View, left: Int, top: Int, right: Int, bottom: Int,
                                         oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int) {
                 view.removeOnLayoutChangeListener(this)
-                if (!isDestroyed && renderedRoute == route && host.indexOfChild(view) >= 0)
-                    view.scrollTo(0, savedY)
+                if (!isDestroyed && renderedRoute == route && host.indexOfChild(view) >= 0) {
+                    val anchor = destination?.anchor?.let { content.findViewWithTag<View>(it) }
+                    if (anchor != null) {
+                        val rect = android.graphics.Rect()
+                        anchor.getDrawingRect(rect)
+                        content.offsetDescendantRectToMyCoords(anchor, rect)
+                        view.scrollTo(0, rect.top)
+                    } else view.scrollTo(0, savedY)
+                    if (destination != null && pendingDestination == destination) pendingDestination = null
+                }
             }
         })
         renderedRoute = route

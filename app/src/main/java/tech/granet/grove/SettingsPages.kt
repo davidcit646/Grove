@@ -57,7 +57,7 @@ internal class SettingsPages(
             }
             "home" -> {
                 val widgets = SettingsGroups.card(content, "Widgets")
-                row(widgets, "Add widget", "Choose and configure on Home", R.drawable.ic_settings_widgets) { platform("widget") }
+                row(widgets, "Add widget", "Choose and configure on Home", R.drawable.ic_settings_widgets, "widgets") { platform("widget") }
                 val buttons = SettingsGroups.card(content, "Buttons")
                 toggle(buttons, "Show Apps button", config.homeScreen.showAppsButton, SettingKey.APPS_BUTTON)
                 toggle(buttons, "Show Search button", config.homeScreen.showSearchButton, SettingKey.SEARCH_BUTTON)
@@ -76,13 +76,13 @@ internal class SettingsPages(
                 toggle(gestures, "Hold empty space for settings", config.gestures.longPressHomeContextMenu, SettingKey.HOLD_MENU)
                 val launcher = SettingsGroups.card(content, "Default launcher")
                 statuses["role"] = activity.bodyText("").also(launcher::addView)
-                row(launcher, "Choose launcher", "Choose Grove in Android", R.drawable.ic_setup_home, chooseHome)
+                row(launcher, "Choose launcher", "Choose Grove in Android", R.drawable.ic_setup_home, "launcher", chooseHome)
             }
             "drawer" -> {
                 val layout = SettingsGroups.card(content, "Layout")
                 row(layout, "Icon grid", gridLabel(config.drawerGrid), R.drawable.ic_setup_apps) { navigate("drawerGrid") }
                 val folders = SettingsGroups.card(content, "Folders and apps")
-                row(folders, "Manage folders and apps", "Open drawer selection and folder actions", R.drawable.ic_setup_folder) { platform("folders") }
+                row(folders, "Manage folders and apps", "Open drawer selection and folder actions", R.drawable.ic_setup_folder, "folders") { platform("folders") }
             }
             "search" -> {
                 source(content, "contacts", "Contacts", SettingKey.CONTACTS, SettingKey.CONTACT_INDEX, config.search.contacts, config.search.contactIndexing)
@@ -95,7 +95,7 @@ internal class SettingsPages(
                 toggle(colors, "Wallpaper colors for buttons", config.homeScreen.useWallpaperButtonColors, SettingKey.WALLPAPER_COLORS)
                 colors.addView(activity.bodyText("Applies in System mode. Wallpaper colors mode always uses Android’s Home wallpaper palette."))
                 val wallpaper = SettingsGroups.card(content, "Wallpaper")
-                row(wallpaper, "Choose wallpaper", "Built-in artwork, your image or solid black", R.drawable.ic_settings_image) { platform("wallpaper") }
+                row(wallpaper, "Choose wallpaper", "Built-in artwork, your image or solid black", R.drawable.ic_settings_image, "wallpaper") { platform("wallpaper") }
             }
             "theme" -> {
                 val choices = SettingsGroups.card(content, "Color mode")
@@ -109,23 +109,23 @@ internal class SettingsPages(
             "help" -> {
                 val tutorials = SettingsGroups.card(content, "Tutorials")
                 val pending = session.commands.replayPending()
-                row(tutorials, if (pending) "Cancel tutorial replay" else "Replay first-run setup", "Starts when you return Home", R.drawable.ic_settings_help) {
+                row(tutorials, if (pending) "Cancel tutorial replay" else "Replay first-run setup", "Starts when you return Home", R.drawable.ic_settings_help, "tutorial") {
                     if (feedback(session.commands.replay(!session.commands.replayPending()))) navigate("help")
                 }
                 val reports = SettingsGroups.card(content, "Local reports")
-                toggleAction(reports, "Automatic crash reports", CrashReporter.isEnabled(activity)) { session.commands.capture(it) }
+                toggleAction(reports, "Automatic crash reports", CrashReporter.isEnabled(activity), "capture") { session.commands.capture(it) }
                 reports.addView(activity.bodyText("Reports stay on this device until you choose to share them."))
                 row(reports, "Developer email", CrashReporter.developerEmail(activity), R.drawable.ic_settings_mail) { navigate("email") }
-                row(reports, "Review saved reports", "${CrashReporter.pendingCount(activity)} saved", R.drawable.ic_settings_description) { CrashReporter.reviewPending(activity) }
+                row(reports, "Review saved reports", "${CrashReporter.pendingCount(activity)} saved", R.drawable.ic_settings_description, "reports") { CrashReporter.reviewPending(activity) }
                 row(reports, "Delete saved reports", null, R.drawable.ic_settings_delete) { navigate("deleteReports") }
             }
             "about" -> {
                 val grove = SettingsGroups.card(content, "Grove ${BuildConfig.VERSION_NAME}")
                 grove.addView(activity.bodyText("Free and open source · Apache 2.0\nNo ads, analytics or automatic telemetry."))
                 val information = SettingsGroups.card(content, "Project and information")
-                row(information, "Project", "Source and issues", R.drawable.ic_settings_code) { link("https://github.com/davidcit646/Grove") }
-                row(information, "Privacy", "How Grove uses local data", R.drawable.ic_settings_shield) { link("https://github.com/davidcit646/Grove/blob/main/PRIVACY.md") }
-                row(information, "Licenses", "Original and third-party attribution", R.drawable.ic_settings_description) { link("https://github.com/davidcit646/Grove/blob/main/NOTICE") }
+                row(information, "Project", "Source and issues", R.drawable.ic_settings_code, "project") { link("https://github.com/davidcit646/Grove") }
+                row(information, "Privacy", "How Grove uses local data", R.drawable.ic_settings_shield, "privacy") { link("https://github.com/davidcit646/Grove/blob/main/PRIVACY.md") }
+                row(information, "Licenses", "Original and third-party attribution", R.drawable.ic_settings_description, "licenses") { link("https://github.com/davidcit646/Grove/blob/main/NOTICE") }
                 row(information, "Artwork credits", "Available offline", R.drawable.ic_settings_image) { navigate("credits") }
             }
             "credits" -> WallpaperArt.sources.forEach { source ->
@@ -144,22 +144,23 @@ internal class SettingsPages(
         group.addView(activity.bodyText(if (kind == "contacts") "We need contact access for contact search to work." else "We need file access for file search to work."))
         val accessRow = activity.iconRow("Android access", R.drawable.ic_settings_shield,
             minHeightDp = 56, onClick = { access(kind) })
+        accessRow.tag = "access-$kind"
         group.addView(accessRow)
         statuses["access-$kind"] = activity.bodyText("").also(group::addView)
         toggle(group, "Background indexing", indexed, index) { if (it && (if (kind == "contacts") config.search.contacts else config.search.files) && !activity.permitted(kind)) access(kind) }
         statuses[kind] = activity.bodyText("").also(group::addView)
         statuses["work-$kind"] = activity.bodyText("").also(group::addView)
         group.addView(MaterialButton(activity, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
-            text = "Refresh index"; setIconResource(R.drawable.ic_settings_refresh)
+            tag = "refresh-$kind"; text = "Refresh index"; setIconResource(R.drawable.ic_settings_refresh)
             setOnClickListener { feedback(session.commands.retryIndex(kind)); refreshStatus() }
         })
     }
     private fun toggle(content: LinearLayout, title: String, checked: Boolean, key: SettingKey, after: (Boolean) -> Unit = {}) =
-        toggleAction(content, title, checked) { value -> session.commands.toggle(key, value).also { if (it.saved) after(value) } }
-    private fun toggleAction(content: LinearLayout, title: String, checked: Boolean, changed: (Boolean) -> CommandFeedback) {
+        toggleAction(content, SettingsLabels.title(activity, key.name) ?: title, checked, key.name) { value -> session.commands.toggle(key, value).also { if (it.saved) after(value) } }
+    private fun toggleAction(content: LinearLayout, title: String, checked: Boolean, anchor: String? = null, changed: (Boolean) -> CommandFeedback) {
         var reverting = false
         content.addView(MaterialSwitch(activity).apply {
-            text = title; isChecked = checked; minimumHeight = activity.dp(56)
+            tag = anchor; text = title; isChecked = checked; minimumHeight = activity.dp(56)
             setOnCheckedChangeListener { _, value ->
                 if (!reverting) {
                     val result = changed(value)
@@ -182,8 +183,8 @@ internal class SettingsPages(
         } catch (_: Exception) { statuses.values.forEach { it.text = "Status unavailable; try again" } }
     }
     private fun feedback(result: CommandFeedback): Boolean { result.message?.let(activity::message); return result.saved }
-    private fun row(content: LinearLayout, title: String, subtitle: String?, icon: Int, action: () -> Unit) {
-        content.addView(activity.iconRow(title, icon, subtitle, minHeightDp = 72, onClick = action).apply { isFocusable = true })
+    private fun row(content: LinearLayout, title: String, subtitle: String?, icon: Int, anchor: String? = null, action: () -> Unit) {
+        content.addView(activity.iconRow(if (anchor == "tutorial") title else anchor?.let { SettingsLabels.title(activity, it) } ?: title, icon, subtitle, minHeightDp = 72, onClick = action).apply { tag = anchor; isFocusable = true })
     }
     private fun link(url: String) = activity.openLink(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     private fun gridLabel(grid: IconGrid?) = grid?.let { "${it.columns} × ${it.rows}" } ?: "Automatic"

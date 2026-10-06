@@ -56,6 +56,29 @@ internal class SearchController(private val activity: MainActivity) {
     internal val indexingFiles get() = with(activity) { sources.indexingFiles }
     internal val fileLoadFailed get() = with(activity) { sources.fileLoadFailed }
     internal val fileScanSkipped get() = with(activity) { sources.fileScanSkipped }
+    private val settingsRouter by lazy { AndroidSettingsRouter(activity) }
+    private val groveMatcher = SettingsMatcher(SettingsLabels.localize(activity, SettingsCatalogue.grove))
+    private var androidSettings = emptyList<SettingsEntry>()
+    private var androidMatcher = SettingsMatcher(emptyList())
+    private var settingsRefreshGeneration = 0
+    private var settingsMatches = SettingsMatches(emptyList(), emptyList())
+    private var settingsQuery = ""
+
+    internal fun refreshSettings() {
+        val generation = ++settingsRefreshGeneration
+        if (searchWorker.isShutdown) return
+        searchWorker.execute {
+            val snapshot = SettingsLabels.localize(activity, settingsRouter.snapshot())
+            activity.runOnUiThread {
+                if (generation != settingsRefreshGeneration || activity.isDestroyed || !activity.searchMode) return@runOnUiThread
+                if (androidSettings != snapshot) {
+                    androidSettings = snapshot
+                    androidMatcher = SettingsMatcher(snapshot)
+                    renderSearch(searchField?.text?.toString().orEmpty())
+                }
+            }
+        }
+    }
     private var lastApps = emptyList<App>()
     private var lastContacts = emptyList<ContactIndex.Contact>()
     private var lastFiles = emptyList<IndexedFile>()
@@ -85,6 +108,7 @@ internal class SearchController(private val activity: MainActivity) {
     fun shutdown() { liveContactWorker.shutdownNow(); liveFileWorker.shutdownNow() }
 
     fun reconcileAccess() {
+        refreshSettings()
         with(activity) {
             val query = searchField?.text?.toString().orEmpty()
             cancelPending()
@@ -169,10 +193,10 @@ internal class SearchController(private val activity: MainActivity) {
             drawer = false; searchMode = true; homeController.base(readableBackdrop = true)
             root.addView(wallpaperLabel("Search", 30f))
             val field = EditText(this).apply {
-                hint = "Apps, contacts, files, web, and Play Store"
+                hint = getString(R.string.settings_search_hint)
                 filters = arrayOf(InputFilter.LengthFilter(256))
                 setSingleLine(); setTextColor(Color.WHITE); setHintTextColor(0xffc1ccc5.toInt())
-                contentDescription = "Search apps, contacts, files, Google, and Play Store"
+                contentDescription = getString(R.string.settings_search_description)
             }
             searchField = field
             root.addView(field)
@@ -185,6 +209,7 @@ internal class SearchController(private val activity: MainActivity) {
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderSearch(s.toString())
                 override fun afterTextChanged(s: Editable?) {}
             })
+            refreshSettings()
             renderSearch("")
             if (animate) homeController.enterContent(-maxOf(surface.height, resources.displayMetrics.heightPixels).toFloat())
             field.requestFocus()
@@ -206,6 +231,8 @@ internal class SearchController(private val activity: MainActivity) {
                 displaySearch(target, query, emptyList(), emptyList(), emptyList())
                 return
             }
+            val settingsSnapshot = androidSettings
+            val matcherSnapshot = androidMatcher
             val appSnapshot = catalogController.appSearch
             val contactSnapshot = contactSearch
             val fileSnapshot = fileSearch
@@ -221,6 +248,8 @@ internal class SearchController(private val activity: MainActivity) {
                 if (searchWorker.isShutdown) return@Runnable
                 searchWorker.execute {
                     if (generation != searchGeneration) return@execute
+                    val groveMatches = groveMatcher.matching(query)
+                    val androidMatches = SettingsSearchFallback.rows(matcherSnapshot.matching(query), settingsSnapshot)
                     val matchingApps = SearchResults.matching(appSnapshot, prepared, 12)
                     if (generation != searchGeneration) return@execute
                     val matchingContacts = if (config.contacts && config.contactIndexing && hasContactAccess())
@@ -231,6 +260,7 @@ internal class SearchController(private val activity: MainActivity) {
                     runOnUiThread {
                         if (generation != searchGeneration || !searchMode || searchResults !== target) return@runOnUiThread
                         pendingSearch = null
+                        settingsQuery = query; settingsMatches = SettingsMatches(groveMatches, androidMatches)
                         lastApps = matchingApps; lastContacts = matchingContacts; lastFiles = matchingFiles
                         displaySearch(target, query, matchingApps, matchingContacts, matchingFiles)
                         if (contactLive) queryLiveContacts(generation, query, prepared)
@@ -308,6 +338,8 @@ internal class SearchController(private val activity: MainActivity) {
                             .onFailure { message("This app is unavailable"); catalogController.loadApps() }
                     }, menu = { actionController.appMenu(app) }) },
                 catalogController.state, retryApps = { catalogController.loadApps() },
+                groveSettings = (if (query == settingsQuery) settingsMatches.grove else emptyList()).map { SettingsSearchPresentation.row(this, settingsRouter, it) },
+                androidSettings = (if (query == settingsQuery) settingsMatches.android else emptyList()).map { SettingsSearchPresentation.row(this, settingsRouter, it) },
                 (if (configController.config.search.contacts && hasContactAccess()) {
                     if (configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed) matchingContacts else liveContacts
                 } else emptyList()).map { contact -> SearchScreen.ContactRow(contact.id, contact.name) { actionController.contactMenu(contact) } },

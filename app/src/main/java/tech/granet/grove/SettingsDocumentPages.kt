@@ -24,14 +24,14 @@ internal class SettingsDocumentPages(
             "configuration" -> {
                 val transfer = SettingsGroups.card(content, "Import and export")
                 transfer.addView(activity.bodyText("Import or export your launcher choices. Widget IDs and Android grants remain on this device."))
-                button(transfer, "Import configuration", pickImport)
-                button(transfer, "Export configuration", pickExport)
+                button(transfer, "Import configuration", "import", pickImport)
+                button(transfer, "Export configuration", "export", pickExport)
                 val advanced = SettingsGroups.card(content, "Advanced")
                 button(advanced, "Advanced editor") {
                     if (session.draft == null) { session.draft = snapshot.config.json(); session.editorBase = snapshot }
                     navigate("editor")
                 }
-                val recovery = SettingsGroups.card(content, "Recovery and defaults")
+                val recovery = SettingsGroups.card(content, "Recovery and defaults").apply { tag = "recovery" }
                 if ((activity.application as GroveApp).settingsStore.brokenCustomConfig != null)
                     button(recovery, "Recover preserved configuration") { navigate("recovery") }
                 button(recovery, "Restore defaults") { navigate("defaults") }
@@ -42,7 +42,7 @@ internal class SettingsDocumentPages(
                     session.draft = (activity.application as GroveApp).settingsStore.brokenCustomConfig ?: snapshot.config.json()
                     session.editorBase = snapshot; navigate("editor")
                 }
-                button(content, "Import a replacement", pickImport)
+                button(content, "Import a replacement", action = pickImport)
                 button(content, "Restore defaults") { navigate("defaults") }
             }
             "defaults" -> {
@@ -110,7 +110,7 @@ internal class SettingsDocumentPages(
             }
         }
     }
-    private fun button(content: LinearLayout, title: String, action: () -> Unit): MaterialButton = MaterialButton(activity).apply {
-        text = title; minimumHeight = activity.dp(48); setOnClickListener { action() }; content.addView(this)
+    private fun button(content: LinearLayout, title: String, anchor: String? = null, action: () -> Unit): MaterialButton = MaterialButton(activity).apply {
+        tag = anchor; text = anchor?.let { SettingsLabels.title(activity, it) } ?: title; minimumHeight = activity.dp(48); setOnClickListener { action() }; content.addView(this)
     }
 }

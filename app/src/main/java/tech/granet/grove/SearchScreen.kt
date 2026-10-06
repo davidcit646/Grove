@@ -16,6 +16,7 @@ import tech.granet.grove.ui.wallpaperLabel
 internal class SearchScreen(private val context: Context) {
     data class AppRow(val key: String, val label: String, val icon: Bitmap?, val open: () -> Unit, val menu: () -> Unit)
     data class FileRow(val file: IndexedFile, val open: () -> Unit, val menu: () -> Unit)
+    data class SettingsRow(val id: String, val title: String, val breadcrumb: String, val icon: Int, val open: () -> Unit)
     data class ContactRow(val id: Long, val name: String, val open: () -> Unit)
 
     private val frames = SearchFrameGate()
@@ -39,6 +40,7 @@ internal class SearchScreen(private val context: Context) {
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>,
                appState: CatalogState, retryApps: () -> Unit,
+               groveSettings: List<SettingsRow>, androidSettings: List<SettingsRow>,
                contacts: List<ContactRow>, files: List<FileRow>,
                contactState: SearchSourceState, requestContactAccess: () -> Unit,
                retryContacts: () -> Unit, fileState: SearchSourceState,
@@ -47,7 +49,9 @@ internal class SearchScreen(private val context: Context) {
                searchStore: () -> Unit, storeMenu: () -> Unit) {
         val fingerprint = listOf(query.trim(), appState, contactState, fileState,
             apps.map { Triple(it.key, it.label, it.icon) },
-            contacts.map { it.id to it.name }, files.map { it.file })
+            contacts.map { it.id to it.name }, files.map { it.file },
+            groveSettings.map { listOf(it.id, it.title, it.breadcrumb, it.icon) },
+            androidSettings.map { listOf(it.id, it.title, it.breadcrumb, it.icon) })
         if (!frames.shouldRender(target, fingerprint)) return
         target.removeAllViews()
         if (Search.prepare(query).text.isEmpty()) return
@@ -64,6 +68,10 @@ internal class SearchScreen(private val context: Context) {
             is CatalogState.Degraded -> target.addView(context.wallpaperLabel(
                 "Some app icons are unavailable; app names and actions still work.", 14f))
             else -> Unit
+        }
+        listOf(context.getString(R.string.settings_search_grove_heading) to groveSettings, context.getString(R.string.settings_search_android_heading) to androidSettings).forEach { (title, entries) ->
+            if (entries.isNotEmpty()) target.addView(heading(title, R.drawable.ic_setup_settings))
+            entries.forEach { entry -> target.addView(row(entry.title, entry.icon, entry.breadcrumb, action = entry.open)) }
         }
         if (contactState !is SearchSourceState.Disabled &&
             (contacts.isNotEmpty() || contactState !is SearchSourceState.Ready))
