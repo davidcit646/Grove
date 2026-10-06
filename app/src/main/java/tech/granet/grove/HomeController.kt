@@ -16,6 +16,7 @@ import java.util.*
 internal class HomeController(private val activity: MainActivity) {
     internal lateinit var body: LinearLayout
     internal var homeScrollY = 0
+    private var gridPage = 0
     fun bodyInitialized() = ::body.isInitialized
 
     fun button(text: String, action: () -> Unit): MaterialButton = with(activity) { MaterialButton(this).apply {
@@ -124,15 +125,41 @@ internal class HomeController(private val activity: MainActivity) {
 
     fun addGrid(items: List<App>, target: LinearLayout) {
         with(activity) {
-            val columns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
-            items.chunked(columns).forEach { group ->
+            val grid = configController.config.homeGrid
+            val columns = GridPolicy.columns(grid, resources.configuration.screenWidthDp)
+            gridPage = GridPolicy.page(gridPage, items.size, grid)
+            val displayed = GridPolicy.items(items, gridPage, grid)
+            val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val groups = displayed.chunked(columns)
+            val rowCount = grid?.rows ?: groups.size
+            val height = if (grid == null) null else maxOf(dp(112), (surface.height - dp(240)) / grid.rows)
+            repeat(rowCount) { index ->
                 val row = LinearLayout(this)
+                val group = groups.getOrNull(index).orEmpty()
                 group.forEach { app ->
-                    val tile = drawerController.createTile(); drawerController.bindTile(tile, app); pinDragController.attach(tile.layout, app)
-                    row.addView(tile.layout, LinearLayout.LayoutParams(0, -2, 1f))
+                    val tile = drawerController.createTile(height)
+                    drawerController.bindTile(tile, app); pinDragController.attach(tile.layout, app)
+                    row.addView(tile.layout, LinearLayout.LayoutParams(0, height ?: -2, 1f))
                 }
-                repeat(columns - group.size) { row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f)) }
-                target.addView(row)
+                repeat(columns - group.size) { row.addView(View(this), LinearLayout.LayoutParams(0, height ?: 1, 1f)) }
+                rows.addView(row)
+            }
+            if (grid == null) target.addView(rows) else {
+                val width = maxOf(resources.displayMetrics.widthPixels - dp(40), columns * dp(72))
+                target.addView(HorizontalScrollView(this).apply {
+                    isFillViewport = true; addView(rows, android.view.ViewGroup.LayoutParams(width, -2))
+                })
+                val count = GridPolicy.pageCount(items.size, grid)
+                val navigation = LinearLayout(this)
+                fun move(delta: Int) {
+                    gridPage = (gridPage + delta).coerceIn(0, count - 1)
+                    showHome()
+                    root.post { (body.parent as? ScrollView)?.scrollTo(0, 0); homeScrollY = 0 }
+                }
+                navigation.addView(button("Previous") { move(-1) }.apply { isEnabled = gridPage > 0 }, LinearLayout.LayoutParams(0, -2, 1f))
+                navigation.addView(wallpaperLabel("${gridPage + 1} / $count").apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -1, 1f))
+                navigation.addView(button("Next") { move(1) }.apply { isEnabled = gridPage < count - 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+                target.addView(navigation)
             }
         }
     }

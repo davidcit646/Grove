@@ -65,7 +65,7 @@ class ConfigTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun unknownVersionRejected() { Config.parse("""{"version":11,"wallpaper":"grove-fern","favorites":[]}""") }
+    fun unknownVersionRejected() { Config.parse("""{"version":12,"wallpaper":"grove-fern","favorites":[]}""") }
 
     @Test fun versionEightNumericWallpaperMigratesToStableIdOnExport() {
         val migrated = Config.parse("""{"version":8,"wallpaper":14,"favorites":[]}""")

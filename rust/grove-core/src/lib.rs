@@ -90,6 +90,20 @@ mod tests {
     }
 
     #[test]
+    fn grids_validate_types_bounds_and_legacy() {
+        for columns in 1..=10 {
+            for rows in 1..=10 {
+                let json = format!(r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","homeGrid":{{"columns":{},"rows":{}}}}}"#, columns, rows);
+                assert!(validate_config(&json).is_ok());
+            }
+        }
+        for value in ["0", "11", "1.5", "\"4\"", "true", "null"] {
+            let json = format!(r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","drawerGrid":{{"columns":{},"rows":2}}}}"#, value);
+            assert!(validate_config(&json).is_err());
+        }
+    }
+
+    #[test]
     fn categories_and_configs() {
         assert_eq!(classify("m4a"), Some(("audio/mp4", "Audio")));
         assert_eq!(classify("mkv"), Some(("video/x-matroska", "Videos")));

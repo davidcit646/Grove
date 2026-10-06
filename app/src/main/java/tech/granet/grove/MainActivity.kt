@@ -159,6 +159,10 @@ class MainActivity : AppCompatActivity() {
             }
         }.onFailure { Log.w("Grove", "Setup state unavailable", it) }
         startupController.beginHome()
+        (application as GroveApp).settingsChanges.observe(this) {
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) && !startupController.coreRecoveryVisible)
+                configController.resume()
+        }
         root.post { if (!isDestroyed) presentationController.start() }
     }
 
@@ -169,11 +173,15 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onResume() {
         super.onResume()
+        if (!startupController.coreRecoveryVisible) configController.resume()
         presentationController.refresh()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
         if (searchMode) searchController.reconcileAccess()
         startupController.applyStartupPlan(StartupCoordinator.resume())
+        if (setupController.setupPending()) root.post {
+            if (!isDestroyed && !startupController.coreRecoveryVisible) setupController.startFirstRunSetup()
+        }
     }
 
     override fun onStop() {
@@ -212,7 +220,15 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
         if (drawer || searchMode) homeController.showHome()
-        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.settings() }
+        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.launcherSettings() }
+        intent.getStringExtra("settingsAction")?.let { action ->
+            intent.removeExtra("settingsAction")
+            root.post { when (action) {
+                "wallpaper" -> wallpaperPresentationController.wallpapers()
+                "widget" -> widgetFlow.pick()
+                "folders" -> { drawerController.showDrawer(false); drawerController.drawerOptions() }
+            } }
+        }
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
