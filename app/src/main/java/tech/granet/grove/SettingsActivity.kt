@@ -34,7 +34,7 @@ class SettingsActivity : AppCompatActivity() {
     private val motion = FirstRunMotion()
     private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(session::readDocument) }
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(session::export) }
-    private val contacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { if (::pages.isInitialized) pages.refreshStatus() }
+    private val contacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { reconcileAccess(); if (::pages.isInitialized) pages.refreshStatus() }
     private val homeRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if (::pages.isInitialized) pages.refreshStatus() }
     override fun onCreate(state: Bundle?) {
         DynamicColors.applyToActivityIfAvailable(this)
@@ -111,10 +111,15 @@ class SettingsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::pages.isInitialized) {
+            reconcileAccess()
             if (session.repository.snapshot().revision != renderedRevision) { applyTheme(); render() }
             if (routes.last() == "help") render()
             pages.refreshStatus()
         }
+    }
+    private fun reconcileAccess() {
+        IndexWork.reconcile(applicationContext, "contacts")
+        IndexWork.reconcile(applicationContext, "files")
     }
     override fun onStop() { motion.finish(); super.onStop() }
     override fun onDestroy() { motion.finish(); super.onDestroy() }
