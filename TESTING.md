@@ -274,3 +274,16 @@ Pending Android device acceptance:
 These issues remain open for device acceptance; no merge or release was performed.
 
 Debug Grove Test APK: `Grove-Juniper-tutorials-193c30f.apk`, SHA-256 `57be0c076c7de9824508798360c19a9ca3a6c6a2ee8ddcac9686d5e7e179dc4e`. Verified the GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.
+
+### Search tutorial operating-agreement fixes — 2026-10-06
+
+Source `60f8f7fe1beeb0ad08219cc1e82ccfbcbed68f8d` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37476750855): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. Eight new tests cover repeated failed explicit replay requests, a newer request retry, Home preparation before rendering, partial presentation/preparation failures, failed completion, refresh suppression/recreation and registered safe Continue routes. These session/registry tests do not constitute Android view or dialog fault-injection proof.
+
+The user confirmed the preceding tutorial APK works in their tested workflows. That functional acceptance does not establish the rare failure paths added here. Pending device checks for this follow-up:
+
+- Queue Search tutorial replay in Help, return Home, swipe down to open it, then Close/Back on its first page. Home must stay at its original position with scroll and widgets preserved. Repeat via the Search button and complete the guide normally.
+- Exercise replay and rotation. A failed presentation/refresh/save should offer a scoped Continue/Report dialog and usable Search; the same failed request must not repeatedly reopen the guide in the session, including recreation. A new explicit replay can retry. Report stays user-reviewed and is never sent automatically.
+
+GROVE-STATUS.md is unchanged. PR #92 remains unmerged and stacked on PR #90.
+
+Debug APK: `Grove-Juniper-audit-60f8f7f.apk`, SHA-256 `ea51e905f61909741ef52bff096d29c2fdb6ef6c015e71e049ee5f10571090e5`. Verified artifact archive digest, APK ZIP integrity, manifest and three Rust ABIs.
