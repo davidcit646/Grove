@@ -16,6 +16,7 @@ import tech.granet.grove.ui.wallpaperLabel
 internal class SearchScreen(private val context: Context) {
     data class AppRow(val key: String, val label: String, val icon: Bitmap?, val open: () -> Unit, val menu: () -> Unit)
     data class FileRow(val file: IndexedFile, val open: () -> Unit, val menu: () -> Unit)
+    data class SettingsRow(val id: String, val title: String, val breadcrumb: String, val icon: Int, val open: () -> Unit)
     data class ContactRow(val id: Long, val name: String, val open: () -> Unit)
 
     private val frames = SearchFrameGate()
@@ -38,19 +39,41 @@ internal class SearchScreen(private val context: Context) {
     }
 
     fun render(target: LinearLayout, query: String, apps: List<AppRow>,
+               calculation: SearchCalculator.Result, openCalculator: () -> Unit,
                appState: CatalogState, retryApps: () -> Unit,
+               groveSettings: List<SettingsRow>, androidSettings: List<SettingsRow>,
+               settingsUnavailable: Boolean, retrySettings: () -> Unit,
                contacts: List<ContactRow>, files: List<FileRow>,
                contactState: SearchSourceState, requestContactAccess: () -> Unit,
                retryContacts: () -> Unit, fileState: SearchSourceState,
                requestFileAccess: () -> Unit, retryFiles: () -> Unit,
                searchGoogle: () -> Unit, googleMenu: () -> Unit,
                searchStore: () -> Unit, storeMenu: () -> Unit) {
-        val fingerprint = listOf(query.trim(), appState, contactState, fileState,
+        val fingerprint = listOf(query.trim(), calculation, appState, contactState, fileState, settingsUnavailable,
             apps.map { Triple(it.key, it.label, it.icon) },
-            contacts.map { it.id to it.name }, files.map { it.file })
+            contacts.map { it.id to it.name }, files.map { it.file },
+            groveSettings.map { listOf(it.id, it.title, it.breadcrumb, it.icon) },
+            androidSettings.map { listOf(it.id, it.title, it.breadcrumb, it.icon) })
         if (!frames.shouldRender(target, fingerprint)) return
         target.removeAllViews()
         if (Search.prepare(query).text.isEmpty()) return
+        when (calculation) {
+            is SearchCalculator.Result.Answer -> {
+                target.addView(heading(context.getString(R.string.calculator_heading), R.drawable.ic_calculate))
+                val value = if (calculation.approximate) context.getString(R.string.calculator_approximate, calculation.value) else calculation.value
+                target.addView(row(value, R.drawable.ic_calculate,
+                    context.getString(R.string.calculator_open, calculation.expression), action = openCalculator))
+            }
+            is SearchCalculator.Result.Invalid -> {
+                target.addView(heading(context.getString(R.string.calculator_heading), R.drawable.ic_calculate))
+                target.addView(context.wallpaperLabel(context.getString(when (calculation.reason) {
+                    SearchCalculator.Reason.SYNTAX -> R.string.calculator_syntax
+                    SearchCalculator.Reason.DIVISION_BY_ZERO -> R.string.calculator_zero
+                    SearchCalculator.Reason.LIMIT -> R.string.calculator_limit
+                }), 14f))
+            }
+            SearchCalculator.Result.NotCalculation -> Unit
+        }
         if (apps.isNotEmpty() || appState is CatalogState.Loading || appState is CatalogState.Failed ||
             appState is CatalogState.Degraded) target.addView(heading("APPS", R.drawable.ic_grid))
         apps.forEach { app ->
@@ -65,6 +88,13 @@ internal class SearchScreen(private val context: Context) {
                 "Some app icons are unavailable; app names and actions still work.", 14f))
             else -> Unit
         }
+        listOf(Triple(context.getString(R.string.settings_search_grove_heading), groveSettings, false),
+            Triple(context.getString(R.string.settings_search_android_heading), androidSettings, settingsUnavailable)).forEach { (title, entries, unavailable) ->
+            if (entries.isNotEmpty() || unavailable) target.addView(heading(title, R.drawable.ic_setup_settings))
+            entries.forEach { entry -> target.addView(row(entry.title, entry.icon, entry.breadcrumb, action = entry.open)) }
+        }
+        if (settingsUnavailable) target.addView(row(context.getString(R.string.settings_search_retry), R.drawable.ic_setup_settings,
+            context.getString(R.string.settings_search_unavailable), action = retrySettings))
         if (contactState !is SearchSourceState.Disabled &&
             (contacts.isNotEmpty() || contactState !is SearchSourceState.Ready))
             target.addView(heading("CONTACTS", R.drawable.ic_contact))

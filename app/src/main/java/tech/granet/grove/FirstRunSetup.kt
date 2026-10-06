@@ -59,10 +59,12 @@ internal class FirstRunSetup(
     private lateinit var previous: MaterialButton
     private lateinit var next: MaterialButton
     private val pages = FirstRunPages(context, state, apps, hasContacts, hasFiles,
-        requestContacts, requestFiles, ::refreshPage)
+        requestContacts, requestFiles, ::refreshPage, { overlay })
 
     init {
         if (restored != null) try {
+            val savedBase = restored.getString("base")?.let(ConfigStore::parse)
+            require(savedBase == null || savedBase == initial) { "Settings changed since setup snapshot" }
             val config = ConfigStore.parse(requireNotNull(restored.getString("answers")))
             state.restore(config, restored.getInt("page"), restored.getBoolean("up"),
                 restored.getBoolean("down"), restored.getBoolean("hold"))
@@ -70,6 +72,7 @@ internal class FirstRunSetup(
     }
 
     fun saveState(): Bundle = Bundle().apply {
+        putString("base", initial.json())
         putString("answers", state.snapshot().json()); putInt("page", state.page)
         putBoolean("up", state.practicedUp); putBoolean("down", state.practicedDown)
         putBoolean("hold", state.practicedHold)
@@ -157,8 +160,9 @@ internal class FirstRunSetup(
     fun refreshPermissions() {
         settleMotion()
         if (state.page == 6 || state.page == 7) refreshPage()
+        else pages.resumePractice()
     }
-    fun settleMotion() { motion.finish(); pane?.alpha = 1f }
+    fun settleMotion() { motion.finish(); pane?.alpha = 1f; pages.pausePractice() }
     fun back() {
         if (motion.busy) return
         if (state.back()) displayPage(forward = false) else { close(); skip() }
@@ -166,9 +170,10 @@ internal class FirstRunSetup(
     private fun refreshPage() { settleMotion(); displayPage() }
     private fun displayPage(forward: Boolean? = null) {
         val target = pageHost ?: return
+        pages.destroyPractice()
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            if (state.page in 0..4) gravity = Gravity.CENTER_VERTICAL
+            if (state.page != 5) gravity = Gravity.CENTER_VERTICAL
             setPadding(0, context.dp(20), 0, context.dp(20))
         }
         pages.render(state.page, content)
@@ -190,6 +195,7 @@ internal class FirstRunSetup(
     }
     private fun close() {
         settleMotion()
+        pages.destroyPractice()
         overlay?.let(host::removeView); overlay = null
         pageHost = null; pageView = null; pane = null
         underlay.visibility = View.VISIBLE

@@ -1,70 +1,50 @@
-# Contact path review — Grove Launcher 0.1.24 (Sept 28, 2026)
+# Grove contact search review
 
-Scope: `ContactIndex.kt`, `MainActivity.contactMenu` / `refreshContacts`, manifest,
-permission flow. Read-only review; no behavior changed.
+Current implementation: PR #92, production/test source `6cafc09247cbc3f96eb1a21a1ebc4bfb025bd130`. [Android CI](https://github.com/davidcit646/Grove/actions/runs/37409473807) passed eight Rust tests, the JVM suite (173 test methods), debug APK assembly, lint and the missing-signing negative gate. Signed release steps were skipped. Device acceptance remains pending. This replaces the older memory-only/MainActivity review; source names below refer to current function bodies, not historical line numbers. GROVE-STATUS.md is unchanged.
 
-## How contact data flows today
+## Ownership and calls
 
-**Getting it**
-- `ContactIndex.load()` queries `ContactsContract.Contacts` (id, lookup key, display
-  name) on a background single-thread executor. Runs on `onResume` when data is >15 min
-  old, on package add/remove/change, and via a `ContentObserver` (400 ms debounce).
-- `ContactIndex.details()` queries `ContactsContract.Data` per contact, on demand, when
-  the contact menu opens: phone numbers + WhatsApp/Messenger channel rows, capped at
-  80 rows.
+| Owner | Authoritative input | Calls and consumers | Failure boundary |
+| --- | --- | --- | --- |
+| SettingsRepository in GroveApp | Confirmed persisted Config | SettingsCommands and ConfigController publish revisioned settings; IndexWork and ContactChanges read the shared snapshot | Failed persistence cannot change active settings; Android grants remain separate truth |
+| ContactChanges in GroveApp | Contact search enabled + current READ_CONTACTS grant | Main/Settings reconcile its single application-context observer; provider events invalidate live queries and cache freshness; eligible indexing requests PROVIDER_CHANGE | No Activity retained; indexing off does not disable permitted live invalidation; observer failure is visible in Settings |
+| IndexWork / IndexRecoveryPolicy | Current settings/grant + per-source persisted token + actual WorkManager state | Typed MANUAL/PROVIDER_CHANGE/STALE_CACHE/REPAIR requests; serial off-thread reconciliation; Worker begin/finished; Operation.result completion | Missing/terminal work releases only its matching reservation; enqueue failure is scoped; active work coalesces to at most one follow-up |
+| IndexWorker / ContactIndex.load | Permission/settings/token checked throughout scan | Contacts Provider aggregate rows → bounded Contact records → atomic IndexCache commit | Canceled/superseded work cannot commit; retry is bounded; provider null/throw is unavailable rather than empty |
+| IndexCache / IndexMetadata | Validated private JSON or confirmed atomic write | Cache generations feed SearchSources independently of next job ID; metadata feeds both UIs | UNKNOWN/ABSENT/CORRUPT/AVAILABLE, partial coverage and freshness stay explicit; metadata access has a separate lock from snapshot I/O |
+| SearchSources | Eligible committed cache generation | One worker load per generation → prepared immutable search snapshot → redraw | Current load generation, cache generation, settings/grant and host lifetime gate UI publication; invalid cache retains permitted live fallback |
+| SearchController | Current query generation + eligible cache/live source | Debounce → existing fuzzy ranking → SearchSourceState → SearchScreen | Live scan has 2.5-second cancellation deadline and 50,000 raw-row budget; exhausted scan is Partial, valid empty is Ready(0), external cancellation cannot publish |
+| ContactIndex.details / ContactActions | Cached lookup URI resolved to current contact identity + current grant/source/package | Current Data rows → menu → fresh detail comparison → dial/message/channel/view/edit intent | Deleted or changed contact requires reopening menu; permission is checked again at launch; details/actions run off the UI thread |
+| LauncherPackageEvents / catalogue | External package/component events | Reload application catalogue only; ignore Grove's own component events | No contact-index dependency; WorkManager receiver changes cannot request contact work or catalogue reload |
 
-**Storing it**
-- Memory only. `MainActivity.contacts` holds id + lookup key + display name (+ a
-  normalized search form). Phone numbers and channel rows are fetched on demand and
-  dropped after the menu closes. Nothing contact-related is written to disk, Config,
-  or logs intentionally. This is the right design — keep it that way.
+## Fixed findings
 
-**Already good (do not "fix")**
-- `READ_CONTACTS` is requested on demand; denial yields an empty list, no crash.
-- Dial/SMS go through `Intent.createChooser` — the user picks the app every time
-  (Phone, Google Voice, Linphone…), no silent default routing.
-- Channel intents grant `FLAG_GRANT_READ_URI_PERMISSION` on a single Data row —
-  minimal scope.
-- Truncation caps everywhere (512-char names, 128-char numbers, 256-char mimetypes,
-  80 rows/contact, 50k contacts) — memory-exhaustion hardening.
-- Lookup URIs (not raw ids) for view/edit intents — resilient to contact aggregation.
+| Issue | Correction |
+| --- | --- |
+| #93 | Removed generic package callbacks from contact scheduling and filtered own-package catalogue events |
+| #94 | Required explicit refresh causes; only provider changes inherit the provider delay |
+| #95 | Reconciled orphan reservations against WorkManager and observed asynchronous enqueue completion |
+| #96 | Published actual cache commits independently of a queued successor's job ID; rejected superseded snapshot reads |
+| #97 | Reconciled both sources after Settings permission results and system return/resume |
+| #98 | Persisted one automatic repair attempt; success/manual retry resets it; running repairs retain coalesced provider follow-up |
+| #99 | Resolved lookup identity before details and revalidated details before actions |
+| #100 | Moved contact observation to the process owner and separated live invalidation from indexing |
+| #101 | Shared validated metadata and current TTL/provider invalidation between Search and Settings |
+| #102 | Bounded live scan time/raw rows while preserving fuzzy ranking and cancellation/empty/partial distinctions |
 
-## Performance
+The second device recording showed repeated Running/Idle contact jobs with a saved cache still present. The source contained a feedback edge from Grove's own WorkManager component package changes back to contact scheduling, bypassing the provider throttle. That edge is removed. The recording alone did not establish a crash or identify every runtime callback; actual idle stability requires the device recheck.
 
-- **P1 — Menu queries queue behind bulk reloads.** `contactMenu`'s `details()` runs on
-  `contactWorker`, the same single thread as full `load()` refreshes. A large contact
-  list refreshing in the background stalls menu opening. *Fix:* give on-demand
-  `details()` its own executor (or a second thread).
-- **P2 — No cache on `details()`.** Every menu open re-queries the provider, even for
-  the same contact seconds apart. *Fix:* small LRU (e.g. 32 entries) keyed by contact
-  id, invalidated by bumping a generation counter in the `ContentObserver`.
-- **P3 — Observer-triggered reloads can hot-loop.** Any contact change (e.g. an active
-  Google sync writing hundreds of rows) schedules a full reload after 400 ms, each of
-  which re-renders search. *Fix:* coalesce — skip observer refreshes within ~30 s of
-  the last completed load unless forced.
-- **P4 (low) — Full reload every 15 min** rebuilds all normalized search names.
-  Incremental refresh via `CONTACT_LAST_UPDATED_TIMESTAMP` is possible but not worth
-  it unless P3 shows up in practice.
+## Cache and scheduling invariants
 
-## Security
+Contact caches contain only aggregate ID, lookup key, display name, writtenAt and coverage. Numbers/channels are queried on demand and are not persisted in Config or the index. Caches are device-private, disposable and excluded from backup. Indexing/search disable or permission loss cancels protected work and clears the relevant cache during capability reconciliation. Unrelated app search/Home remain available.
 
-- **S1 — Log hygiene.** `Log.w("Grove", "Cannot read contact details", it)` attaches the
-  throwable; on some devices its message can embed a contact URI / lookup key.
-  *Fix:* log the exception class only, never the throwable carrying a URI.
-- **S2 — No permission rationale.** `requestContactAccess()` fires the system dialog
-  with no in-app explanation of why a launcher wants contacts. *Fix:* short rationale
-  dialog first ("Grove searches your contacts from search; names stay on this device").
-  Also a Play-data-safety plus.
-- **S3 — wa.me number disclosure (inherent).** Opening `https://wa.me/<digits>` hands
-  the number to WhatsApp/Meta even if the user backs out without sending. The new
-  gating (only offered for contacts with real WhatsApp sync data) already limits this
-  to genuine WhatsApp contacts; just don't loosen it later.
-- **S4 — Keep storage memory-only.** If anyone proposes a disk cache of contacts for
-  speed, it must be encrypted (or better: cache only id+name hashes, never numbers).
+Cache freshness is evaluated when used: 15 minutes for contacts, 24 hours for files, rejecting future timestamps and provider-invalidated snapshots. Hitting a count bound remains partial. A provider event during a scan keeps its published snapshot invalid until the coalesced successor refreshes it. Work status is displayed separately from saved-cache status. Idle does not mean absent, and a queued refresh does not hide a committed snapshot.
 
-## Suggested order for Codex
+Automatic repair is bounded across process recreation. Repeated corruption does not rebuild indefinitely; manual Retry permits recovery. Scheduling acceptance means a request was received, not that WorkManager has confirmed enqueue or a cache has been written. Off-thread operation completion and scoped failure state supply those distinctions.
 
-1. S2 rationale dialog (user trust, cheap).
-2. S1 log scrub (cheap).
-3. P1 separate executor for `details()` (fixes real latency).
-4. P2 LRU for `details()` + P3 refresh coalescing (only if P1/P2 leave visible jank).
+Live deadlines use Android CancellationSignal; an OEM provider that ignores cancellation cannot be forcibly terminated safely. The deadline is a cancellation request, not proof of a hard wall-clock guarantee on every device.
+
+## Verification boundary
+
+ContactLifecycleTest covers own-component feedback isolation, external catalogue events, orphan/terminal/superseded reservations, repair policy with running follow-up, raw-row/deadline budgets, cache TTL/clock reversal/invalidation and explicit causes. IndexRefreshRequestsTest covers queued/running notification bursts, one deferred follow-up and scheduling/marker failure. Existing access, publication, ranking and action helper tests remain in the suite.
+
+Actual WorkManager persistence/failure, observer registration/lifetime, provider cancellation and Android contact aggregation need instrumented/device evidence. See TESTING.md → Contact-path fixes #93–#102. Issues remain open and PR #92 remains draft pending acceptance/integration.

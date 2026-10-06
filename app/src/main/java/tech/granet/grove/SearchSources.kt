@@ -32,36 +32,38 @@ internal class SearchSources(
     var fileLoadFailed = false; private set
     var fileScanSkipped = 0; private set
     var contactScanSkipped = 0; private set
-    var contactCacheReady = false; private set
-    var fileCacheReady = false; private set
+    val contactCacheReady get() = IndexCache.metadata("contacts").fresh("contacts") && contactWrittenAt == IndexCache.metadata("contacts").writtenAt
+    private var contactWrittenAt = 0L
+    val fileCacheReady get() = IndexCache.metadata("files").fresh("files") && fileWrittenAt == IndexCache.metadata("files").writtenAt
+    private var fileWrittenAt = 0L
     private var contactCorrupt = false
     private var fileCorrupt = false
     @Volatile private var contactGeneration = 0
     @Volatile private var fileGeneration = 0
-    private val handler = Handler(Looper.getMainLooper())
-    private val contactChange = Runnable { refreshContacts() }
-    private val observer = object : ContentObserver(handler) {
-        override fun onChange(selfChange: Boolean) {
-            handler.removeCallbacks(contactChange)
-            handler.postDelayed(contactChange, 400L)
-        }
-    }
-    private var observing = false
+    private var loadedContacts = -1L
+    private var loadedFiles = -1L
 
     init {
+        (activity.application as GroveApp).contactChanges.changes.observe(activity) { redraw() }
+        IndexCache.changes.observe(activity) { loadContacts(); loadFiles() }
+        IndexWork.failures.observe(activity) { errors ->
+            if (errors.containsKey("contacts")) contactLoadFailed = true
+            if (errors.containsKey("files")) fileLoadFailed = true
+            redraw()
+        }
         try {
             val work = WorkManager.getInstance(activity)
             work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("contacts")).observe(activity, Observer { infos ->
                 val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "contacts") }
                 indexingContacts = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
                 contactLoadFailed = info?.state == WorkInfo.State.FAILED
-                if (info?.state == WorkInfo.State.SUCCEEDED) loadContacts() else redraw()
+                redraw()
             })
             work.getWorkInfosForUniqueWorkLiveData(IndexWork.name("files")).observe(activity, Observer { infos ->
                 val info = infos.firstOrNull { it.id.toString() == IndexWork.currentWorkId(activity, "files") }
                 indexingFiles = info?.state == WorkInfo.State.ENQUEUED || info?.state == WorkInfo.State.RUNNING
                 fileLoadFailed = info?.state == WorkInfo.State.FAILED
-                if (info?.state == WorkInfo.State.SUCCEEDED) loadFiles() else redraw()
+                redraw()
             })
         } catch (error: Exception) {
             contactLoadFailed = true; fileLoadFailed = true
@@ -70,11 +72,8 @@ internal class SearchSources(
     }
 
     fun reconcile() {
+        (activity.application as GroveApp).contactChanges.reconcile()
         if (IndexAccessPolicy.contacts(settings(), hasContactAccess())) {
-            if (!observing) runCatching {
-                activity.contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI, true, observer)
-                observing = true
-            }.onFailure { Log.w("Grove", "Contact observer unavailable", it) }
             loadContacts()
             if (!IndexWork.reconcile(activity, "contacts")) contactLoadFailed = true
         } else clearContacts()
@@ -84,11 +83,14 @@ internal class SearchSources(
         } else clearFiles()
     }
 
-    fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files")) { fileLoadFailed = true; redraw() } }
-    fun refreshContacts() { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts")) { contactLoadFailed = true; redraw() } }
+    fun indexFiles() { if (IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager()) && !IndexWork.enqueue(activity, "files", IndexRefreshCause.MANUAL)) { fileLoadFailed = true; redraw() } }
+    fun refreshContacts(cause: IndexRefreshCause) { if (IndexAccessPolicy.contacts(settings(), hasContactAccess()) && !IndexWork.enqueue(activity, "contacts", cause)) { contactLoadFailed = true; redraw() } }
 
     private fun loadContacts() {
         if (!IndexAccessPolicy.contacts(settings(), hasContactAccess())) return
+        val revision = IndexCache.generation("contacts")
+        if (loadedContacts == revision) return
+        loadedContacts = revision
         val generation = ++contactGeneration
         contactWorker.execute {
             val cache = try { Result.success(run {
@@ -96,11 +98,12 @@ internal class SearchSources(
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { contact -> contact.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
-                if (generation != contactGeneration || activity.isDestroyed || !IndexAccessPolicy.contacts(settings(), hasContactAccess())) return@runOnUiThread
+                if (generation != contactGeneration || revision != IndexCache.generation("contacts") || activity.isDestroyed || !IndexAccessPolicy.contacts(settings(), hasContactAccess())) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         contactCorrupt = false
-                        contactCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(15L * 60_000)
+                        contactWrittenAt = snapshot.writtenAt
+                        contactLoadFailed = false
                         contactScanSkipped = snapshot.skipped
                         if (contacts != snapshot.items) {
                             contacts = snapshot.items
@@ -111,8 +114,7 @@ internal class SearchSources(
                 }.onFailure {
                     contactLoadFailed = true
                     contactCorrupt = true
-                    IndexCache.clear(activity, "contacts")
-                    refreshContacts()
+                    refreshContacts(IndexRefreshCause.REPAIR)
                 }
                 redraw()
             }
@@ -121,6 +123,9 @@ internal class SearchSources(
 
     private fun loadFiles() {
         if (!IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return
+        val revision = IndexCache.generation("files")
+        if (loadedFiles == revision) return
+        loadedFiles = revision
         val generation = ++fileGeneration
         worker.execute {
             val cache = try { Result.success(run {
@@ -128,11 +133,12 @@ internal class SearchSources(
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { file -> file.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
-                if (generation != fileGeneration || activity.isDestroyed || !IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return@runOnUiThread
+                if (generation != fileGeneration || revision != IndexCache.generation("files") || activity.isDestroyed || !IndexAccessPolicy.files(settings(), Environment.isExternalStorageManager())) return@runOnUiThread
                 cache.onSuccess { (snapshot, prepared) ->
                     if (snapshot != null && prepared != null) {
                         fileCorrupt = false
-                        fileCacheReady = System.currentTimeMillis() - snapshot.writtenAt in 0..(24L * 60 * 60_000)
+                        fileWrittenAt = snapshot.writtenAt
+                        fileLoadFailed = false
                         if (files != snapshot.items) {
                             files = snapshot.items
                             fileSearch = prepared
@@ -142,8 +148,7 @@ internal class SearchSources(
                 }.onFailure {
                     fileLoadFailed = true
                     fileCorrupt = true
-                    IndexCache.clear(activity, "files")
-                    indexFiles()
+                    IndexWork.enqueue(activity, "files", IndexRefreshCause.REPAIR)
                 }
                 redraw()
             }
@@ -152,22 +157,21 @@ internal class SearchSources(
 
     fun clearContacts(notify: Boolean = true) {
         contactGeneration++
+        loadedContacts = -1L
         contacts = emptyList(); contactSearch = SearchResults.prepare(contacts) { it.searchName }
-        contactCacheReady = false
+        contactWrittenAt = 0L
         contactScanSkipped = 0
         contactCorrupt = false
         indexingContacts = false; contactLoadFailed = false; lastContactRefresh = 0
-        handler.removeCallbacks(contactChange)
-        if (observing) runCatching { activity.contentResolver.unregisterContentObserver(observer) }
-        observing = false
         IndexWork.cancel(activity, "contacts")
         if (notify) redraw()
     }
 
     fun clearFiles(notify: Boolean = true) {
         fileGeneration++
+        loadedFiles = -1L
         files = emptyList(); fileSearch = SearchResults.prepare(files) { it.searchName }
-        fileCacheReady = false
+        fileWrittenAt = 0L
         fileCorrupt = false
         indexingFiles = false; fileLoadFailed = false; fileScanSkipped = 0
         IndexWork.cancel(activity, "files")
@@ -176,9 +180,6 @@ internal class SearchSources(
 
     fun shutdown() {
         contactGeneration++; fileGeneration++
-        handler.removeCallbacks(contactChange)
-        if (observing) runCatching { activity.contentResolver.unregisterContentObserver(observer) }
-        observing = false
         contactWorker.shutdownNow()
         // Persistent work survives Activity destruction.
     }
@@ -187,7 +188,7 @@ internal class SearchSources(
         val files = kind == "files"
         val enabled = if (files) settings().fileIndexing else settings().contactIndexing
         val permitted = if (files) Environment.isExternalStorageManager() else hasContactAccess()
-        val exists = java.io.File(activity.filesDir, "grove-$kind-index.json").exists()
+        val exists = IndexCache.metadata(kind).validity == IndexValidity.AVAILABLE
         val state = IndexState.resolve(enabled, permitted, exists,
             if (files) fileCacheReady else contactCacheReady,
             if (files) indexingFiles else indexingContacts,

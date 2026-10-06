@@ -11,8 +11,8 @@ android {
         manifestPlaceholders["appLabel"] = "Grove Launcher"
         minSdk = 31
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.1.30-alpha"
+        versionCode = 32
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

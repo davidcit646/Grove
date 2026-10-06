@@ -22,6 +22,23 @@ mod tests {
     }
 
     #[test]
+    fn search_provider_schema_matches_kotlin_validation() {
+        for mask in 0..8 {
+            let json = format!(r#"{{"version":12,"wallpaper":"solid-black","favorites":[],"themeMode":"system","search":{{"calculator":{},"androidSettings":{},"groveSettings":{}}}}}"#,
+                mask & 1 != 0, mask & 2 != 0, mask & 4 != 0);
+            assert!(validate_config(&json).is_ok());
+        }
+        for field in ["calculator", "androidSettings", "groveSettings"] {
+            for value in ["1", "null", "\"true\"", "{}"] {
+                let json = format!(r#"{{"version":12,"wallpaper":"solid-black","favorites":[],"themeMode":"system","search":{{"{}":{}}}}}"#, field, value);
+                assert!(validate_config(&json).is_err());
+            }
+        }
+        assert!(validate_config(r#"{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system"}"#).is_ok());
+        assert!(validate_config(r#"{"version":13,"wallpaper":"solid-black","favorites":[],"themeMode":"system"}"#).is_err());
+    }
+
+    #[test]
     fn theme_schema_accepts_all_modes_and_rejects_invalid_values() {
         for mode in ["system", "light", "dark", "wallpaper"] {
             let json = format!(r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":"{}"}}"#, mode);
@@ -87,6 +104,20 @@ mod tests {
             &"a\u{1F603}".encode_utf16().collect::<Vec<_>>(),
             1
         ));
+    }
+
+    #[test]
+    fn grids_validate_types_bounds_and_legacy() {
+        for columns in 1..=10 {
+            for rows in 1..=10 {
+                let json = format!(r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","homeGrid":{{"columns":{},"rows":{}}}}}"#, columns, rows);
+                assert!(validate_config(&json).is_ok());
+            }
+        }
+        for value in ["0", "11", "1.5", "\"4\"", "true", "null"] {
+            let json = format!(r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","drawerGrid":{{"columns":{},"rows":2}}}}"#, value);
+            assert!(validate_config(&json).is_err());
+        }
     }
 
     #[test]

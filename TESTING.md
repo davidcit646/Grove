@@ -12,7 +12,7 @@ Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7
 - Type, erase and replace queries rapidly while contact/file live queries and index jobs complete. Search must not blank/flash or repeatedly rebuild unchanged rows. Revoke/disable a source during this test: its protected rows disappear immediately; app search stays usable.
 - Change Home wallpaper outside Grove, including a live wallpaper; return Home/restart and verify Android's actual image remains visible. The library may remember Grove's last choice but must not assert it is currently applied.
 - Apply Home, Lock and Both choices. Lock-only must leave Home wallpaper and Home-derived button colors unchanged. Test apply failure and successful Android apply followed by failed Config save; Home still reflects Android, and only a confirmed save updates the remembered choice.
-- Change System/Light/Dark/Wallpaper colors, switch Android night mode, rotate/restart and import legacy v1/v8/v9 settings. Verify v10 roundtrip and Kotlin/native acceptance; malformed v10 modes and future v11 reject. Unavailable Android colors use legible theme fallback, including light wallpaper colors with black button text.
+- Change System/Light/Dark/Wallpaper colors, switch Android night mode, rotate/restart and import legacy v1/v8/v9 settings. Verify v11 roundtrip and Kotlin/native acceptance; malformed themes/grids and future v12 reject. Unavailable Android colors use legible theme fallback, including light wallpaper colors with black button text.
 - Use a slow/broken document provider while Home remains responsive. Change a setting during import: the delayed document must not overwrite it. Cancel/recreate while reading. Fail a config save and verify settings toggle rollback, retained setup/editor recovery, and no stale generic retry.
 - Reach the contact scan bound and verify Partial rather than complete Indexed. Revoke contacts after opening a menu, then select call/text/contact actions: no protected intent may launch. Verify genuine empty results remain Ready(0).
 - Verify real mail-app detection, no-handler copy fallback and failed clipboard access. Fail report-setting saves and report deletion: no false saved/copied/deleted message. Make widget-provider enumeration throw: report unavailable rather than empty.
@@ -175,3 +175,123 @@ Production/test source `026be7f0314c355f0449fe23796a557ee0417e22` passed [Androi
 - Rotate/recreate, background/return and leave for Android permissions during motion. Current page, provisional choices/pins and practice restore; alpha is 1 and translation is 0. Permission redraws do not replay startup fade. Fail Finish persistence: retain final setup for retry.
 
 These PR #90 Android cases remain pending until David's device acceptance; automated coverage does not claim actual device/OEM outcomes.
+
+## Juniper acceptance — PR #92 (not device-run)
+
+Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37404896738): eight Rust tests, 163 JVM tests, debug APK assembly, Android lint and the missing-signing negative gate. Signed release steps were skipped. PR #92 is stacked on unmerged PR #90; Juniper device acceptance remains pending. GROVE-STATUS.md is unchanged.
+
+- Open Launcher settings from Home and Android APPLICATION_PREFERENCES; navigate/back through all seven categories, rotate, and return Home. Verify page slides, animation-disabled behavior, RTL, light/dark/Wallpaper themes, system bars, small/landscape displays, large font, keyboard and TalkBack focus/labels. Settings must have an opaque readable background.
+- Change every existing switch/theme and restart. Verify only the intended setting changed; pin/folder/wallpaper/widget state remains. Fail preference writes: UI rolls back, no saved claim and no active revision change. Recover and retry from retained UI.
+- Set both grids to 1×1, 1×10, 10×1 and 10×10; traverse overflow pages, filter/clear the drawer, shrink from a last page, pin/unpin/reorder and restore Automatic. All items remain reachable, labels/touch targets readable and folder/selection actions correct. Dense grids may scroll; dimensions define page capacity, not forced viewport fit.
+- Toggle contact/file search and indexing independently. Deny/cancel/grant/revoke access during query/indexing, return from system settings and verify accurate status. Index-off retains permitted live search; disable/revoke cancels work and clears cache without stale publication. Retry only schedules eligible sources; inject scheduling failure and confirm saved preferences with unavailable refresh.
+- Edit/import invalid, oversized, malformed UTF-8 and future-schema documents; retain draft/recovery without changing active settings. Review a valid import, change settings in the other host, then Apply: require re-review. Exercise ABA changes, failed save, discard, explicit defaults replacement, provider delay/failure/cancel, export failure and concurrent navigation.
+- Rotate during document work and grid/email editing: no duplicated launch/apply or lost retained draft. Kill/recreate process: editor draft requires explicit new review and a pending import must be reread; no automatic activation. Cancel a queued document before its worker starts: it must not read/apply/publish later.
+- Queue/cancel tutorials under Help & diagnostics and return Home. Exactly one replay appears. Change theme/grid during setup then Finish: preserve unrelated changes; same-lane conflict restarts review; failed config/marker write keeps retry truthful. Existing replay Skip preserves configuration.
+- Add/bind/configure/cancel widgets through Home settings, edit folders from App drawer, and apply Home/Lock/Both wallpaper through Appearance. Verify the existing owner gets the action exactly once, no leaked widget IDs, retained wallpaper split-state recovery, and unchanged drag/selection behavior. Test cold settings entry and return Home.
+- Change reporting/email, force write/delete/copy/mail-handler failures, and verify truthful messages and retained reports. About version/privacy/license/artwork links and offline credits remain accessible. Reports/email/replay/widget IDs must not enter portable configuration exports.
+
+## Juniper cleanup recheck (pending)
+
+Cleanup source `a8f1ecdc5be3cd51b685425f6f4c896bd91d67bc` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37407249555): eight Rust tests, JVM tests, debug APK assembly, lint and the missing-signing negative gate. Signed release steps were skipped. The user confirmed the original Juniper build loads and core workflows work, and supplied a recording showing repeated contact-index status transitions. The cleanup still requires device revalidation; no merge occurred.
+
+- Keep Search settings open for one minute with contact/file access allowed. Saved-index status should remain separate from background refresh; no rapidly replacing active scans. Test contact-sync bursts while a scan runs and immediately after it finishes: only one queued/deferred follow-up, bounded by the 30-second provider-event window. Newly changed contacts must appear after refresh.
+- Refresh manually while idle and while queued/running; idle refresh should be immediate and active refresh should coalesce. Force provider failure/retry exhaustion; failed work remains failed, no permanently blocked successor. Disable/revoke during pending follow-up: no protected read/cache publication, no resumed canceled job.
+- Inspect category/destination icons and both Search cards in light/dark/Wallpaper theme, large font, small screen, RTL and TalkBack. All existing switches/access/refresh actions retain their behavior.
+- IndexRefreshRequestsTest covers notification storms before/during scanning, one deferred successor, sequential-event throttling, manual retry timing, clock reversal and failed scheduling/marker acceptance.
+
+## Contact-path fixes #93–#102 — October 6, 2026
+
+Production/test source `6cafc09247cbc3f96eb1a21a1ebc4bfb025bd130` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37409473807): eight Rust tests, the JVM suite (173 test methods), debug APK assembly, lint and the missing-signing negative gate. Signed release steps were skipped. Source trees locally and on the pushed branch match. PR #92 remains draft, stacked on unmerged PR #90; the new device acceptance is pending. GROVE-STATUS.md is unchanged.
+
+The current owner/caller/consumer and failure inventory is [CONTACT-REVIEW.md](CONTACT-REVIEW.md). Package changes no longer request contact indexing; ContactChanges owns process observation, IndexWork owns scheduling/recovery/repair, IndexCache owns confirmed cache publication and shared metadata, and the two UIs render those outcomes. The previous cleanup pass did not prove idle stability; this source fixes the subsequent full-audit findings.
+
+Record build SHA, device/API, date and actual outcome; these are pending checks, not passing claims.
+
+- #93/#94: leave Home and Settings Search idle with a fresh cache for at least two minutes. No recurring contact jobs or catalogue reloads from worker receiver/component events. Refresh files without triggering contacts; external install/update/remove still updates catalogue. Real contact edits request the provider-throttled source refresh.
+- #95: simulate missing/terminal WorkManager work with a persisted token; Retry recovers. Force asynchronous enqueue failure; show unavailable and release only its own token. Cancel before Worker starts, kill/restart and retry; old work cannot commit after a newer reservation.
+- #96: edit contacts during a running scan. Its successful cache is visible despite a delayed successor, but remains stale if it missed the change. Exactly one successor refreshes it. Force write failure, revoke access and supersede a load; no protected or stale-generation snapshot publishes.
+- #97/#100: start with Settings only, grant contacts/files and return from Android settings. Eligible indexing starts without requiring Home. Revoke or disable during scanning, then return: cancel, clear cache and hide protected results. With contact indexing off and live search on, edit/delete contacts while a query is displayed: query refreshes without an indexing job. Recreate hosts; only one process observer remains. Force observer registration failure and verify visible scoped status.
+- #98: retain a corrupt/oversize/unsupported-version cache and force unsuccessful repair repeatedly, including restart. At most one automatic repair cycle occurs until a successful commit or manual Retry; permitted live search remains available and the other source stays usable.
+- #99: merge/reaggregate contacts so cached numeric IDs change. Menus still resolve the same lookup identity. Delete/change the contact after menu opening and before call/text/channel/view/edit: reject changed/deleted details and request reopening. Revocation at action time blocks protected launch. Verify genuine WhatsApp/Business/Messenger channels and number deduplication.
+- #101: use empty, valid, partial, stale, future-dated and corrupt caches. Settings and Search agree on validity, coverage and current TTL; touching file mtime cannot make invalid JSON available. Keep a screen open across TTL expiry and query again; readiness reevaluates without a JSON reload.
+- #102: use a slow provider and many invalid rows. Live deadline/raw-row limits yield Partial; a genuinely empty provider yields Ready(0); typing, leaving Search, revoke and cancel cannot publish old rows. Record cancellation behavior for the actual OEM provider; ignored CancellationSignal is a platform limitation requiring evidence, not a passing deadline claim.
+
+## Grouped settings cards — October 6, 2026
+
+Source `42984548fd4c6211bde60df7871acd20a421c9fb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37456480396): Rust tests, the JVM suite, debug APK assembly, lint and the missing-signing gate. Signed release steps were skipped. This is source/build verification; visual device acceptance is pending. GROVE-STATUS.md is unchanged.
+
+`SettingsGroups` owns only Material card surfaces, spacing and accessibility headings. `SettingsPages` and `SettingsDocumentPages` place their existing controls inside these groups; SettingsCommands, the shared repository and platform/feature owners retain all actions and settings authority. Search uses the same helper. Home groups are Buttons, Clock and date, Pinned apps, Gestures, Widgets and Default launcher; Drawer, Appearance, Configuration, Help, About and artwork credits also use labeled cards. No setting keys, navigation routes, platform actions or command calls were removed.
+
+Pending device check: inspect every grouped page in light/dark and dynamic colors, large text and RTL. Cards and headings remain distinct; switches/rows remain reachable through scrolling and independently focusable. Toggle each Home control, navigate both grids, open widget/default-launcher/folder/wallpaper actions, change theme, replay tutorial and use configuration/report workflows. Verify failed saves still roll back the original toggle and no card intercepts child actions.
+
+## Widget entry polish — October 6, 2026
+
+Source `3bc0b75f4a6f897886996c54bce4055b3c2f2853` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37457299182): Rust/JVM tests, debug APK assembly, lint and missing-signing gate. Signed release steps were skipped. Widgets is the first card in Home screen settings; the Widget controls acknowledgment has only Got It! (Not now removed). Acknowledgment persistence, provider picker cancellation, bind/configure and interrupted-setup recovery are unchanged. GROVE-STATUS.md is unchanged.
+
+Pending device check: open Home screen settings and reach Add widget without scrolling. With tutorial acknowledgment unset, verify only Got It! is shown and a confirmed acknowledgment opens the picker; failed acknowledgment persistence reports failure. Add/configure a widget and verify picker/Android cancellation and pending-widget Retry/Remove still work.
+
+
+### Settings scroll preservation — 2026-10-06
+
+Source `f1666e7fd338b3ca89a3f4191b61bbb3a495ff3c` passed CI run 37459613835: Rust tests, JVM suite (175 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. `SettingsScrollStateTest` covers independent routes, refresh/Back positions, known-route recreation, negative clamping and snapshot independence.
+
+Device checks pending: scroll down and toggle several options; verify the same position remains after repository refresh, returning from a child page, rotation and external permission/settings return. Rapid changes before layout must not replace a remembered position with zero. Shorter content should clamp normally.
+
+Debug Grove Test APK: `Grove-Juniper-scroll-f1666e7.apk`, SHA-256 `df4c2ba1643721541630d33db6e51e093b9a4924489db9dfecaaa883d5dde00c`. Verified GitHub archive digest, ZIP integrity, manifest and all three Rust ABIs.
+
+
+### Search Grove and Android settings — #103, 2026-10-06
+
+Source `fa23c6d8fa79ee7d3fba026e6934501aa94832c5` passed CI run 37463688547: eight Rust tests, JVM suite (183 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SettingsDiscoveryTest covers unique IDs, SettingKey coverage, route/anchor validation, aliases/punctuation/case/accents/fuzzy matching, bounds/category queries/deduplication, Grove-before-Android ordering, honest widget fallbacks, frame changes and obsolete publication, unavailable versus failed capability states, handler trust and launch exceptions.
+
+Device acceptance remains pending: Android 12/current Android and an OEM phone. Search widgets, Wi-Fi/wifi, Bluetooth, airplane/flight mode, dark mode, clock and grid; verify Grove rows precede Android rows and land on the correct control/page. Confirm widget navigation allocates nothing until the existing Add widget action is tapped. Check supported Android destinations, missing/disabled handlers, labeled generic fallback, rotation, Back, keyboard/focus and per-route scroll after a preference save. Settings search must still work with contact/file search and indexing disabled or permissions denied; permission and source state changes must remove protected rows. Rapid superseded queries and leaving search must not publish stale settings results.
+
+Debug Grove Test APK: `Grove-Juniper-settings-search-fa23c6d.apk`, SHA-256 `29f79d338f810a9473aafa6eacc473f3dbb07636be77450c83e966cf4e057d9c`. Verified GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.
+
+
+### Calculator search — 2026-10-06
+
+Source `0dc18f5145478c199fb22edf879464bf89815e9e` passed CI run 37466709982: eight Rust tests, JVM suite (191 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SearchCalculatorTest covers precedence, left associativity, parentheses, decimal precision, unary negatives and keyboard symbols, explicit approximate division, zero division, malformed/incomplete/non-arithmetic input, resource bounds, frame invalidation and stale query/lifecycle suppression.
+
+Device checks pending: enter `2+2=`, `2+3*4=`, `(2+3)*4=`, `0.1+0.2=`, `1/3=` and `1/0=`; verify top result, exact/approximate formatting and non-actionable errors. Tap an answer to open the phone calculator; return to search and check focus/query state. With no handler or a disabled calculator, the answer stays available with a scoped launch message. Check rapid edits, leaving search, rotation and normal app/settings/contact/file search. No automatic query handoff to the external calculator is promised.
+
+Debug Grove Test APK: `Grove-Juniper-calculator-0dc18f5.apk`, SHA-256 `24eac13d1016729b068c70cc2fc42abd2265e32222298d806bee37ec904c5db2`. Verified GitHub artifact archive digest, APK integrity, manifest and all three Rust ABIs.
+
+
+### Search feature controls and tutorials — 2026-10-06
+
+Source `193c30fb14775f9f885eec9e1a8548cd50345d7c` passed CI run 37472889992: nine Rust tests, JVM suite (205 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SearchFeaturesTest covers all provider flag combinations, old-schema defaults, malformed booleans, isolated protected-source effect callbacks, independent setup merging and failed preference publication. SearchTutorialStateTest covers first-entry/replay gating, exactly three forward actions, incomplete completion rejection, failed-save session suppression, successful replay and bounded restored pages. SettingsDiscoveryTest retains Wi-Fi/Bluetooth alias isolation and adds provider-control destinations. The Rust schema test covers v12 provider combinations, strict types, v11 compatibility and unsupported future versions.
+
+Pending Android device acceptance:
+
+- Replay initial setup: visible up/down dot/trail inside practice target; genuine enabled swipe yields 75ms entrance + 100ms hold + 75ms fade check feedback (250ms total at default scale), optional practice unchanged. Check cancellation, horizontal/multitouch, rapid repeats, one/both gestures off, page exit, background/resume and rotation.
+- Contact/File permission pages sit vertically in the middle with fixed progress/navigation; large text, short screens and landscape remain scrollable. Access return and denial preserve truthful state and provisional Finish-only changes.
+- First Search from button or Home swipe opens the centered three-page Material You guide. No keyboard before completion. Two page changes plus final swipe/button enter Search; Back/Close incomplete reopens next time, completed guide does not reopen on calculator/settings return. Rotate on each page; confirm restored page and explicit Help search replay independent of setup/widget guidance.
+- Check dynamic light/dark colors, TalkBack labels and announcements, large text, RTL forward/back, vertical scrolling, disabled system animations and rapid navigation. No permission prompt, provider read, index work, widget allocation or configuration mutation from samples.
+- Toggle Calculator/Grove/Android independently while queries/results are active; only affected rows disappear, including Android fallback/retry. Re-enable and verify correct rows. Persist across relaunch and import/export; Settings stays accessible when Grove discovery is off. Verify idle contact/file indexing does not restart from a provider-only preference change.
+- Exercise missing/failed Android handlers and invalid arithmetic with switches enabled; verify existing scoped failures. Rapid query edits and leaving Search cannot publish superseded output. Inspect initial setup Finish after independent settings changes and old v11 config migration on device.
+
+These issues remain open for device acceptance; no merge or release was performed.
+
+Debug Grove Test APK: `Grove-Juniper-tutorials-193c30f.apk`, SHA-256 `57be0c076c7de9824508798360c19a9ca3a6c6a2ee8ddcac9686d5e7e179dc4e`. Verified the GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.
+
+### Search tutorial operating-agreement fixes — 2026-10-06
+
+Source `60f8f7fe1beeb0ad08219cc1e82ccfbcbed68f8d` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37476750855): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. Eight new tests cover repeated failed explicit replay requests, a newer request retry, Home preparation before rendering, partial presentation/preparation failures, failed completion, refresh suppression/recreation and registered safe Continue routes. These session/registry tests do not constitute Android view or dialog fault-injection proof.
+
+The user confirmed the preceding tutorial APK works in their tested workflows. That functional acceptance does not establish the rare failure paths added here. Pending device checks for this follow-up:
+
+- Queue Search tutorial replay in Help, return Home, swipe down to open it, then Close/Back on its first page. Home must stay at its original position with scroll and widgets preserved. Repeat via the Search button and complete the guide normally.
+- Exercise replay and rotation. A failed presentation/refresh/save should offer a scoped Continue/Report dialog and usable Search; the same failed request must not repeatedly reopen the guide in the session, including recreation. A new explicit replay can retry. Report stays user-reviewed and is never sent automatically.
+
+GROVE-STATUS.md is unchanged. PR #92 remains unmerged and stacked on PR #90.
+
+Debug APK: `Grove-Juniper-audit-60f8f7f.apk`, SHA-256 `ea51e905f61909741ef52bff096d29c2fdb6ef6c015e71e049ee5f10571090e5`. Verified artifact archive digest, APK ZIP integrity, manifest and three Rust ABIs.
+
+## Grove 1.0.0 preparation — October 6, 2026
+
+Source `f1bce9b98f92d1b5322121a0764e041de592b254` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37481707804): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, lint and the missing-signing negative gate. The only production change after the device-accepted audit build is versionName 1.0.0 and versionCode 32. The user confirmed that APK works, then authorized merging for 1.0. Functional device acceptance does not establish every Android/OEM/accessibility/fault-injection case in the historical matrix. PR #90 is merged; PR #92 is authorized for main. GROVE-STATUS.md is unchanged.
+
+This run skips signed release steps; production APK/AAB delivery remains conditional on main CI's existing certificate, ABI, alignment and checksum gates. The previous main release attempt lacked GROVE_SIGNING_PASSWORD. Do not label a debug Grove Test APK as a signed production release.
+
+Verified debug APK: `Grove-1.0.0-test.apk`, SHA-256 `a0a94fa31c08e7c4d5054c84b3e4d08b152335eb295c10d1557b1f0a9a452140`; archive digest, APK integrity, 1.0.0/test manifest and three Rust ABIs verified.

@@ -33,6 +33,9 @@ data class SearchSettings(
     val files: Boolean = false,
     val contactIndexing: Boolean = false,
     val fileIndexing: Boolean = false,
+    val calculator: Boolean = true,
+    val androidSettings: Boolean = true,
+    val groveSettings: Boolean = true,
 )
 
 /** A saved indexing preference never authorizes a disabled search source. */
@@ -60,17 +63,23 @@ data class Config(
     val folders: List<AppFolder> = emptyList(),
     val search: SearchSettings = SearchSettings(),
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val homeGrid: IconGrid? = null,
+    val drawerGrid: IconGrid? = null,
 ) {
     fun json(): String = JSONObject()
-        .put("version", 10)
+        .put("version", 12)
         .put("themeMode", themeMode.id)
+        .put("homeGrid", homeGrid?.let { JSONObject().put("columns", it.columns).put("rows", it.rows) } ?: JSONObject.NULL)
+        .put("drawerGrid", drawerGrid?.let { JSONObject().put("columns", it.columns).put("rows", it.rows) } ?: JSONObject.NULL)
         .put("wallpaper", WallpaperArt.source(wallpaper)?.id ?: error("Wallpaper selection is invalid"))
         .put("favorites", JSONArray(favorites))
         .put("folders", JSONArray().apply { folders.forEach { folder ->
             put(JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps)))
         } })
         .put("search", JSONObject().put("contacts", search.contacts).put("files", search.files)
-            .put("contactIndexing", search.contactIndexing).put("fileIndexing", search.fileIndexing))
+            .put("contactIndexing", search.contactIndexing).put("fileIndexing", search.fileIndexing)
+            .put("calculator", search.calculator).put("androidSettings", search.androidSettings)
+            .put("groveSettings", search.groveSettings))
         .put(
             "gestures",
             JSONObject()
@@ -97,7 +106,7 @@ data class Config(
         fun parse(text: String): Config {
             val root = JSONObject(text)
             val version = root.getInt("version")
-            require(version in 1..10) { "Unsupported configuration version" }
+            require(version in 1..12) { "Unsupported configuration version" }
 
             val wallpaper = if (version >= 9) {
                 val value = root.get("wallpaper")
@@ -155,6 +164,9 @@ data class Config(
                 // Existing users had only search switches. Never silently opt them into durable storage.
                 contactIndexing = flag(searchJson, "contactIndexing", false),
                 fileIndexing = flag(searchJson, "fileIndexing", false),
+                calculator = flag(searchJson, "calculator", true),
+                androidSettings = flag(searchJson, "androidSettings", true),
+                groveSettings = flag(searchJson, "groveSettings", true),
             )
 
             val folders = if (root.has("folders")) {
@@ -179,7 +191,21 @@ data class Config(
                 require(value is String) { "Theme mode must be a string" }
                 ThemeMode.parse(value)
             } else ThemeMode.SYSTEM
-            return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders, search, themeMode)
+            fun grid(name: String): IconGrid? {
+                if (version < 11 || !root.has(name) || root.isNull(name)) return null
+                val value = root.get(name)
+                require(value is JSONObject) { "$name must be an object" }
+                fun dimension(key: String): Int {
+                    val number = value.get(key)
+                    require(number is Int || number is Long) { "$name $key must be an integer" }
+                    val long = (number as Number).toLong()
+                    require(long in 1..10) { "$name $key must be 1–10" }
+                    return long.toInt()
+                }
+                return IconGrid(dimension("columns"), dimension("rows"))
+            }
+            return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders, search, themeMode,
+                grid("homeGrid"), grid("drawerGrid"))
         }
     }
 }

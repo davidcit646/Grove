@@ -43,4 +43,13 @@ Google Material Symbols Rounded
 The bundled ic_setup_* vectors (apps, arrow_back, arrow_forward, folder, home, person, search, settings and star) are Google's Material Symbols Rounded, redistributed under Apache License 2.0.
 Source: https://github.com/google/material-design-icons/tree/master/symbols/android
 License: https://github.com/google/material-design-icons/blob/master/LICENSE
-The upstream vector paths are retained; resource names are scoped to onboarding.
+The upstream vector paths are retained; resource names use the ic_setup prefix and are reused by onboarding and Juniper settings.
+
+Juniper also bundles Google Material Symbols Rounded as ic_settings_* vectors: code, delete, description, help, image, info, mail, palette, public, refresh, shield and widgets. Their upstream Android vector paths are retained and they use the same Apache License 2.0 source/license links above.
+
+Settings discovery also bundles Google Material Symbols Rounded as ic_settings_wifi, ic_settings_bluetooth, ic_settings_airplane (airplanemode_active), ic_settings_sound (volume_up), ic_settings_battery (battery_full), and ic_settings_location (location_on). Their upstream 24px Android vector paths are retained under the same Apache License 2.0 source/license above.
+
+Calculator search bundles Google's Material Symbols Rounded calculate_24px vector as ic_calculate. Its upstream Android vector path is retained under the Apache License 2.0 source/license above.
+
+Swipe practice feedback bundles Google's Material Symbols Rounded check_24px vector as ic_setup_check. Its upstream Android vector path is retained under the Apache License 2.0 source/license above.
+Source: https://github.com/google/material-design-icons/blob/master/symbols/android/check/materialsymbolsrounded/check_24px.xml

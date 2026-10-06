@@ -1,0 +1,4 @@
+<resources>
+    <string name="swipe_practice_done">Swipe complete</string>
+    <string name="swipe_practice_description">Practice the enabled Home swipes inside this card. Next skips practice.</string>
+</resources>

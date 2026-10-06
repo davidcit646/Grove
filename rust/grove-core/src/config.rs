@@ -9,8 +9,19 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
         .get("version")
         .and_then(Value::as_i64)
         .ok_or("Missing configuration version")?;
-    if !(1..=10).contains(&version) {
+    if !(1..=12).contains(&version) {
         return Err("Unsupported configuration version");
+    }
+    if version >= 11 {
+        for key in ["homeGrid", "drawerGrid"] {
+            if let Some(grid) = root.get(key).filter(|v| !v.is_null()) {
+                let map = grid.as_object().ok_or("Grid must be an object")?;
+                for dimension in ["columns", "rows"] {
+                    let size = map.get(dimension).and_then(Value::as_i64).ok_or("Grid must use integers")?;
+                    if !(1..=10).contains(&size) { return Err("Grid must be 1–10"); }
+                }
+            }
+        }
     }
     if version >= 10 {
         match root.get("themeMode").and_then(Value::as_str) {
@@ -81,6 +92,7 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
                 "showAppsButton",
                 "showSearchButton",
                 "showClock",
+                "tapClockOpensClock",
                 "showPinnedApps",
                 "showPinnedAppsHint",
                 "pinnedAppsAtBottom",
@@ -94,6 +106,9 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
                 "files",
                 "contactIndexing",
                 "fileIndexing",
+                "calculator",
+                "androidSettings",
+                "groveSettings",
             ][..],
         ),
     ] {

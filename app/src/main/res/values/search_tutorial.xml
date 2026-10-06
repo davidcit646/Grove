@@ -1,0 +1,26 @@
+<resources>
+    <string name="search_tutorial_title">Search with Grove</string>
+    <string name="search_tutorial_progress">Search with Grove · %1$d / 3</string>
+    <string name="search_tutorial_calculator">Calculator</string>
+    <string name="search_tutorial_calculator_detail">End your calculation with =, then tap the answer to open Calculator.</string>
+    <string name="search_tutorial_calculator_example">2 + 3 × 4 = 14</string>
+    <string name="search_tutorial_apps">Apps</string>
+    <string name="search_tutorial_apps_detail">Search an app name and tap to launch it.</string>
+    <string name="search_tutorial_contacts">Contacts</string>
+    <string name="search_tutorial_contacts_detail">Find a person and tap for calling or messaging.</string>
+    <string name="search_tutorial_files">Files</string>
+    <string name="search_tutorial_files_detail">Find accessible shared files by name, then open or share them.</string>
+    <string name="search_tutorial_grove">Grove settings</string>
+    <string name="search_tutorial_grove_detail">Find launcher controls, like widgets, above Android settings.</string>
+    <string name="search_tutorial_android">Android settings</string>
+    <string name="search_tutorial_android_detail">Find Wi-Fi, Bluetooth, airplane mode and more.</string>
+    <string name="search_tutorial_disabled">Turn this on later in Search settings.</string>
+    <string name="search_tutorial_access">Allow Android access in Search settings.</string>
+    <string name="search_tutorial_close">Close</string>
+    <string name="search_tutorial_back">Back</string>
+    <string name="search_tutorial_next">Next</string>
+    <string name="search_tutorial_finish">Search</string>
+    <string name="search_tutorial_replay">Replay search tutorial</string>
+    <string name="search_tutorial_cancel_replay">Cancel search tutorial replay</string>
+    <string name="search_tutorial_replay_detail">Starts the next time you open Search</string>
+</resources>

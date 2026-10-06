@@ -20,8 +20,14 @@ internal class DrawerController(private val activity: MainActivity) {
     internal var drawerEmpty: TextView? = null
     internal var drawerGrid: GridView? = null
     internal val drawerState = DrawerState()
+    private var gridPage = 0
+    private var lastGridQuery = ""
+    private var gridNavigation: LinearLayout? = null
+    private fun tileHeight(): Int? = activity.configController.config.drawerGrid?.let {
+        maxOf(drawerTiles.minimumCellHeight(), ((drawerGrid?.height ?: 0) - activity.dp(4) * (it.rows - 1)) / it.rows)
+    }
     internal val drawerDragController by lazy { with(activity) { DrawerDragController(actionController::appMenu) } }
-    internal val drawerTiles by lazy { with(activity) { DrawerTiles(this, this@DrawerController::launchDrawerApp, actionController::appMenu) } }
+    internal val drawerTiles by lazy { with(activity) { DrawerTiles(this, this@DrawerController::launchDrawerApp, actionController::appMenu, this@DrawerController::tileHeight) } }
     internal val folderActions by lazy { with(activity) {
         FolderActions(this, { configController.config }, { catalogController.apps }, drawerTiles, configController::commitConfig,
             drawerState::clearKeys, this@DrawerController::refreshDrawer, actionController::appMenu, actionController::showActionMenu)
@@ -38,6 +44,7 @@ internal class DrawerController(private val activity: MainActivity) {
             if (isDestroyed || startupController.coreRecoveryVisible) return
             homeController.rememberHomeScroll()
             clearAppSelection()
+            gridPage = 0; lastGridQuery = ""
             drawer = true; searchMode = false; homeController.base(readableBackdrop = true)
             root.requestFocus()
             val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -61,7 +68,7 @@ internal class DrawerController(private val activity: MainActivity) {
             val empty = wallpaperLabel(if (catalogController.state is CatalogState.Loading) "Preparing apps and icons…" else "No matching apps").apply { gravity = Gravity.CENTER }
             drawerEmpty = empty
             val grid = GridView(this).apply {
-                numColumns = if (resources.configuration.screenWidthDp >= 600) 6 else 4
+                numColumns = GridPolicy.columns(configController.config.drawerGrid, resources.configuration.screenWidthDp)
                 stretchMode = GridView.STRETCH_COLUMN_WIDTH
                 verticalSpacing = dp(4)
                 clipToPadding = false
@@ -74,10 +81,16 @@ internal class DrawerController(private val activity: MainActivity) {
                 }
             }
             grid.adapter = drawerAdapter
-            content.addView(grid, FrameLayout.LayoutParams(-1, -1))
+            val width = maxOf(resources.displayMetrics.widthPixels - dp(40),
+                if (configController.config.drawerGrid != null) grid.numColumns * dp(72) else 0)
+            content.addView(HorizontalScrollView(this).apply {
+                isFillViewport = true
+                addView(grid, android.view.ViewGroup.LayoutParams(width, -1))
+            }, FrameLayout.LayoutParams(-1, -1))
             content.addView(empty, FrameLayout.LayoutParams(-1, -1))
             grid.emptyView = empty
             root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+            gridNavigation = LinearLayout(this).also { root.addView(it) }
             field.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderApps(s.toString()) }
@@ -99,7 +112,26 @@ internal class DrawerController(private val activity: MainActivity) {
                 configController.config.folders.map { DrawerTiles.Item.Folder(it) } + catalogController.apps.take(catalogController.drawerVisibleCount)
                     .filterNot { it.key in assigned }.map { DrawerTiles.Item.Application(it) }
             } else SearchResults.matching(catalogController.apps, prepared) { it.searchName }.map { DrawerTiles.Item.Application(it) }
-            drawerAdapter?.submit(filtered)
+            val grid = configController.config.drawerGrid
+            if (lastGridQuery != query) { lastGridQuery = query; gridPage = 0 }
+            gridPage = GridPolicy.page(gridPage, filtered.size, grid)
+            drawerGrid?.let { view ->
+                view.numColumns = GridPolicy.columns(grid, resources.configuration.screenWidthDp)
+                view.layoutParams?.let { params ->
+                    params.width = maxOf(resources.displayMetrics.widthPixels - dp(40), if (grid != null) view.numColumns * dp(72) else 0)
+                    view.layoutParams = params
+                }
+            }
+            drawerAdapter?.submit(GridPolicy.items(filtered, gridPage, grid))
+            gridNavigation?.apply {
+                removeAllViews(); visibility = if (grid == null) View.GONE else View.VISIBLE
+                if (grid != null) {
+                    val count = GridPolicy.pageCount(filtered.size, grid)
+                    addView(homeController.button("Previous") { gridPage--; renderApps(query) }.apply { isEnabled = gridPage > 0 }, LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(wallpaperLabel("${gridPage + 1} / $count").apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -1, 1f))
+                    addView(homeController.button("Next") { gridPage++; renderApps(query) }.apply { isEnabled = gridPage < count - 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+                }
+            }
         }
     }
 
@@ -110,7 +142,7 @@ internal class DrawerController(private val activity: MainActivity) {
         }
     }
 
-    fun createTile(): DrawerTiles.Tile = with(activity) { drawerTiles.create()
+    fun createTile(height: Int? = null): DrawerTiles.Tile = with(activity) { drawerTiles.create(height)
     }
 
     fun bindTile(tile: DrawerTiles.Tile, app: App): Unit = with(activity) { drawerTiles.bind(tile, app)

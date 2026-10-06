@@ -23,6 +23,7 @@ internal class CatalogController(private val activity: MainActivity) {
     fun loadApps(changedPackage: String? = null) {
         with(activity) {
             if (isDestroyed || worker.isShutdown) return
+            if (changedPackage != null && searchMode) searchController.refreshSettings()
             val generation = ++loadGeneration
             state = CatalogState.Loading
             val iconSize = dp(48)
@@ -44,7 +45,8 @@ internal class CatalogController(private val activity: MainActivity) {
                         if (!prefs.contains("initialized")) {
                             val initial = if (!setupController.setupPending() && configController.config.favorites.isEmpty())
                                 configController.config.copy(favorites = apps.take(8).map { it.key }) else configController.config
-                            if (configController.commitConfig(initial)) prefs.edit().putBoolean("initialized", true).apply()
+                            if (configController.commitConfig(initial) && !prefs.edit().putBoolean("initialized", true).commit())
+                                Log.w("Grove", "Could not persist initialization marker")
                         }
                         if (startupController.coreRecoveryState?.reason == CoreRecoveryReason.APP_CATALOG) {
                             startupController.clearCoreRecovery()
@@ -52,7 +54,7 @@ internal class CatalogController(private val activity: MainActivity) {
                             homeController.showHome()
                         } else if (drawer) drawerController.renderApps(searchController.searchField?.text?.toString().orEmpty())
                         else if (searchMode) searchController.renderSearch(searchController.searchField?.text?.toString().orEmpty())
-                        else if (!pinDragController.busy) homeController.showHome()
+                        else if (!pinDragController.busy && !searchTutorialController.visible) homeController.showHome()
                         if (setupController.setupPending() && setupController.firstRunSetup == null &&
                             configController.configStore.brokenCustomConfig == null) root.post { if (!isDestroyed) setupController.startFirstRunSetup() }
                     }

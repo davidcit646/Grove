@@ -19,6 +19,7 @@ internal class DrawerTiles(
     private val activity: AppCompatActivity,
     private val launch: (App) -> Unit,
     private val menu: (App) -> Unit,
+    private val cellHeight: () -> Int? = { null },
 ) {
     sealed interface Item {
         data class Application(val app: App) : Item
@@ -27,11 +28,14 @@ internal class DrawerTiles(
 
     class Tile(val layout: LinearLayout, val icon: ImageView, val name: TextView, val badge: ImageView)
 
-    fun create(): Tile {
+    fun minimumCellHeight(): Int = maxOf(activity.dp(112), activity.dp(80) + (32f * activity.resources.displayMetrics.scaledDensity).toInt())
+
+    fun create(height: Int? = null): Tile {
         val layout = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(activity.dp(4), activity.dp(10), activity.dp(4), activity.dp(10))
+            minimumHeight = height ?: activity.dp(96)
             isFocusable = true
             isClickable = true
         }
@@ -75,7 +79,8 @@ internal class DrawerTiles(
         override fun getItem(position: Int) = items[position]
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val tile = (convertView?.tag as? Tile) ?: create()
+            val tile = (convertView?.tag as? Tile) ?: create(cellHeight())
+            tile.layout.layoutParams = android.widget.AbsListView.LayoutParams(-1, cellHeight() ?: -2)
             bindItem(tile, items[position])
             return tile.layout
         }

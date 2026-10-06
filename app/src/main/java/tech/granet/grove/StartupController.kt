@@ -50,12 +50,11 @@ internal class StartupController(private val activity: MainActivity) {
 
     fun beginHome() {
         with(activity) {
-            val loaded = runCatching { configController.configStore.load() }.getOrElse { error ->
+            val loaded = runCatching { configController.load() }.getOrElse { error ->
                 Log.e("Grove", "Configuration unavailable", error)
                 showCoreRecovery(CoreRecoveryReason.CONFIG)
                 return
             }
-            configController.config = loaded
             presentationController.applyTheme(loaded.themeMode)
             // Widget metadata is optional. Keep the app list and Home available if it is damaged.
             runCatching { widgets.restore(startupState) }
@@ -67,6 +66,14 @@ internal class StartupController(private val activity: MainActivity) {
             startupState = null
             homeController.showHome()
             applyStartupPlan(StartupCoordinator.coldStart())
+            intent.getStringExtra("settingsAction")?.let { action ->
+                intent.removeExtra("settingsAction")
+                root.post { when (action) {
+                    "wallpaper" -> wallpaperPresentationController.wallpapers()
+                    "widget" -> widgetFlow.pick()
+                    "folders" -> { drawerController.showDrawer(false); drawerController.drawerOptions() }
+                } }
+            }
             if (configController.configStore.brokenCustomConfig != null) root.post { configController.showConfigRecoveryDialog() }
             if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.settings() }
         }
@@ -93,6 +100,7 @@ internal class StartupController(private val activity: MainActivity) {
 
     fun showCoreRecovery(reason: CoreRecoveryReason) {
         with(activity) {
+            searchTutorialController.destroy()
             val recovery = CoreRecoveryPolicy.forReason(reason)
             coreRecoveryState = recovery
             // Supersede pending catalog/search output before showing a closed core lane.

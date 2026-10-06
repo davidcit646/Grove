@@ -37,10 +37,9 @@ internal class WidgetFlow(
                 .setTitle("Widget controls")
                 .setMessage("Once a widget is on your Home screen, tap and hold it for options such as resizing, configuring, or removing it.")
                 .setPositiveButton("Got It!") { _, _ ->
-                    prefs.edit().putBoolean("widget_tutorial_seen", true).apply()
-                    showPicker()
+                    if (prefs.edit().putBoolean("widget_tutorial_seen", true).commit()) showPicker()
+                    else message("Could not save tutorial acknowledgment; try again")
                 }
-                .setNegativeButton("Not now", null)
                 .show()
             return
         }

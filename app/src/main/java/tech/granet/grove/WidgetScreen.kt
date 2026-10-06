@@ -106,8 +106,8 @@ internal class WidgetScreen(
 
     private fun resize(id: Int, info: AppWidgetProviderInfo, requested: Int) {
         val min = (info.minHeight / activity.resources.displayMetrics.density).toInt()
-        prefs.edit().putInt("height_$id", maxOf(requested, min)).apply()
-        changed()
+        if (prefs.edit().putInt("height_$id", maxOf(requested, min)).commit()) changed()
+        else activity.infoDialog("Widget resize failed", "Your previous size is still active. Try again.")
     }
 
     private fun configure(id: Int, info: AppWidgetProviderInfo) {

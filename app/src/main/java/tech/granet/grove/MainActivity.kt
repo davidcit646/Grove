@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     internal val searchController by lazy { SearchController(this) }
     internal val actionController by lazy { ActionController(this) }
     internal val drawerController by lazy { DrawerController(this) }
+    internal val searchTutorialController by lazy { SearchTutorialController(this) }
     internal val setupController by lazy { SetupController(this) }
     internal val startupController by lazy { StartupController(this) }
     internal val wallpaperPresentationController by lazy { WallpaperPresentationController(this) }
@@ -87,11 +88,11 @@ class MainActivity : AppCompatActivity() {
     }
     internal val chooseHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     internal val changes = object : LauncherApps.Callback() {
-        override fun onPackageAdded(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
-        override fun onPackageRemoved(p: String, u: UserHandle) { catalogController.loadApps(); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
-        override fun onPackageChanged(p: String, u: UserHandle) { catalogController.loadApps(p); if (configController.config.search.contactIndexing) searchController.refreshContacts() }
-        override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
-        override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) = catalogController.loadApps()
+        override fun onPackageAdded(p: String, u: UserHandle) = LauncherPackageEvents.changed(p, packageName, catalogController::loadApps)
+        override fun onPackageRemoved(p: String, u: UserHandle) = LauncherPackageEvents.changed(p, packageName, catalogController::loadApps)
+        override fun onPackageChanged(p: String, u: UserHandle) = LauncherPackageEvents.changed(p, packageName, catalogController::loadApps)
+        override fun onPackagesAvailable(p: Array<out String>, u: UserHandle, replacing: Boolean) { if (p.any { it != packageName }) catalogController.loadApps() }
+        override fun onPackagesUnavailable(p: Array<out String>, u: UserHandle, replacing: Boolean) { if (p.any { it != packageName }) catalogController.loadApps() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,24 +142,31 @@ class MainActivity : AppCompatActivity() {
         }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (setupController.firstRunSetup != null) setupController.firstRunSetup?.back()
+                if (searchTutorialController.visible) searchTutorialController.back()
+                else if (setupController.firstRunSetup != null) setupController.firstRunSetup?.back()
                 else if (drawer && drawerController.drawerState.selecting) { drawerController.clearAppSelection(); drawerController.refreshDrawer() }
                 else if (drawer || searchMode) homeController.animateDrawerClosed()
                 // Back at Home has no navigation destination. Recreating the
                 // view here would unexpectedly jump a scrolled layout to top.
             }
         })
+        searchTutorialController.restore(savedInstanceState)
         setupController.restore(savedInstanceState)
         startupController.startupState = savedInstanceState
         runCatching {
             if (!prefs.getBoolean("setup_complete", false) && !setupController.setupPending()) {
                 // Existing users keep their layout and can replay setup from the menu.
-                prefs.edit().putBoolean(
+                check(prefs.edit().putBoolean(
                     if (prefs.contains("initialized")) "setup_complete" else "setup_pending", true
-                ).apply()
+                ).commit()) { "Could not persist setup state" }
             }
         }.onFailure { Log.w("Grove", "Setup state unavailable", it) }
         startupController.beginHome()
+        root.post { searchTutorialController.restoreEntry() }
+        (application as GroveApp).settingsChanges.observe(this) {
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) && !startupController.coreRecoveryVisible)
+                configController.resume()
+        }
         root.post { if (!isDestroyed) presentationController.start() }
     }
 
@@ -169,15 +177,21 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onResume() {
         super.onResume()
+        if (!startupController.coreRecoveryVisible) configController.resume()
         presentationController.refresh()
+        searchTutorialController.refresh()
         setupController.firstRunSetup?.refreshPermissions()
         if (startupController.coreRecoveryVisible) return
         if (searchMode) searchController.reconcileAccess()
         startupController.applyStartupPlan(StartupCoordinator.resume())
+        if (setupController.setupPending()) root.post {
+            if (!isDestroyed && !startupController.coreRecoveryVisible) setupController.startFirstRunSetup()
+        }
     }
 
     override fun onStop() {
         setupController.firstRunSetup?.settleMotion()
+        searchTutorialController.stop()
         pinDragController.releaseHold(); touchRouter.cancel()
         runCatching { host.stopListening() }.onFailure { Log.w("Grove", "Widget stop failed", it) }
         drawerController.clearAppSelection()
@@ -186,6 +200,7 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onDestroy() {
         setupController.destroy()
+        searchTutorialController.destroy()
         if (startupController.launcherCallbackRegistered) {
             try { launcher.unregisterCallback(changes) }
             catch (error: Exception) { Log.w("Grove", "Could not unregister launcher callback", error) }
@@ -204,6 +219,7 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onSaveInstanceState(outState: Bundle) {
         setupController.saveState(outState)
+        searchTutorialController.save(outState)
         homeController.rememberHomeScroll()
         outState.putInt("pending", widgets.pending)
         outState.putInt("homeScrollY", homeController.homeScrollY)
@@ -211,12 +227,21 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
+        searchTutorialController.destroy()
         if (drawer || searchMode) homeController.showHome()
-        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.settings() }
+        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) root.post { setupController.launcherSettings() }
+        intent.getStringExtra("settingsAction")?.let { action ->
+            intent.removeExtra("settingsAction")
+            root.post { when (action) {
+                "wallpaper" -> wallpaperPresentationController.wallpapers()
+                "widget" -> widgetFlow.pick()
+                "folders" -> { drawerController.showDrawer(false); drawerController.drawerOptions() }
+            } }
+        }
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (setupController.firstRunSetup != null) return super.dispatchTouchEvent(event)
+        if (setupController.firstRunSetup != null || searchTutorialController.visible) return super.dispatchTouchEvent(event)
         if (pinDragController.busy) {
             touchRouter.cancel()
             return super.dispatchTouchEvent(event)
