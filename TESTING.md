@@ -238,3 +238,12 @@ Source `f1666e7fd338b3ca89a3f4191b61bbb3a495ff3c` passed CI run 37459613835: Rus
 Device checks pending: scroll down and toggle several options; verify the same position remains after repository refresh, returning from a child page, rotation and external permission/settings return. Rapid changes before layout must not replace a remembered position with zero. Shorter content should clamp normally.
 
 Debug Grove Test APK: `Grove-Juniper-scroll-f1666e7.apk`, SHA-256 `df4c2ba1643721541630d33db6e51e093b9a4924489db9dfecaaa883d5dde00c`. Verified GitHub archive digest, ZIP integrity, manifest and all three Rust ABIs.
+
+
+### Search Grove and Android settings — #103, 2026-10-06
+
+Source `fa23c6d8fa79ee7d3fba026e6934501aa94832c5` passed CI run 37463688547: eight Rust tests, JVM suite (183 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SettingsDiscoveryTest covers unique IDs, SettingKey coverage, route/anchor validation, aliases/punctuation/case/accents/fuzzy matching, bounds/category queries/deduplication, Grove-before-Android ordering, honest widget fallbacks, frame changes and obsolete publication, unavailable versus failed capability states, handler trust and launch exceptions.
+
+Device acceptance remains pending: Android 12/current Android and an OEM phone. Search widgets, Wi-Fi/wifi, Bluetooth, airplane/flight mode, dark mode, clock and grid; verify Grove rows precede Android rows and land on the correct control/page. Confirm widget navigation allocates nothing until the existing Add widget action is tapped. Check supported Android destinations, missing/disabled handlers, labeled generic fallback, rotation, Back, keyboard/focus and per-route scroll after a preference save. Settings search must still work with contact/file search and indexing disabled or permissions denied; permission and source state changes must remove protected rows. Rapid superseded queries and leaving search must not publish stale settings results.
+
+Debug Grove Test APK: `Grove-Juniper-settings-search-fa23c6d.apk`, SHA-256 `29f79d338f810a9473aafa6eacc473f3dbb07636be77450c83e966cf4e057d9c`. Verified GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.
