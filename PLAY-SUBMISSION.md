@@ -38,13 +38,13 @@ Google Play currently limits the app name to 30 characters, the short descriptio
 
 ### Short description
 
-Exactly 80 characters:
+74 characters:
 
-> A privacy-first Android launcher with unified on-device search and customization
+> Search-focused Android launcher with no ads, no tracking, and no nonsense.
 
 ### Full description
 
-> Grove Launcher is a free, open-source Android launcher built around fast, private, on-device search and a customizable Home experience.
+> Grove Launcher is a free, open-source, search-focused Android launcher built for people who want a fast Home experience without ads, tracking, sponsored clutter, or unnecessary nonsense.
 >
 > Search from one place across installed apps, Grove settings, supported Android settings, contacts you choose to enable, calculations, and files on your device. File Search is designed to locate files across user-visible shared storage when you explicitly enable it and grant Android's All files access permission.
 >
@@ -92,17 +92,19 @@ Before submission:
 
 ### Target audience
 
-**Submission-time owner decision required.**
+**Product audience:** people who want a search-focused Android launcher with no ads, no tracking, and no unnecessary clutter.
 
-Grove is a general-purpose launcher and is not designed specifically for children. Do not select child age groups merely to maximize availability.
+**Initial Play target age groups:** **13–15, 16–17, and 18+**.
 
-A conservative first-release choice is **18 and over** only, which avoids intentionally placing Grove in a child-directed target audience. This is a distribution choice, not a technical requirement, and should not be submitted without the publisher intentionally choosing that audience.
+Grove is not child-directed and is not marketed as a children's app. The initial distribution is United States only, so the listing and creative assets should remain adult/general-audience productivity/personalization material rather than child-oriented artwork.
 
-Record the selected age group(s) here before release review.
+Do not enable Google's **Restrict Minor Access** control; Grove is not an adult-only app.
 
 ### Content rating
 
-Complete the IARC questionnaire from the actual release behavior. Do not predict or claim the assigned rating in advance.
+**Desired U.S. rating: ESRB Everyone (E).**
+
+The final rating is assigned through Google Play's IARC questionnaire rather than manually chosen. Complete the questionnaire truthfully from the release behavior and record the assigned result. Based on the current content inventory, Grove is intended to qualify for the U.S. **Everyone** rating.
 
 Current behavior to represent accurately:
 
@@ -205,9 +207,9 @@ Do not assume the GitHub release-signing certificate and Play distribution certi
 
 ### Countries and regions
 
-**Submission-time publisher decision required.**
+**Initial distribution: United States only.**
 
-Record the initial distribution set before production submission.
+Do not enable additional countries or regions for the first release unless the publisher explicitly expands the rollout after the initial Play review.
 
 ### Production-access/testing requirements
 
@@ -273,8 +275,10 @@ General reviewer note:
 
 ### Publisher decisions
 
-- [ ] Target audience selected intentionally.
-- [ ] Countries/regions selected.
+- [x] Product audience defined: search-focused launcher users who want no ads/tracking/clutter.
+- [x] Play target age groups selected: 13–15, 16–17, 18+; not child-directed.
+- [x] Initial distribution selected: United States only.
+- [x] Desired U.S. content rating recorded: ESRB Everyone; final result remains IARC-assigned.
 - [ ] Public developer/support information confirmed.
 
 ### Visual assets
