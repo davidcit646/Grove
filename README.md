@@ -1,129 +1,35 @@
 # Grove Launcher
 
-## Grove 1.0.0
+An Android 12+ home launcher by GraNet IT Solutions. Version 1.0.0, version code 32.
 
-Production/test source `f1bce9b98f92d1b5322121a0764e041de592b254` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37481707804): nine Rust tests, JVM suite (213 source test methods), debug APK assembly, Android lint and the missing-signing negative gate. The user accepted the preceding audit-fix APK in their tested device workflows and authorized the 1.0 merge. Version 1.0.0 uses version code 32. [Stable v1.0.0](https://github.com/davidcit646/Grove/releases/tag/v1.0.0) was published October 6, 2026 from `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed signed APK/AAB certificate, ABI, alignment and checksum verification. Remaining device checks are recorded in TESTING.md.
+## Features
 
-Launcher settings now opens a full-screen Material workflow: Home screen, App drawer, Search, Appearance, Configuration, Help & diagnostics, and About. Home screen → Icon grid and App drawer → Icon grid each offer columns and rows from 1–10, a preview, Apply, and Automatic. Larger grids use scrolling and paging to preserve reachable icons and labels.
+- Home screen with clock, pinned apps, widgets, gestures and customizable grids.
+- App drawer with folders, search and Android uninstall actions.
+- Permission-controlled app, contact and file search with independent indexing controls.
+- Local wallpapers, theme choices, guided setup and recoverable configuration import/export.
+- Adaptive color and monochrome themed launcher icons.
 
-Configuration provides editor, import review, explicit Apply, export and recovery pages. A concurrent settings change requires a new review. Tutorials and reporting are under Help & diagnostics. Widget, wallpaper and folder actions still use their existing feature owners. Settings is an Activity in the main APK, sharing the same settings backend. Schema v12 preserves automatic grids and adds independent calculator, Grove settings search and Android settings search controls, enabled by default for older saved/imported documents.
-
-An Android 12+ home launcher by GraNet IT Solutions. Current source version: 1.0.0. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
-
-[GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md) is the complete v1.0.0 reference for process/host/method ownership, sources of truth, information flow, commit points, invariants, fail-first/fail-fast checks, scoped recovery and the full Kotlin/Rust declaration index.
-
-[SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its [release implementation matrix](GROVE-STATUS.md#implementation-status-on-main) is authoritative for capabilities at v1.0.0, with owners, pinned source, tracking issues and test/device evidence. Supporting documents retain historical verification records and detailed pending checks. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
-
-## Presentation and failure-boundary changes — merged PR #87
-
-PR #87 addresses #31, #77 and #85, is merged, and is included in v1.0.0. The descriptions below summarize shipped implementation; remaining device checks are in TESTING.md.
-
-- Search no longer blanks rows during debounce. Unchanged source notifications preserve existing rows, while revoked/disabled sources are cleared and stale query generations cannot publish.
-- Android displays the actual Home wallpaper, including external and live wallpaper changes, behind a transparent Home, with localized text shadows and system-bar protection. Grove's saved wallpaper choice is a library preference, not proof of Android's applied image.
-- Launcher settings → Appearance offers System, Light, Dark and Wallpaper colors. Wallpaper colors follows the system's night mode and uses Android's Home-wallpaper color for launcher buttons, with a theme fallback. Lock-only changes do not alter Home selection/colors.
-- Configuration documents run on a dedicated worker; a delayed import cannot replace settings changed while it was reading. Failed saves keep original UI recovery paths and roll settings switches back.
-- Contact scans at their bound report partial coverage. Contact actions recheck access, mail-handler visibility is declared, and report copy/delete/save and widget-provider failures expose truthful outcomes.
-
-## Historical change log
-
-The following version and dated PR records describe their original snapshots, not current merge/build status. Current capability status is maintained in GROVE-STATUS.md; current release evidence is in BUILD-STATUS.md.
-
-## 0.1.30 changes
-
-- Search and background indexing are independent for contacts and shared-storage files; durable private caches can rebuild without making permission or user-setting decisions for themselves.
-- Configuration import/export/recovery uses bounded document I/O outside Activity UI. Schema v10 persists explicit theme modes and stable wallpaper source IDs while remaining compatible with legacy v1–v9 documents.
-- Launcher settings → Tutorials owns a single replay request. Existing completed setup remains completed while replay is queued, and replay Skip preserves the current launcher configuration.
-- The wallpaper library is fully local for built-ins: three generated designs, ten packaged Commons images with offline credits, a true solid-black option, and a bounded user-selected image copy. Built-ins no longer require runtime Wikimedia downloads.
-- Grove errors use reserved numeric ranges plus assigned wallpaper GWS diagnostics, Degrade/Recover/Stop routing, privacy-bounded reports addressed to `support@granet.tech`, and a copy fallback when no mail app handles the draft.
-
-## 0.1.29 changes
-
-- Reworked first-run setup with larger type, progress, visual cards, app icons in the pin picker, and readable permission disclosures. The setup colors follow the Android light or dark theme.
-- When both Home swipe gestures are disabled, the swipe-practice page is omitted. When one is enabled, practice shows only that gesture and the progress count reflects the visible pages.
-
-## 0.1.28 changes
-
-- Accept Wikimedia Commons' dedicated `thumb.wikimedia.org` thumbnail redirects while retaining HTTPS, host, image, and download-size checks. This fixes remote wallpapers whose previews previously failed even with a working connection.
-- Keep the wallpaper navigation and credits visible when error text or large fonts need more room; scroll the preview details instead. Preview photos now crop to the phone aspect ratio instead of stretching.
-
-## 0.1.27 changes
-
-- Fresh installs get a guided full-screen setup for home gestures and controls, a swipe practice area, an installed-app pin picker, and independent Contact search and whole-device File search switches. Each permission request has a separate disclosure and can be declined.
-- Launcher settings has separate Search and Background indexing switches for contacts and files. Search can query permitted Android data live when its index is off; indexing saves a private, rebuildable metadata cache. Android permissions remain controlled in system settings.
-- Setup offers Android's default Home-app chooser after the user finishes. It can be replayed from Launcher settings → Tutorials; existing installations keep their layout and settings until a replay is successfully finished.
-
-## 0.1.25 changes (Nova: Rust migration, uncompiled — needs build + test)
-
-- Search is now one native call per keystroke: `CoreBridge.searchNative` scores and
-  top-K selects in Rust, returning winning indices. The old score-array + Kotlin
-  PriorityQueue path is the fallback when the native library is absent.
-- The Rust edit distance now counts UTF-16 code units exactly like Kotlin, so the
-  old non-ASCII Kotlin fallback in ranking is deleted — native and Kotlin agree
-  bit-for-bit. `Search.normalize`/`prepare` stay in Kotlin (tiny, correct, needed
-  for the fallback).
-- File extension table moved to Rust (`classifyNative` returns `mime|category`);
-  `FileIndex` still consults Android's `MimeTypeMap` first, so behavior is unchanged.
-- Procedural wallpapers render in Rust (`renderWallpaperNative` → ARGB pixels);
-  the Canvas painter remains as the no-native fallback.
-- New/updated Rust unit tests: top-K ordering parity (incl. 20k-label tie test),
-  UTF-16 edit-distance parity (accents, emoji surrogate pairs), classify table,
-  wallpaper opacity/size. See [RUST-PLAN.md](RUST-PLAN.md).
-
-## 0.1.24 changes (Nova patch — uncompiled, needs Codex review + build)
-
-Contact menu fixes (`ContactIndex.kt`, `MainActivity.contactMenu`):
-- Phone numbers are normalized to digits before deduplication, so `917-669-7537` and `9176697537` no longer produce doubled Call/Text rows. The first original display format is kept.
-- WhatsApp sync rows (profile / voice call / video call) collapse to one row per app variant via `collapseChannels()`; WhatsApp Business stays separate.
-- "Message via WhatsApp" is now gated by `whatsAppTargets()`: it appears only when the contact has real WhatsApp sync data AND the app is installed — never speculatively for every phone number.
-- One Call row + one Text row per contact. Tapping opens Android's app chooser (Phone, Google Voice, Linphone, …). A number-picker submenu appears only for genuinely multi-number contacts.
-- New `ContactIndexTest.kt` (8 unit tests) covering normalization, channel collapse, WhatsApp gating, and install gating.
-
-UI kit (`tech.granet.grove.ui.UiKit` — the reusable "CSS library"):
-- `Context.dp()`, `Context.message()`, `Context.label()`, `titleText()`, `bodyText()`, `warningText()`.
-- `iconRow()` — one tappable icon+title+subtitle row builder used by search results and menus.
-- One-line dialogs: `menuDialog()`, `infoDialog()`, `confirmDialog()`, `listDialog()`, `scrollDialog()`.
-- `settingsButton()`, `toggleRow()`, `LinearLayout.addSection()`.
-- `MainActivity`, `SearchScreen`, `LauncherSettingsScreen`, `WidgetScreen`, `HomeScreen` all migrated onto the kit; five copies of `dp()` removed; 22 scattered dialog builders consolidated (5 bespoke ones remain: icon grid, text inputs, config editor, recovery). Behavior is intended to be identical — verify with a build.
-
-Also see [CONTACT-REVIEW.md](CONTACT-REVIEW.md) for the perf + security pass on the contact path (threading, caching, log hygiene, permission rationale).
+There is no account or telemetry. Built-in wallpapers work offline. Google and Play Store searches open external apps or web pages.
 
 ## Build
 
-Install JDK 17, Android SDK 36, NDK 27.3.13750724, and Rust with the Android arm64, ARMv7, and x86-64 targets. Then run:
+Install JDK 17, Android SDK 36, NDK 27.3.13750724, and Rust with Android arm64, ARMv7 and x86-64 targets. Gradle builds the Rust core before packaging.
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Gradle builds the Rust core before packaging the APK. Choose Grove in Android's default Home app selector. Keep another launcher installed so you can switch back in Android Settings.
+Choose Grove in Android's default Home app selector. Keep another launcher installed so you can switch back. Debug and signed release artifacts are distinct; device acceptance and Play readiness are separate from a passing source build.
 
-## Features
+## Documentation
 
-- Home screen with clock, pinned apps, Android widgets, gestures, and optional navigation buttons. Hold a pinned app to move it or open its actions.
-- Customizable app drawer with app folders, bulk selection, pinning, and Android's uninstall confirmation.
-- Dedicated search with ranked app, contact, and optional file matches, followed by Google and Play Store actions. Long press a result for its context actions.
-- Optional shared storage indexing. Android's all files access is requested only when file search is enabled; private app data and system partitions remain inaccessible. The index is bounded and never reads file contents.
-- Procedural wallpapers, ten packaged Wikimedia Commons selections, a true solid-black option, and a user-selected local image. Built-in previews/apply work offline; author/source/license details are available in the picker and [NOTICE](NOTICE).
-- Settings with recoverable JSON configuration import/export under Configuration. Widget IDs remain local and are excluded from exports.
-
-There is no account or telemetry. Built-in wallpapers do not make runtime network requests. Google and Play Store searches open external apps or web pages.
-
-## Architecture and security
-
-Android views, storage permissions, widgets, intents, and wallpaper APIs remain in Kotlin. Rust handles batched search scoring, MIME categories, and bounded configuration preflight through JNI. Kotlin ranking remains a fallback if the native library is unavailable, and Kotlin validates the final configuration. See [ARCHITECTURE.md](ARCHITECTURE.md) and [TESTING.md](TESTING.md).
-
-File sharing uses read only, per-intent content URI grants. The provider is not exported. Configuration documents and custom wallpaper images are size/dimension bounded before activation or expensive decode. Android's broad storage access remains necessary for device-wide file search and requires Play policy review and approval before distribution; see [PLAY-READINESS.md](PLAY-READINESS.md) and [PRIVACY.md](PRIVACY.md).
-
-Debug APKs are development builds. The published v1.0.0 APK/AAB are signed production artifacts; Google Play distribution and installed-device update validation remain separate work.
+- [Code documentation](code_documentation.md): architecture, system catalogue, behavior contract, failure policies, test evidence, historical changes and release instructions.
+- [Build verification](code_documentation.md#build-status) and [device acceptance](code_documentation.md#testing).
+- [Signing](code_documentation.md#signing-readme) and [Play readiness](code_documentation.md#play-readiness).
+- [Privacy policy](PRIVACY.md). Broad file-search access requires Play policy review before distribution.
 
 ## License
 
-Apache-2.0 for original source and artwork. Third party dependencies and Commons wallpapers retain their respective licenses; see [NOTICE](NOTICE).
-
-
-## PR #90 onboarding implementation — October 5, 2026
-
-Production/test source `026be7f0314c355f0449fe23796a557ee0417e22` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37399253894): seven Rust tests, debug APK assembly, JVM tests, lint, and the missing-signing negative gate. This is source/build verification; PR #90 remains unmerged and its Android device acceptance is pending. GROVE-STATUS.md is unchanged. Issue #89 explicitly requests fresh-install indexing defaults and Settings-only indexing controls; this overrides the older onboarding indexing-choice description without editing that contract.
-
-On the PR #90 branch, onboarding uses a concise Material You setup with rounded symbols, direct one-sentence permission choices, page slides and an initial foreground fade. Fresh-install indexing defaults on but requires enabled search and Android access. Indexing switches stay in Launcher settings. Existing users can preview the redesign through Launcher settings → Tutorials → Replay first-run setup; saved choices are preserved until successful Finish.
+Apache-2.0 for original source and artwork. Third-party dependencies and Commons wallpapers retain their respective licenses; see [NOTICE](NOTICE).
