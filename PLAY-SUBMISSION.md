@@ -19,8 +19,8 @@ This file is the canonical working copy for Grove's first Google Play submission
 | License | Apache-2.0 |
 | Project | https://github.com/davidcit646/Grove |
 | Privacy policy | https://github.com/davidcit646/Grove/blob/main/PRIVACY.md |
-| Support email | `support@granet.tech` |
-| Developer website | https://granet.tech/ |
+| Support email | `support@granet.tech` — publicly listed on granet.tech |
+| Developer website | https://granet.tech/ — live public site |
 
 If a newer production build is submitted, re-audit this file against that exact artifact and use a monotonically higher version code.
 
@@ -279,7 +279,9 @@ General reviewer note:
 - [x] Play target age groups selected: 13–15, 16–17, 18+; not child-directed.
 - [x] Initial distribution selected: United States only.
 - [x] Desired U.S. content rating recorded: ESRB Everyone; final result remains IARC-assigned.
-- [ ] Public developer/support information confirmed.
+- [x] Public support email confirmed: `support@granet.tech`.
+- [x] Public developer website confirmed: https://granet.tech/.
+- [ ] Legal Play publisher/developer name confirmed against the actual Play Console account. The public website currently uses “GraNet IT Solutions LLC,” while Grove's privacy policy identifies GraNet IT Solutions under CITARE HOLDINGS LLC; align the public/legal naming used for submission rather than guessing.
 
 ### Visual assets
 
