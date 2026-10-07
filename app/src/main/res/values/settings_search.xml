@@ -9,8 +9,6 @@
     <string name="settings_search_clock_action_path">Home screen &gt; Clock and date</string>
     <string name="settings_search_pins">Show pinned apps</string>
     <string name="settings_search_pins_path">Home screen &gt; Pinned apps</string>
-    <string name="settings_search_pin_hint">Show pinned apps hint</string>
-    <string name="settings_search_pin_hint_path">Home screen &gt; Pinned apps</string>
     <string name="settings_search_pin_bottom">Pinned apps at bottom</string>
     <string name="settings_search_pin_bottom_path">Home screen &gt; Pinned apps</string>
     <string name="settings_search_swipe_search">Swipe down to search</string>
@@ -67,7 +65,7 @@
     <string name="settings_search_deletereports_path">Help &gt; Local reports</string>
     <string name="settings_search_project">Project</string>
     <string name="settings_search_project_path">About &gt; Project and information</string>
-    <string name="settings_search_privacy">Privacy</string>
+    <string name="settings_search_privacy">Privacy Policy</string>
     <string name="settings_search_privacy_path">About &gt; Project and information</string>
     <string name="settings_search_licenses">Licenses</string>
     <string name="settings_search_licenses_path">About &gt; Project and information</string>

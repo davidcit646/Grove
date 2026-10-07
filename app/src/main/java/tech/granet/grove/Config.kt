@@ -18,7 +18,6 @@ data class HomeScreenSettings(
     val showClock: Boolean = true,
     val tapClockOpensClock: Boolean = true,
     val showPinnedApps: Boolean = true,
-    val showPinnedAppsHint: Boolean = true,
     val useWallpaperButtonColors: Boolean = false,
     // True preserves the original Grove layout: pins sit after widgets and above All apps.
     // False moves pins directly below the clock/search controls.
@@ -96,7 +95,6 @@ data class Config(
                 .put("showClock", homeScreen.showClock)
                 .put("tapClockOpensClock", homeScreen.tapClockOpensClock)
                 .put("showPinnedApps", homeScreen.showPinnedApps)
-                .put("showPinnedAppsHint", homeScreen.showPinnedAppsHint)
                 .put("useWallpaperButtonColors", homeScreen.useWallpaperButtonColors)
                 .put("pinnedAppsAtBottom", homeScreen.pinnedAppsAtBottom),
         )
@@ -151,7 +149,6 @@ data class Config(
                 showClock = flag(homeJson, "showClock", true),
                 tapClockOpensClock = flag(homeJson, "tapClockOpensClock", true),
                 showPinnedApps = flag(homeJson, "showPinnedApps", true),
-                showPinnedAppsHint = flag(homeJson, "showPinnedAppsHint", true),
                 useWallpaperButtonColors = flag(homeJson, "useWallpaperButtonColors", false),
                 pinnedAppsAtBottom = flag(homeJson, "pinnedAppsAtBottom", true),
             )

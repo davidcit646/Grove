@@ -66,7 +66,6 @@ internal class SettingsPages(
                 toggle(clock, "Tap clock to open Clock", config.homeScreen.tapClockOpensClock, SettingKey.CLOCK_ACTION)
                 val pins = SettingsGroups.card(content, "Pinned apps")
                 toggle(pins, "Show pinned apps", config.homeScreen.showPinnedApps, SettingKey.PINS)
-                toggle(pins, "Show pinned apps hint", config.homeScreen.showPinnedAppsHint, SettingKey.PIN_HINT)
                 toggle(pins, "Pinned apps at bottom", config.homeScreen.pinnedAppsAtBottom, SettingKey.PIN_BOTTOM)
                 row(pins, "Icon grid", gridLabel(config.homeGrid), R.drawable.ic_setup_apps) { navigate("homeGrid") }
                 val gestures = SettingsGroups.card(content, "Gestures")
@@ -132,7 +131,7 @@ internal class SettingsPages(
                 grove.addView(activity.bodyText("Free and open source · Apache 2.0\nNo ads, analytics or automatic telemetry."))
                 val information = SettingsGroups.card(content, "Project and information")
                 row(information, "Project", "Source and issues", R.drawable.ic_settings_code, "project") { link("https://github.com/davidcit646/Grove") }
-                row(information, "Privacy", "How Grove uses local data", R.drawable.ic_settings_shield, "privacy") { link("https://github.com/davidcit646/Grove/blob/main/PRIVACY.md") }
+                row(information, "Privacy Policy", "How Grove uses local data", R.drawable.ic_settings_shield, "privacy") { link("https://github.com/davidcit646/Grove/blob/main/PRIVACY.md") }
                 row(information, "Licenses", "Original and third-party attribution", R.drawable.ic_settings_description, "licenses") { link("https://github.com/davidcit646/Grove/blob/main/NOTICE") }
                 row(information, "Artwork credits", "Available offline", R.drawable.ic_settings_image) { navigate("credits") }
             }

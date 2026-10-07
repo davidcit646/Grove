@@ -10,7 +10,6 @@ internal object SettingsLabels {
         "CLOCK" to (R.string.settings_search_clock to R.string.settings_search_clock_path),
         "CLOCK_ACTION" to (R.string.settings_search_clock_action to R.string.settings_search_clock_action_path),
         "PINS" to (R.string.settings_search_pins to R.string.settings_search_pins_path),
-        "PIN_HINT" to (R.string.settings_search_pin_hint to R.string.settings_search_pin_hint_path),
         "PIN_BOTTOM" to (R.string.settings_search_pin_bottom to R.string.settings_search_pin_bottom_path),
         "SWIPE_SEARCH" to (R.string.settings_search_swipe_search to R.string.settings_search_swipe_search_path),
         "SWIPE_DRAWER" to (R.string.settings_search_swipe_drawer to R.string.settings_search_swipe_drawer_path),

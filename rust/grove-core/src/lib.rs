@@ -121,13 +121,25 @@ mod tests {
     }
 
     #[test]
+    fn legacy_configuration_ignores_retired_fields() {
+        // Historical input must remain readable; this field has no active meaning.
+        for version in 1..=12 {
+            for value in ["true", "false", "\"false\"", "null"] {
+                let wallpaper = if version >= 9 { "\"grove-fern\"" } else { "0" };
+                let json = format!(r#"{{"version":{},"wallpaper":{},"themeMode":"dark","favorites":["example.app/.Main"],"homeScreen":{{"showPinnedAppsHint":{},"showPinnedApps":false,"showClock":false}}}}"#, version, wallpaper, value);
+                assert!(validate_config(&json).is_ok());
+            }
+        }
+    }
+
+    #[test]
     fn categories_and_configs() {
         assert_eq!(classify("m4a"), Some(("audio/mp4", "Audio")));
         assert_eq!(classify("mkv"), Some(("video/x-matroska", "Videos")));
         assert_eq!(classify("csv"), Some(("text/csv", "Documents")));
         assert_eq!(classify("jpg"), None);
-        assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedAppsHint":false}}"#).is_ok());
-        assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedAppsHint":"false"}}"#).is_err());
+        assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedApps":false}}"#).is_ok());
+        assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedApps":"false"}}"#).is_err());
         assert!(validate_config(r#"{"version":6,"wallpaper":12,"favorites":[],"homeScreen":{"useWallpaperButtonColors":true},"folders":[{"name":"Work","apps":["example/.Main"]}]}"#).is_ok());
         assert!(validate_config(r#"{"version":6,"wallpaper":0,"favorites":[],"folders":[{"name":"Bad","apps":["invalid"]}]}"#).is_err());
         assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"contacts":false,"files":true}}"#).is_ok());
