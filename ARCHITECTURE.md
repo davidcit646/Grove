@@ -1,8 +1,10 @@
 # Grove architecture
 
+**v1.0.0 documentation baseline:** `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`, published October 6, 2026. [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main) is the authoritative contract and release capability matrix; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed source and signed-artifact gates. Included implementation is separate from pending Android device proof. Dated pre-release sections below preserve evidence at their stated commits: “unmerged”, “unchanged”, “skipped” and “blocked” in those records describe that historical run, not current release status. Documentation reconciliation is tracked in [#79](https://github.com/davidcit646/Grove/issues/79).
+
 ## Juniper settings architecture — PR #92
 
-Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37404896738): eight Rust tests, 163 JVM tests, debug APK assembly, Android lint and the missing-signing negative gate. Signed release steps were skipped. PR #92 is stacked on unmerged PR #90; Juniper device acceptance remains pending. GROVE-STATUS.md is unchanged.
+Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37404896738): eight Rust tests, 163 JVM tests, debug APK assembly, Android lint and the missing-signing negative gate. Signed release steps were skipped. This is historical PR build evidence. PRs #90 and #92 are merged and included in v1.0.0; the current architecture below uses release schema v12. Remaining device acceptance cases stay pending in TESTING.md.
 
 | Owner | Incoming source → outgoing consumer | Authority, commit and failure boundary |
 | --- | --- | --- |
@@ -12,18 +14,18 @@ Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Androi
 | `SettingsSession`, `ConfigDocuments` | Editor/document → bounded worker read/parse → reviewed candidate → explicit Apply | No retained Activity. Generation invalidation cancels queued/publication effects. Candidate captures config and revision; concurrent changes require re-review. Failed writes preserve draft and active configuration. Rotation retains jobs/drafts; process death requires explicit re-review/reimport. |
 | `ConfigController`, `MainActivity` | Shared committed snapshot → Home/search/theme reconciliation | ConfigController is a host adapter, not an independent Config store. Main refreshes on return/resume and observes committed changes while active. Saved preference and unavailable feature refresh remain distinguishable. |
 | `SetupController`, `SetupMergePolicy` | Original base + provisional setup lanes + current snapshot → checked Finish | Merge only modified setup lanes; retain current grids/theme/folders/wallpaper. Same-lane conflict restarts review; failed save retains setup. Marker writes are checked. |
-| `GridPolicy`, `HomeController`, `DrawerController`, `DrawerTiles` | Optional validated home/drawer grid + actual items → pages and accessible tiles | Schema v11 reads v1–v10 as automatic grid. Columns and rows independently accept integers 1–10. Page capacity = columns × rows; shrink/filter clamps pages without dropping items. Dense grids scroll with minimum touch/font sizing. Existing folder grids and automatic behavior remain unchanged. |
+| `GridPolicy`, `HomeController`, `DrawerController`, `DrawerTiles` | Optional validated home/drawer grid + actual items → pages and accessible tiles | Schema v12 retains v11 grid support and reads v1–v10 as automatic grid. Columns and rows independently accept integers 1–10. Page capacity = columns × rows; shrink/filter clamps pages without dropping items. Dense grids scroll with minimum touch/font sizing. Existing folder grids and automatic behavior remain unchanged. |
 | Existing feature owners | Settings routes → Main feature entry/platform adapter | WidgetFlow/Registry retain ID ownership; FolderActions retains selected-app mutations; wallpaper owners retain Android apply-before-preference; SearchSources/IndexWork retain permission, generation, cache and scheduling gates. Reports, email and tutorial markers remain outside portable Config. |
 
 The categorized workflow replaces the Grove settings modal and configuration dialogs. Home/drawer/search remain in MainActivity. Widget, wallpaper and folder entry routes delegate to their existing owners; their contextual dialogs are retained. There is no second APK, duplicated preference store or exported backend service. The APPLICATION_PREFERENCES route opens SettingsActivity directly.
 
-Portable Config schema v11 includes nullable `homeGrid` and `drawerGrid`. Kotlin and native preflight agree on integral dimensions 1–10; legacy automatic grids and unrelated preferences are preserved. Local widget IDs, report settings and replay markers keep their existing separate ownership.
+Portable Config schema v12 includes nullable `homeGrid` and `drawerGrid` (introduced in v11), explicit theme mode and independent search/provider preferences. Kotlin and native preflight agree on integral dimensions 1–10; legacy automatic grids and unrelated preferences are preserved. Local widget IDs, report settings and replay markers keep their existing separate ownership.
 
-For the full current system and invariant inventory with source line references, see [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md). This page is the shorter ownership overview.
+For the complete current system/method ownership, invariant, failure-boundary and information-flow reference, see [GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md). [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) retains historical source audits. This page is the shorter ownership overview.
 
 ## PR #87 presentation and failure-boundary changes
 
-The review branch adds an activity-scoped `PresentationController`: Android owns the applied static/live wallpaper and renders it through the wallpaper window. Home stays transparent without global dimming. Text shadows protect clock/date and wallpaper labels; inset-sized views protect system-bar icons only. Grove does not paint a decoded copy of its remembered selection. Android owns wallpaper ID/color metadata; a private worker reads it, a Home-color listener invalidates it, and resume refresh is the fallback if registration fails. Lifecycle generations reject destroyed/superseded output. No additional wallpaper-reading or file permission is required. Missing color metadata uses the current theme's button colors.
+Merged PR #87 adds an activity-scoped `PresentationController`: Android owns the applied static/live wallpaper and renders it through the wallpaper window. Home stays transparent without global dimming. Text shadows protect clock/date and wallpaper labels; inset-sized views protect system-bar icons only. Grove does not paint a decoded copy of its remembered selection. Android owns wallpaper ID/color metadata; a private worker reads it, a Home-color listener invalidates it, and resume refresh is the fallback if registration fails. Lifecycle generations reject destroyed/superseded output. No additional wallpaper-reading or file permission is required. Missing color metadata uses the current theme's button colors.
 
 Config schema v10 adds `themeMode` (system/light/dark/wallpaper) in both Kotlin and Rust. Legacy v1–v9 imports retain System and their existing wallpaper-button-color preference. Explicit Light/Dark uses AppCompat night mode; Wallpaper colors follows system night mode and applies Android Home-wallpaper color to launcher buttons. Home/Lock/Both still apply through Android before Grove's remembered Home preference commits; lock-only never replaces Home preference. External changes never rewrite that preference.
 
@@ -33,7 +35,7 @@ Search preserves its committed frame through debounce; permission/preference rec
 
 Status: the integrated source refactor and [PR #73](https://github.com/davidcit646/Grove/pull/73) MainActivity lane split are on main. The broad device verification ticket #34 was closed unrun by scope decision; the checklist remains in TESTING.md. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior; [FAILURE-POLICY.md](FAILURE-POLICY.md) defines the capability outcomes, and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) separates source checks from Android device work.
 
-`MainActivity` is the approximately 200-line Android host for lifecycle, ActivityResult launchers, root views, platform services and routing. Nine activity-scoped controllers own feature state and navigation decisions. `SearchSources` owns activity cache snapshots; process-owned `ContactChanges` owns contact observation, `IndexWork` owns durable scheduling and `IndexCache` owns publication; `WidgetFlow` owns the widget setup sequence while the Activity retains result launchers. `FirstRunSetup` owns the full-screen shell and navigation; `FirstRunPages` renders page content with `FirstRunComponents` visual primitives and `FirstRunState` provisional answers. The earlier 1,145-line Activity was split by #73. The former #6 device gate was closed by user scope decision without a device pass; see TESTING.md for the unrun matrix. These lower-level components still support the controllers:
+`MainActivity` is the Android host for lifecycle, ActivityResult launchers, root views, platform services and routing. Nine activity-scoped controllers own feature state and navigation decisions. `SearchSources` owns activity cache snapshots; process-owned `ContactChanges` owns contact observation, `IndexWork` owns durable scheduling and `IndexCache` owns publication; `WidgetFlow` owns the widget setup sequence while the Activity retains result launchers. `FirstRunSetup` owns the full-screen shell and navigation; `FirstRunPages` renders page content with `FirstRunComponents` visual primitives and `FirstRunState` provisional answers. The earlier 1,145-line Activity was split by #73. The former #6 device gate was closed by user scope decision without a device pass; see TESTING.md for the unrun matrix. These lower-level components still support the controllers:
 
 | Owner | Boundary and timing | Failure outcome / retry | Verification |
 | --- | --- | --- | --- |
@@ -85,10 +87,9 @@ permissions denied/revoked, setup finish/skip/replay, widgets bind/cancel/restor
 config import/editor/recovery, wallpaper apply, and rotation/resume during pending
 search/catalog/wallpaper work. #6 was closed with this device checklist unrun by user scope decision.
 
-## Target design gaps
+## Released capabilities and remaining verification
 
-The implementation matrix in [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main) is the immutable operating contract, even where its historical main-branch implementation notes lag behind this branch. On PR #83, #74/#75 implement independent controls, live lookups and private persistent caches; #82 incorporates #76 with packaged offline artwork, v9 stable source IDs, solid black and a bounded Android-selected custom image flow; #78 implements the stable Grove/GWS error registry, Degrade/Recover/Stop routing and privacy-bounded report handoff; #27 separates bounded configuration document/recovery work from Activity UI; and #81 moves replay into Launcher settings → Tutorials with a single persisted request. Production/test source at `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567 (Rust tests, debug build, JVM tests, lint, and missing-signing-secret negative gate). Android device proof remains recorded separately in TESTING.md. PR #87 implements external Android wallpaper/theme reconciliation under #77 on its review branch.
-
+The [GROVE-STATUS.md release matrix](GROVE-STATUS.md#implementation-status-on-main) is authoritative. v1.0.0 includes independent search/indexing and durable caches (#74/#75), custom/black/offline wallpaper (#82 incorporating #76), numeric/severity/report workflow (#78), external wallpaper/theme reconciliation (#77), configuration workflows (#27), replay (#81), onboarding (#89) and Juniper settings (#92). Included implementation does not close unrun device checks. The #89 onboarding exception remains explicitly recorded in Grove Status; detailed evidence is in BUILD-STATUS.md and TESTING.md.
 
 ## PR #90 onboarding implementation — October 5, 2026
 
@@ -118,11 +119,9 @@ Source `42984548fd4c6211bde60df7871acd20a421c9fb` passed [Android CI](https://gi
 
 `SettingsGroups` owns only Material card surfaces, spacing and accessibility headings. `SettingsPages` and `SettingsDocumentPages` place their existing controls inside these groups; SettingsCommands, the shared repository and platform/feature owners retain all actions and settings authority. Search uses the same helper. Home groups are Buttons, Clock and date, Pinned apps, Gestures, Widgets and Default launcher; Drawer, Appearance, Configuration, Help, About and artwork credits also use labeled cards. No setting keys, navigation routes, platform actions or command calls were removed.
 
-
 ### Settings scroll ownership
 
 `SettingsActivity` owns transient per-route scroll positions through `SettingsScrollState`, outside configuration and `SettingsRepository`. Before a render it remembers the laid-out displayed route; after the replacement ScrollView lays out it restores that route's position. The layout guard prevents rapid repository updates from saving a newly created view's zero position before restoration. Saved-instance state preserves allowlisted route positions across recreation. The ScrollView receives focus to prevent newly constructed controls from pulling the viewport to the first row. Existing page motion finishes before capture; Android clamps positions when content shrinks.
-
 
 ### Settings discovery (#103)
 
@@ -136,13 +135,11 @@ Source `42984548fd4c6211bde60df7871acd20a421c9fb` passed [Android CI](https://gi
 
 Android has no universal documented widget-settings page. Widget queries offer Grove Add widget first, plus supported related Default launcher and a labeled Search Android settings (or Android settings root) fallback. ACTION_APP_SEARCH_SETTINGS receives no undocumented query extras. ACTION_SEARCH_SETTINGS, which configures global search, is not used.
 
-
 ### Calculator search
 
 `SearchCalculator` owns deterministic local arithmetic for expressions ending in `=`: decimal literals, unary signs, parentheses and precedence for addition/subtraction/multiplication/division, including ×/÷/− keyboard symbols. It returns NotCalculation, Answer (with an explicit approximation flag), or Invalid (syntax, division by zero, or limits). It parses no functions/scripts/exponents and never accesses Android, the network or persistent settings. Input is bounded to 256 characters, literals to 64 characters, nesting to 16, operations to 128, and intermediate precision/scale and rendered answers to bounded sizes. BigDecimal preserves exact arithmetic; nonterminating division uses DECIMAL128 and marks the answer approximate.
 
 SearchController evaluates on the existing query worker and publishes under the same generation/target guard as other results. SearchScreen includes the calculation in its frame fingerprint and renders the answer before app results; malformed arithmetic has a non-actionable correction message. Ordinary queries retain their normal search behavior. CalculatorActions owns tap-time handoff through Intent.makeMainSelectorActivity(ACTION_MAIN, CATEGORY_APP_CALCULATOR), without an OEM package name or expression extras. A missing/failed external calculator produces a scoped message and keeps the local answer available. Android owns calculator app selection and launch.
-
 
 ### Search feature preferences and tutorial ownership (#104–#107)
 

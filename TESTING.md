@@ -1,5 +1,7 @@
 # Device acceptance checklist
 
+**v1.0.0 documentation baseline:** `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`, published October 6, 2026. [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main) is the authoritative contract and release capability matrix; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed source and signed-artifact gates. Included implementation is separate from pending Android device proof. Dated pre-release sections below preserve evidence at their stated commits: “unmerged”, “unchanged”, “skipped” and “blocked” in those records describe that historical run, not current release status. Documentation reconciliation is tracked in [#79](https://github.com/davidcit646/Grove/issues/79).
+
 ## PR #87 source verification (2026-10-05)
 
 Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7870222d194018551e4a54cd63b8454ef8b4`, passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37356982336): Rust tests, debug APK assembly, JVM tests, lint and the missing-signing-secret negative gate. Signed release steps were skipped in this PR run. This is source/build verification; new Android visual, permission, provider and lifecycle cases below have not been run by the assistant. `GROVE-STATUS.md` remains unchanged.
@@ -19,22 +21,21 @@ Review branch `codex/search-theme-audit-31-77-85`, production/test source `531d7
 
 These are new review-branch checks, not covered by the earlier main acceptance. Historical verification-only issues #20–#26, #29, #30, #32 and #33 were closed on David's explicit acceptance on 2026-10-05; that decision does not manufacture individual test results.
 
-
 ## #74/#75 indexer review gate (pending device execution)
 
 Record build SHA, device/API, and result for each case. Do not mark source review or JVM tests as Android proof.
 
-- Upgrade v7 settings with both search flags on: both indexing flags remain off, live search still returns contacts/files with current grants, and Home remains responsive. Import a v8 document with each search/index combination, then export/reload v9 and verify the wallpaper is represented by a stable source ID while the four search/index choices are unchanged.
-- Regression #84: with the native library loaded, load a valid legacy v8 configuration, change a wallpaper or ordinary setting so Grove commits v9, recreate/restart Grove, and verify both v8 input and the resulting v9 save reload without fallback recovery. Malformed v8/v9 and unsupported v10 must still enter the normal rejection/recovery path without erasing the preserved raw configuration.
+- Upgrade v7 settings with both search flags on: both indexing flags remain off, live search still returns contacts/files with current grants, and Home remains responsive. Import a v8 document with each search/index combination, then export/reload v12 and verify the wallpaper is represented by a stable source ID while the four search/index choices are unchanged.
+- Regression #84: with the native library loaded, load a valid legacy v8 configuration, change a wallpaper or ordinary setting so Grove commits v12, recreate/restart Grove, and verify both legacy input and the resulting v12 save reload without fallback recovery. Malformed input and unsupported v13 must enter the normal rejection/recovery path without erasing preserved raw configuration; v10–v12 are supported.
 - Grant, deny, and revoke contacts and All files access while a query and background build are running. No protected row may remain visible or be committed after revocation; restoring a grant alone must not enable a Grove switch.
-- Turn indexing off during a build and verify worker cancellation, private cache deletion and permitted live search; turn search off independently and verify no rows while explicitly enabled indexing may refresh. App search and Home must work throughout.
+- Turn indexing off during a build and verify worker cancellation, private cache deletion and permitted live search; turn search off independently and verify no protected rows, canceled indexing and deleted cache even if its saved indexing preference remains on (#89). App search and Home must work throughout.
 - Force unavailable, empty, corrupt, oversize, stale and partially scanned caches; force provider null/throw and a failed/low-storage atomic write. Check scoped status, retry/fallback, no false Indexed result, and isolation of the other source.
 - Type quickly and leave Search during a live 15,000-file scan. Verify bounded time, cancellation, a truthful partial label, no main-thread stall, and no old query publication. Repeat after process kill/reboot, low battery, storage pressure, and contact observer registration failure.
 - Inspect app-private cache contents and privacy text: only contact name/lookup ID and file name/path/type/coverage, no phone numbers or file contents. Verify backup/device-transfer exclusion, deletion on indexing disable/revocation, and no contact/file data in logs.
 
 **Scope note (2026-10-05):** Validation-only issues #2, #5, #6, #14, #34 and #35 were closed at the user's request. Their unrun device and performance rows below remain a checklist, not passing evidence. The current test APK is a debug `.test` package from source identical to main at `7015420`; a signed production install/update remains #36.
 
-[GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior, with a [current-versus-proposed matrix](GROVE-STATUS.md#implementation-status-on-main). Do not mark proposal-only cases as failures of the current release without first implementing their linked issues. The 2026-10-04 user acceptance of some integrated Grove Test conditions closed #17 by a scope decision; it was not the full dated Android 12/current-device matrix below.
+[GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior, with a [release implementation matrix](GROVE-STATUS.md#implementation-status-on-main). Use the release matrix to distinguish included implementation, contract deviations and unrun checks; do not infer device success from release publication. The 2026-10-04 user acceptance of some integrated Grove Test conditions closed #17 by a scope decision; it was not the full dated Android 12/current-device matrix below.
 
 ## #21/#22/#23 recovery, catalogue and search gate (pending device execution)
 
@@ -64,20 +65,11 @@ For the latest stacked build, inject a malformed preference type and a failing c
 
 See [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) for the capability-by-capability failure cases. CI passing is required but does not fill any row in this table.
 
-
 ## Grove Status implementation verification (pending device execution)
 
-| Design requirement | Issue | Required evidence |
-| --- | --- | --- |
-| Search works live with indexing off, and a denied/revoked source reveals no stale results | [#74](https://github.com/davidcit646/Grove/issues/74) | Clean/upgrade config migration, provider failure, cancellation and query/action permission checks on device |
-| Independent, rebuildable contact/file caches with eight states | [#75](https://github.com/davidcit646/Grove/issues/75) | Cache missing/stale/corrupt, process death, revocation, partial scan, size/retention and privacy checks |
-| Packaged/user/solid-black wallpaper library | [#82](https://github.com/davidcit646/Grove/issues/82) (incorporates #76) | Offline built-ins and credits, stable-ID migration, cancel/invalid/oversized input, Home/Lock/Both, apply/config-sync failure, prior-wallpaper preservation, rotation/process recreation |
-| Android wallpaper reconciliation and explicit theme choices | [#77](https://github.com/davidcit646/Grove/issues/77) | External wallpaper and light/dark changes, Home/Lock/Both, restart and failed preference commit |
-| Severity/code error workflow and safe report draft | [#78](https://github.com/davidcit646/Grove/issues/78) | Each severity, no mail handler, chooser cancellation, report redaction/retention, no automatic send |
+The single requirement/owner/code/issue/evidence matrix is in [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main). All five capabilities are included in v1.0.0; the permission/live-search/cache checks above, wallpaper checks below, PR #87 theme checks and #78 report checks remain pending where no dated device result is recorded. Historical source CI is not device evidence. Record device/API, exact build SHA, steps and outcome. The closed #34 checklist records unrun work; issue closure alone cannot mark a check passed.
 
-PR #83 implements #27, #74/#75, #78, #81 and #82 (including #76) in source with deterministic tests; production/test head `13aa0c10ac635e216fe555484bc2807d3a98bb2a` passed Android CI run #567; the rows above remain Android evidence gaps, not implementation gaps. Record device/API, build SHA, steps and outcome. The closed [#34](https://github.com/davidcit646/Grove/issues/34) checklist records unrun device work; [#32](https://github.com/davidcit646/Grove/issues/32) remains the broader failure-injection gate.
-
-## Wallpaper picker (#82 review branch)
+## Wallpaper picker (#82, included in v1.0.0; device checks pending)
 
 - Browse every packaged curated image with networking disabled. Verify preview/apply works offline and each item exposes readable author, source and license metadata; verify generated art and the separate true `#000000` option.
 - On short screens, landscape, gesture-navigation insets, large font/display size and long attribution text, verify preview/details can scroll without hiding Previous/Next, Retry, credits, destination controls or the custom-image entry.
@@ -160,7 +152,6 @@ Device behavior and visual layout have not yet been validated on hardware. Local
 - Export configuration and verify schema version 4 contains `pinnedAppsAtBottom`.
 - Import version 1, 2, and 3 configs and verify pinned apps default to the legacy bottom placement.
 
-
 ## PR #90 onboarding implementation — October 5, 2026
 
 Production/test source `026be7f0314c355f0449fe23796a557ee0417e22` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37399253894): seven Rust tests, debug APK assembly, JVM tests, lint, and the missing-signing negative gate. This is source/build verification; PR #90 remains unmerged and its Android device acceptance is pending. GROVE-STATUS.md is unchanged. Issue #89 explicitly requests fresh-install indexing defaults and Settings-only indexing controls; this overrides the older onboarding indexing-choice description without editing that contract.
@@ -230,7 +221,6 @@ Source `3bc0b75f4a6f897886996c54bce4055b3c2f2853` passed [Android CI](https://gi
 
 Pending device check: open Home screen settings and reach Add widget without scrolling. With tutorial acknowledgment unset, verify only Got It! is shown and a confirmed acknowledgment opens the picker; failed acknowledgment persistence reports failure. Add/configure a widget and verify picker/Android cancellation and pending-widget Retry/Remove still work.
 
-
 ### Settings scroll preservation — 2026-10-06
 
 Source `f1666e7fd338b3ca89a3f4191b61bbb3a495ff3c` passed CI run 37459613835: Rust tests, JVM suite (175 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. `SettingsScrollStateTest` covers independent routes, refresh/Back positions, known-route recreation, negative clamping and snapshot independence.
@@ -238,7 +228,6 @@ Source `f1666e7fd338b3ca89a3f4191b61bbb3a495ff3c` passed CI run 37459613835: Rus
 Device checks pending: scroll down and toggle several options; verify the same position remains after repository refresh, returning from a child page, rotation and external permission/settings return. Rapid changes before layout must not replace a remembered position with zero. Shorter content should clamp normally.
 
 Debug Grove Test APK: `Grove-Juniper-scroll-f1666e7.apk`, SHA-256 `df4c2ba1643721541630d33db6e51e093b9a4924489db9dfecaaa883d5dde00c`. Verified GitHub archive digest, ZIP integrity, manifest and all three Rust ABIs.
-
 
 ### Search Grove and Android settings — #103, 2026-10-06
 
@@ -248,7 +237,6 @@ Device acceptance remains pending: Android 12/current Android and an OEM phone. 
 
 Debug Grove Test APK: `Grove-Juniper-settings-search-fa23c6d.apk`, SHA-256 `29f79d338f810a9473aafa6eacc473f3dbb07636be77450c83e966cf4e057d9c`. Verified GitHub artifact archive digest, APK ZIP integrity, manifest and all three Rust ABIs.
 
-
 ### Calculator search — 2026-10-06
 
 Source `0dc18f5145478c199fb22edf879464bf89815e9e` passed CI run 37466709982: eight Rust tests, JVM suite (191 test methods), debug APK assembly, lint and missing-signing negative gate. Signed release steps were skipped. SearchCalculatorTest covers precedence, left associativity, parentheses, decimal precision, unary negatives and keyboard symbols, explicit approximate division, zero division, malformed/incomplete/non-arithmetic input, resource bounds, frame invalidation and stale query/lifecycle suppression.
@@ -256,7 +244,6 @@ Source `0dc18f5145478c199fb22edf879464bf89815e9e` passed CI run 37466709982: eig
 Device checks pending: enter `2+2=`, `2+3*4=`, `(2+3)*4=`, `0.1+0.2=`, `1/3=` and `1/0=`; verify top result, exact/approximate formatting and non-actionable errors. Tap an answer to open the phone calculator; return to search and check focus/query state. With no handler or a disabled calculator, the answer stays available with a scoped launch message. Check rapid edits, leaving search, rotation and normal app/settings/contact/file search. No automatic query handoff to the external calculator is promised.
 
 Debug Grove Test APK: `Grove-Juniper-calculator-0dc18f5.apk`, SHA-256 `24eac13d1016729b068c70cc2fc42abd2265e32222298d806bee37ec904c5db2`. Verified GitHub artifact archive digest, APK integrity, manifest and all three Rust ABIs.
-
 
 ### Search feature controls and tutorials — 2026-10-06
 

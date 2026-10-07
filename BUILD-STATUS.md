@@ -1,5 +1,14 @@
 # Grove build verification
 
+## Published Grove 1.0.0 — October 6, 2026
+
+[v1.0.0](https://github.com/davidcit646/Grove/releases/tag/v1.0.0) was published from `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48` with signed APK, AAB, checksums and provenance. [CI run 37491934642](https://github.com/davidcit646/Grove/actions/runs/37491934642) completed Rust tests, JVM tests, debug assembly, lint, missing-signing negative check, signed build/verification, artifact upload and stable publication. Certificate, three native ABIs, alignment and checksums passed release verification. Source version is 1.0.0, version code 32, portable Config schema v12. PRs #83/#87/#90/#92 are merged. Signing-secret setup is no longer a blocker for this release; the replacement-key compatibility limitation recorded below remains applicable. Installed-device update/native-load tests, broad OEM/accessibility/fault-injection coverage and Google Play approval remain separate pending work.
+
+## Historical build records
+
+
+**v1.0.0 documentation baseline:** `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`, published October 6, 2026. [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main) is the authoritative contract and release capability matrix; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed source and signed-artifact gates. Included implementation is separate from pending Android device proof. Dated pre-release sections below preserve evidence at their stated commits: “unmerged”, “unchanged”, “skipped” and “blocked” in those records describe that historical run, not current release status. Documentation reconciliation is tracked in [#79](https://github.com/davidcit646/Grove/issues/79).
+
 ## Juniper source verification (2026-10-06)
 
 Production/test source `994df71d741b67dd65ed690840bd67b48cef1cdb` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37404896738): eight Rust tests, 163 JVM tests, debug APK assembly, Android lint and the missing-signing negative gate. Signed release steps were skipped. PR #92 is stacked on unmerged PR #90; Juniper device acceptance remains pending. GROVE-STATUS.md is unchanged.
@@ -30,7 +39,6 @@ Historical verification records in `verification/` describe earlier releases onl
 
 [GROVE-STATUS.md](GROVE-STATUS.md) remains the immutable target specification for this work. PR #83 implements the linked search/indexing, configuration workflow, tutorial replay, wallpaper-library and error-reporting behavior in source, while external wallpaper/theme reconciliation and Android device evidence remain separate work.
 
-
 ## PR #90 onboarding implementation — October 5, 2026
 
 Production/test source `026be7f0314c355f0449fe23796a557ee0417e22` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37399253894): seven Rust tests, debug APK assembly, JVM tests, lint, and the missing-signing negative gate. This is source/build verification; PR #90 remains unmerged and its Android device acceptance is pending. GROVE-STATUS.md is unchanged. Issue #89 explicitly requests fresh-install indexing defaults and Settings-only indexing controls; this overrides the older onboarding indexing-choice description without editing that contract.
@@ -46,7 +54,6 @@ Settings categories and destinations now use matching Material Symbols Rounded i
 Production/test source `6cafc09247cbc3f96eb1a21a1ebc4bfb025bd130` passed [Android CI](https://github.com/davidcit646/Grove/actions/runs/37409473807): eight Rust tests, the JVM suite (173 test methods), debug APK assembly, lint and the missing-signing negative gate. Signed release steps were skipped. Source trees locally and on the pushed branch match. PR #92 remains draft, stacked on unmerged PR #90; the new device acceptance is pending. GROVE-STATUS.md is unchanged.
 
 The current owner/caller/consumer and failure inventory is [CONTACT-REVIEW.md](CONTACT-REVIEW.md). Package changes no longer request contact indexing; ContactChanges owns process observation, IndexWork owns scheduling/recovery/repair, IndexCache owns confirmed cache publication and shared metadata, and the two UIs render those outcomes. The previous cleanup pass did not prove idle stability; this source fixes the subsequent full-audit findings.
-
 
 ## Search feature controls and tutorials (#104–#107) — October 6, 2026
 

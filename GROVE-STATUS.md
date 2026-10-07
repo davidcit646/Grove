@@ -1,24 +1,28 @@
 # Grove behavior and failure rules
 
-**Current code map:** [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) records the baseline systems, invariants, data flow, dependencies and failure boundaries with pinned source lines.
+**Current code map:** [GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md) is the complete release-pinned ownership, invariant, failure-method and information-flow reference, including every Kotlin/Rust source file and named declaration. [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) retains historical source audits. This file remains authoritative for behavior and capability status.
 
-**Status:** Design proposal. This describes how Grove should behave; it is not a claim that every rule is implemented today. See [Open implementation checks](#open-implementation-checks) before using it as a test checklist.
+**Status:** Target behavior and failure contract, with release-pinned implementation evidence below. This is not a claim that every rule or device scenario has been verified. See [Open implementation checks](#open-implementation-checks) before using it as a test checklist.
 
 Grove is the phone's home screen. A broken wallpaper download or contact index should not make the user lose their launcher. Each feature owns its own failure, and protected data stays unavailable whenever Android permission or the user's Grove setting says it should.
 
 ## Implementation status on `main`
 
-This is the target contract. The current app already has a recoverable Home, permission-aware in-memory contact/file search, partial file-scan reporting, off-thread wallpaper preparation, and a user-directed crash email. The following parts are **proposed, not shipped**:
+This file remains the source of truth for intended behavior and the canonical implementation-status matrix. **Release baseline:** [v1.0.0](https://github.com/davidcit646/Grove/releases/tag/v1.0.0), published October 6, 2026, at `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48` (version code 32). `main` had the same source baseline when this reconciliation was prepared. Later documentation commits do not change the shipped binary. [Release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed Rust/JVM tests, debug assembly, lint, the missing-signing negative gate, signed APK/AAB verification and stable publication.
 
-| Target behavior | Current implementation | Tracking |
-| --- | --- | --- |
-| Search with indexing independently disabled; live GFS/GCS | One contact and one file search switch; enabling a source loads/scans it | [#74](https://github.com/davidcit646/Grove/issues/74) |
-| Separate durable GFI/GCI caches and the eight index states below | Separate in-memory lists only; no persistent search index or index-only switch | [#75](https://github.com/davidcit646/Grove/issues/75) |
-| User-selected wallpaper and solid black choice | Three generated designs and ten Commons choices | [#76](https://github.com/davidcit646/Grove/issues/76) |
-| Android-applied-wallpaper reconciliation and explicit theme modes | Saved Grove selection plus wallpaper-button-color toggle; system theme styling | [#77](https://github.com/davidcit646/Grove/issues/77), [#29](https://github.com/davidcit646/Grove/issues/29) |
-| GHEAEW severity/code registry, safe report draft, default recipient | Saved crash/nonfatal reports and a next-launch email choice; no numeric code UI or default address | [#78](https://github.com/davidcit646/Grove/issues/78), [#28](https://github.com/davidcit646/Grove/issues/28) |
+The five capabilities below are **included in v1.0.0**, replacing the earlier pre-release implementation notes. Included means implemented and packaged; it does not establish every target rule, Android/OEM interaction or failure path as verified. [TESTING.md](TESTING.md) owns detailed execution records and pending checks; [BUILD-STATUS.md](BUILD-STATUS.md) owns build/release evidence.
 
-The [PR #73](https://github.com/davidcit646/Grove/pull/73) MainActivity lane split is on `main`; its #6/#34 device gates were closed unrun by user scope decision. [TESTING.md](TESTING.md) and [FAILURE-VERIFICATION.md](FAILURE-VERIFICATION.md) retain the unrun Android device checklist. [#79](https://github.com/davidcit646/Grove/issues/79) tracks documentation alignment.
+| Target behavior | Release owner / pinned code | Implementation at v1.0.0 | Tracking | Test / device evidence |
+| --- | --- | --- | --- | --- |
+| Search with indexing independently disabled; live GFS/GCS | [Config](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/Config.kt), [SearchController](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/SearchController.kt), [SearchSources](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/SearchSources.kt) | Separate persisted search/indexing switches; bounded permitted live lookup when indexing is off or a cache is unavailable | [#74](https://github.com/davidcit646/Grove/issues/74) | SearchPublicationGateTest, ConfigTest; device permission/query/action, latency and cancellation checks pending |
+| Separate durable GFI/GCI caches and eight index states | [IndexCache](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/IndexCache.kt), [IndexWork](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/IndexWork.kt), [IndexState](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/IndexState.kt) | Separate atomic app-private metadata caches, independently scheduled workers and explicit states; caches never authorize access | [#75](https://github.com/davidcit646/Grove/issues/75) | IndexStateTest, IndexRefreshRequestsTest; device corrupt/stale/partial cache, failed write, revocation and process-death checks pending |
+| User-selected wallpaper and solid black choice | [WallpaperArt](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/WallpaperArt.kt), [WallpaperController](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/WallpaperController.kt), [WallpaperPicker](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/WallpaperPicker.kt) | Three generated designs, ten packaged Commons images, solid black and a bounded user-selected image; Android apply precedes Grove preference commit | [#82](https://github.com/davidcit646/Grove/issues/82), [#76](https://github.com/davidcit646/Grove/issues/76) (#76 closed as duplicate) | WallpaperRegistryTest, WallpaperControllerTest; offline/apply/cancel/invalid-input/lifecycle device checks pending |
+| Android-applied-wallpaper reconciliation and explicit theme modes | [PresentationController](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/PresentationController.kt), [Config](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/Config.kt), [ThemeColors](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/ThemeColors.kt) | Android renders Home static/live wallpaper; ID/color metadata refreshes button colors; System/Light/Dark/Wallpaper choices persist | [#77](https://github.com/davidcit646/Grove/issues/77), [#29](https://github.com/davidcit646/Grove/issues/29) | PresentationPolicyTest, ConfigTest; external/live/Home/Lock/Both and OEM device checks pending |
+| GHEAEW severity/code registry, safe report draft, default recipient | [GroveErrors](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/GroveErrors.kt), [CrashReporter](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/CrashReporter.kt) | Assigned numeric/GWS registry, Recover/Degrade/Stop UI, bounded retained reports, support@granet.tech draft and no-mail copy fallback; no automatic send | [#78](https://github.com/davidcit646/Grove/issues/78), [#28](https://github.com/davidcit646/Grove/issues/28) | GroveErrorRegistryTest, GroveErrorRoutingTest, CrashReporterPrivacyTest, ReportPromptPolicyTest; actual dialog/mail/copy/retention failure checks pending |
+
+PRs [#73](https://github.com/davidcit646/Grove/pull/73), [#83](https://github.com/davidcit646/Grove/pull/83), [#87](https://github.com/davidcit646/Grove/pull/87), [#90](https://github.com/davidcit646/Grove/pull/90) and [#92](https://github.com/davidcit646/Grove/pull/92) are merged and included in this baseline. The #6/#34 device gates were closed unrun by user scope decision; closure is not passing evidence. Limited user acceptance of tested workflows does not complete the broader Android/OEM/accessibility/fault-injection matrix in TESTING.md and FAILURE-VERIFICATION.md. [#79](https://github.com/davidcit646/Grove/issues/79) tracks this reconciliation.
+
+**Documented onboarding exception — #89:** The rules below retain the original setup indexing-choice description. [#89](https://github.com/davidcit646/Grove/issues/89) explicitly requested indexing preferences on for genuine fresh installs and indexing controls only in Settings. v1.0.0 implements that request: optional search sources start off, work requires enabled search plus current Android access, and existing/imported/replayed choices are preserved. Search off stops the affected indexer and deletes its cache; an indexing preference alone never authorizes work. This exception is recorded separately rather than silently rewriting the target rules.
 
 ## The rules in plain language
 
@@ -42,7 +46,7 @@ On a genuine first run with no saved settings, create safe defaults and show set
 
 If Android's app inventory cannot be read, retry and show a scoped error with whatever recovery surface Grove can render. Do not present stale cached apps as a verified current list. If Grove cannot render even a minimal home, that is a **Stop** failure.
 
-The original draft named `/data/usr/0/Grove/files/datastore/grovesettings.conf`. Treat that as an **unverified placeholder**, not an Android path or format to implement. Check the repository's actual storage code first. The desired behavior matters more than that filename.
+**Verified v1.0.0 storage:** [GroveApp](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/GroveApp.kt) supplies private SharedPreferences named `grove` to [ConfigStore](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/ConfigStore.kt). Config is JSON under `config`, with separate damaged/fallback recovery entries; [Config](https://github.com/davidcit646/Grove/blob/f9455918d0bcd7f5f038bb3cd87fa64c4a93be48/app/src/main/java/tech/granet/grove/Config.kt) emits schema v12. The original draft path was a placeholder and is not used.
 
 ## Who owns each piece of data?
 
@@ -84,7 +88,7 @@ The first-run tutorial may explain the speed tradeoff and offer indexing as a ch
 | `7 Cache unavailable` | Cache is missing or unreadable | Rebuild if enabled; otherwise use permitted live search |
 | `8 Cache disabled` | Cache use is deliberately off | Treat as indexing disabled |
 
-These numbers are proposed service states, **not** Grove error codes. The cache never gives itself permission to return data. On revocation, stop the affected indexer immediately and discard or quarantine inaccessible cached results before another query can expose them.
+These numbers are contract state labels, **not** Grove error codes; v1.0.0 implements the named states in `IndexState`. The cache never gives itself permission to return data. On revocation, stop the affected indexer immediately and discard or quarantine inaccessible cached results before another query can expose them.
 
 ## Wallpaper selection
 
@@ -135,12 +139,11 @@ The reporting choice exists at every severity. “Continue” is offered only wh
 | `500–599` | GFI |
 | `600–699` | GCI |
 
-The ranges are reserved; individual codes still need a registry. Do not invent a code from an example. Error reports include safe context, not private data.
+The ranges are reserved; v1.0.0 assigns individual codes in the `GroveErrors` registry linked above. That registry, rather than an example in this document, defines assigned codes. Error reports include safe context, not private data.
 
 ## Open implementation checks
 
 - Compare this proposal with the current activities, settings schema, search/index code, and wallpaper implementation. Split ownership along those real boundaries rather than creating classes solely to match acronyms.
-- Confirm the actual settings location and format; remove the placeholder above once verified.
 - Confirm Android's accessible file scope and permission behavior before promising searches across every user folder. Keep app-private and system data outside the promise.
-- Decide exact code assignments and diagnostic details in one registry.
+- Keep exact code assignments and diagnostic details in the existing GroveErrors registry; verify actual UI/report behavior on device.
 - Test missing/corrupt settings, failed saves, unavailable app inventory, revoked permissions, stale/broken caches, missing mail app, and wallpaper download/apply failure. Verify each failure leaves unrelated features usable and never leaks disabled search results.
