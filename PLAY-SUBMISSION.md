@@ -219,13 +219,15 @@ Treat the Play Console account as authoritative. If the developer account is sho
 
 ### App icon
 
-Required Play asset:
+Prepared asset: `play-assets/icon-512.png`
 
 - 512 × 512 px;
-- 32-bit PNG with alpha;
-- no more than 1,024 KB.
+- PNG / RGBA;
+- derived directly from the existing `app/src/main/res/drawable/ic_grove.xml` geometry and colors;
+- SHA-256: `2c1447b2fc6baf79b8e9f878ebfaf71f2e52bf7088b583c204e9766fcb1ae592`;
+- no unrelated redesign or new branding introduced.
 
-The in-app application icon currently comes from `app/src/main/res/drawable/ic_grove.xml`. Prepare the Play icon from the approved Grove branding rather than inventing unrelated artwork.
+Verify final file size remains under Google Play's 1,024 KB limit before upload.
 
 ### Feature graphic
 
@@ -285,7 +287,7 @@ General reviewer note:
 
 ### Visual assets
 
-- [ ] 512 × 512 Play icon prepared.
+- [x] 512 × 512 Play icon prepared from existing Grove branding.
 - [ ] 1024 × 500 feature graphic prepared.
 - [ ] Final screenshots captured from release UI.
 
