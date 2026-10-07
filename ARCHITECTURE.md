@@ -21,7 +21,7 @@ The categorized workflow replaces the Grove settings modal and configuration dia
 
 Portable Config schema v12 includes nullable `homeGrid` and `drawerGrid` (introduced in v11), explicit theme mode and independent search/provider preferences. Kotlin and native preflight agree on integral dimensions 1–10; legacy automatic grids and unrelated preferences are preserved. Local widget IDs, report settings and replay markers keep their existing separate ownership.
 
-For the full current system and invariant inventory with source line references, see [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md). This page is the shorter ownership overview.
+For the complete current system/method ownership, invariant, failure-boundary and information-flow reference, see [GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md). [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) retains historical source audits. This page is the shorter ownership overview.
 
 ## PR #87 presentation and failure-boundary changes
 

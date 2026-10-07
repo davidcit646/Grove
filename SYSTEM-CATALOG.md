@@ -1,5 +1,7 @@
 # Grove system catalogue
 
+**Complete current reference:** [GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md) maps release-pinned lifetimes, operations, method ownership, invariants, failure boundaries and all source declarations. This catalogue retains detailed historical audits and migration evidence. GROVE-STATUS.md remains authoritative for behavior/status.
+
 **v1.0.0 documentation baseline:** `f9455918d0bcd7f5f038bb3cd87fa64c4a93be48`, published October 6, 2026. [GROVE-STATUS.md](GROVE-STATUS.md#implementation-status-on-main) is the authoritative contract and release capability matrix; [release CI](https://github.com/davidcit646/Grove/actions/runs/37491934642) passed source and signed-artifact gates. Included implementation is separate from pending Android device proof. Dated pre-release sections below preserve evidence at their stated commits: “unmerged”, “unchanged”, “skipped” and “blocked” in those records describe that historical run, not current release status. Documentation reconciliation is tracked in [#79](https://github.com/davidcit646/Grove/issues/79).
 
 ## Juniper current ownership — PR #92

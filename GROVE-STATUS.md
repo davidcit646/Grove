@@ -1,6 +1,6 @@
 # Grove behavior and failure rules
 
-**Current code map:** [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) records the baseline systems, invariants, data flow, dependencies and failure boundaries with pinned source lines.
+**Current code map:** [GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md) is the complete release-pinned ownership, invariant, failure-method and information-flow reference, including every Kotlin/Rust source file and named declaration. [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) retains historical source audits. This file remains authoritative for behavior and capability status.
 
 **Status:** Target behavior and failure contract, with release-pinned implementation evidence below. This is not a claim that every rule or device scenario has been verified. See [Open implementation checks](#open-implementation-checks) before using it as a test checklist.
 

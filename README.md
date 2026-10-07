@@ -10,6 +10,8 @@ Configuration provides editor, import review, explicit Apply, export and recover
 
 An Android 12+ home launcher by GraNet IT Solutions. Current source version: 1.0.0. See [BUILD-STATUS.md](BUILD-STATUS.md) for verification status.
 
+[GROVE-SYSTEM-MAP.md](GROVE-SYSTEM-MAP.md) is the complete v1.0.0 reference for process/host/method ownership, sources of truth, information flow, commit points, invariants, fail-first/fail-fast checks, scoped recovery and the full Kotlin/Rust declaration index.
+
 [SYSTEM-CATALOG.md](SYSTEM-CATALOG.md) inventories the current systems, sources of truth, information flow, dependencies, invariants, and failure paths with commit-pinned code lines. [GROVE-STATUS.md](GROVE-STATUS.md) is the target behavior and failure contract. Its [release implementation matrix](GROVE-STATUS.md#implementation-status-on-main) is authoritative for capabilities at v1.0.0, with owners, pinned source, tracking issues and test/device evidence. Supporting documents retain historical verification records and detailed pending checks. The open [documentation issue](https://github.com/davidcit646/Grove/issues/79) keeps that distinction current. Source checks and Android device results are separate in [TESTING.md](TESTING.md).
 
 ## Presentation and failure-boundary changes — merged PR #87
