@@ -20,7 +20,6 @@ class ConfigTest {
                 showClock = true,
                 tapClockOpensClock = false,
                 showPinnedApps = false,
-                showPinnedAppsHint = false,
                 pinnedAppsAtBottom = false,
                 useWallpaperButtonColors = true,
             ),
@@ -33,12 +32,26 @@ class ConfigTest {
         val migrated = Config.parse("""{"version":1,"wallpaper":0,"favorites":[]}""")
         assertEquals(GestureSettings(), migrated.gestures)
         assertEquals(HomeScreenSettings(), migrated.homeScreen)
-        assertTrue(migrated.homeScreen.showPinnedAppsHint)
         assertTrue(migrated.json().contains("\"version\": 12"))
         assertEquals(SearchSettings(contacts = true, files = true), migrated.search)
         assertFalse(migrated.search.contactIndexing)
         assertFalse(migrated.search.fileIndexing)
         assertFalse(migrated.homeScreen.useWallpaperButtonColors)
+    }
+
+    @Test fun legacyConfigurationDropsRetiredFieldWithoutChangingPinsOrPreferences() {
+        // Historical input only: the retired key must never be emitted again.
+        for (version in 1..12) for (value in listOf("true", "false", "\"false\"", "null")) {
+            val wallpaper = if (version >= 9) "\"grove-fern\"" else "0"
+            val json = """{"version":$version,"wallpaper":$wallpaper,"themeMode":"dark","favorites":["example.app/.Main"],"homeScreen":{"showPinnedAppsHint":$value,"showPinnedApps":false,"showClock":false,"pinnedAppsAtBottom":false}}"""
+            val parsed = Config.parse(json)
+            assertEquals(listOf("example.app/.Main"), parsed.favorites)
+            assertFalse(parsed.homeScreen.showPinnedApps)
+            assertFalse(parsed.homeScreen.showClock)
+            assertFalse(parsed.homeScreen.pinnedAppsAtBottom)
+            assertFalse(parsed.json().contains("showPinnedAppsHint"))
+            assertEquals(parsed, Config.parse(parsed.json()))
+        }
     }
 
     @Test fun versionTwoMigratesNewControls() {
@@ -145,16 +158,15 @@ class ConfigTest {
     }
 
     @Test fun everyHomeSettingCombinationRoundTrips() {
-        for (mask in 0 until 256) {
+        for (mask in 0 until 128) {
             val home = HomeScreenSettings(
                 showAppsButton = mask and 1 != 0,
                 showSearchButton = mask and 2 != 0,
                 showClock = mask and 4 != 0,
                 showPinnedApps = mask and 8 != 0,
                 pinnedAppsAtBottom = mask and 16 != 0,
-                showPinnedAppsHint = mask and 32 != 0,
-                useWallpaperButtonColors = mask and 64 != 0,
-                tapClockOpensClock = mask and 128 != 0,
+                useWallpaperButtonColors = mask and 32 != 0,
+                tapClockOpensClock = mask and 64 != 0,
             )
             val parsed = Config.parse(Config(homeScreen = home).json())
             assertEquals(home, parsed.homeScreen)

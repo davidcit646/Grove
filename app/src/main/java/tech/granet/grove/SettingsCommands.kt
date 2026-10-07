@@ -3,7 +3,7 @@ package tech.granet.grove
 import android.content.Context
 
 internal enum class SettingKey {
-    APPS_BUTTON, SEARCH_BUTTON, CLOCK, CLOCK_ACTION, PINS, PIN_HINT, PIN_BOTTOM, WALLPAPER_COLORS,
+    APPS_BUTTON, SEARCH_BUTTON, CLOCK, CLOCK_ACTION, PINS, PIN_BOTTOM, WALLPAPER_COLORS,
     SWIPE_SEARCH, SWIPE_DRAWER, TAP_MENU, HOLD_MENU, CONTACTS, FILES, CONTACT_INDEX, FILE_INDEX, CALCULATOR, ANDROID_SETTINGS, GROVE_SETTINGS,
 }
 internal data class CommandFeedback(val saved: Boolean, val message: String? = null)
@@ -17,7 +17,6 @@ internal class SettingsCommands(private val context: Context, private val reposi
             SettingKey.CLOCK -> config.copy(homeScreen = config.homeScreen.copy(showClock = value))
             SettingKey.CLOCK_ACTION -> config.copy(homeScreen = config.homeScreen.copy(tapClockOpensClock = value))
             SettingKey.PINS -> config.copy(homeScreen = config.homeScreen.copy(showPinnedApps = value))
-            SettingKey.PIN_HINT -> config.copy(homeScreen = config.homeScreen.copy(showPinnedAppsHint = value))
             SettingKey.PIN_BOTTOM -> config.copy(homeScreen = config.homeScreen.copy(pinnedAppsAtBottom = value))
             SettingKey.WALLPAPER_COLORS -> config.copy(homeScreen = config.homeScreen.copy(useWallpaperButtonColors = value))
             SettingKey.SWIPE_SEARCH -> config.copy(gestures = config.gestures.copy(swipeDownSearch = value))

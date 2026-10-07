@@ -113,14 +113,7 @@ internal class HomeController(private val activity: MainActivity) {
 
     fun renderPinnedApps(target: LinearLayout) {
         with(activity) {
-            if (configController.config.homeScreen.showPinnedAppsHint) {
-                val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-                heading.addView(wallpaperLabel("PINNED APPS", 12f), LinearLayout.LayoutParams(0, -2, 1f))
-                target.addView(heading)
-                target.addView(wallpaperLabel("Hold and drag to move. Hold and release for options.", 12f))
-            }
             addGrid(catalogController.apps.filter { it.key in configController.config.favorites }.sortedBy { configController.config.favorites.indexOf(it.key) }, target)
-            if (configController.config.favorites.isEmpty()) target.addView(wallpaperLabel("Long-press an app in the drawer to pin it here."))
         }
     }
 

@@ -94,7 +94,6 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
                 "showClock",
                 "tapClockOpensClock",
                 "showPinnedApps",
-                "showPinnedAppsHint",
                 "pinnedAppsAtBottom",
                 "useWallpaperButtonColors",
             ][..],

@@ -37,10 +37,7 @@ internal class SetupController(private val activity: MainActivity) {
                 appsAvailable = catalogController.apps.isNotEmpty(),
             )) {
                 TutorialReplayDecision.NONE -> return
-                TutorialReplayDecision.DEFER -> {
-                    message("Tutorial replay will start when apps are available")
-                    return
-                }
+                TutorialReplayDecision.DEFER -> return
                 TutorialReplayDecision.START -> Unit
             }
             val setupPreviouslyCompleted = runCatching { prefs.getBoolean("setup_complete", false) }

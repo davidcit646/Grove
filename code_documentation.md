@@ -3314,3 +3314,14 @@ Apache-2.0 for original source and artwork. Third party dependencies and Commons
 See [shared record](#record-35) (same information).
 
 On the PR #90 branch, onboarding uses a concise Material You setup with rounded symbols, direct one-sentence permission choices, page slides and an initial foreground fade. Fresh-install indexing defaults on but requires enabled search and Android access. Indexing switches stay in Launcher settings. Existing users can preview the redesign through Launcher settings → Tutorials → Replay first-run setup; saved choices are preserved until successful Finish.
+
+
+## October 7, 2026 maintenance — privacy and Home cleanup
+
+The privacy policy now describes external search, contact, clipboard/share and reporting handoffs, default-enabled local crash capture, and explicit custom-image access separately from file indexing. About and Settings search label the canonical external link “Privacy Policy”; the existing ACTION_VIEW route keeps recoverable no-handler feedback. Permissions and dependencies are unchanged.
+
+The deferred setup announcement has been removed; tutorial readiness and replay policy are unchanged. Home renders its pinned grid without instructional text or a section heading. The associated preference, Settings command/catalogue/resources, Kotlin persistence field and Rust validation entry have been removed. Older configurations ignore the retired field, and subsequent saves/exports omit it without discarding pins or unrelated preferences. Kotlin and Rust compatibility cases cover schema versions 1–12 and previously stored boolean/string/null values; active toggle validation remains strict. Only deliberate legacy-input regression tests retain the old key.
+
+David reported on October 7 that update validation passes. Together with release CI run 37491934642 and the published v1.0.0 provenance, this resolves the remaining reported update-validation gate for #36. This records user-reported acceptance, not a newly executed assistant device test or broad OEM/native-load certification. Historical pending checklists above describe their original runs.
+
+For this maintenance change, device checks remain: first-run/deferred/replayed tutorial navigation; empty and populated Home grids plus pin/unpin/reorder/launch; upgrade/import/save/export with old configurations; Privacy Policy browser launch and missing-handler feedback. Source verification is recorded in the associated PR.
