@@ -190,3 +190,6 @@ mod contacts;
 mod actions_policy;
 
 mod reports;
+
+#[cfg(any(target_os="linux",target_os="android"))]
+mod shared_file;

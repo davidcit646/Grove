@@ -2,6 +2,8 @@ use crate::{classify, render_wallpaper, score_prepared, prepare_query, top_indic
 use jni::objects::{JObject, JObjectArray, JString};
 use jni::sys::{jint, jintArray, jobjectArray, jstring};
 use jni::JNIEnv;
+#[cfg(any(target_os="linux",target_os="android"))]
+use std::os::fd::{IntoRawFd,FromRawFd};
 
 // --- JNI -------------------------------------------------------------------
 
@@ -140,4 +142,22 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_normalizeNative(
         Ok(out.into_raw())
     }));
     match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
+}
+
+#[cfg(any(target_os="linux",target_os="android"))]
+#[no_mangle]
+pub extern "system" fn Java_tech_granet_grove_CoreBridge_openSharedNative(mut env:JNIEnv,_this:JObject,root:JString,relative:JString)->jint {
+    let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let root:String=env.get_string(&root).ok()?.into();let relative:String=env.get_string(&relative).ok()?.into();
+        crate::shared_file::open_shared(&root,&relative).ok().map(IntoRawFd::into_raw_fd)
+    }));
+    match result {Ok(Some(fd))=>fd,_=>-1}
+}
+#[cfg(any(target_os="linux",target_os="android"))]
+#[no_mangle]
+pub extern "system" fn Java_tech_granet_grove_CoreBridge_closeSharedNative(_env:JNIEnv,_this:JObject,fd:jint) {
+    if fd>=0 {
+        // SAFETY: caller transfers ownership only when Java adoptFd failed.
+        drop(unsafe { std::fs::File::from_raw_fd(fd) });
+    }
 }

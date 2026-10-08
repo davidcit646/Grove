@@ -44,9 +44,17 @@ internal object ConfigCodec {
     fun parse(text: String): Config {
             ConfigInput.validate(text)
             val response = CoreBridge.portable("config", JSONObject().put("text", text))
-            if (response?.has("error") == true) throw IllegalArgumentException(response.getString("error"))
-            // Recovery decoder remains available when the native library cannot load.
-            return decode(response?.getJSONObject("value") ?: JSONObject(text))
+            return resolveNative(text, response)
+    }
+    internal fun resolveNative(text: String, response: JSONObject?): Config {
+        if (response?.has("error") == true) throw IllegalArgumentException(response.getString("error"))
+        if (response != null) try {
+            return decode(response.getJSONObject("value"))
+        } catch (error: Exception) {
+            // A protocol/DTO failure cannot declare the original document invalid.
+            CoreBridge.malformed("config", error)
+        }
+        return recovery(text)
     }
     internal fun recovery(text: String): Config { ConfigInput.validate(text); return decode(JSONObject(text)) }
     private fun decode(root: JSONObject): Config {

@@ -15,6 +15,8 @@ internal object CoreBridge {
     }
     private val loaded = native("load") { System.loadLibrary("grove_core"); true } ?: false
 
+    internal fun malformed(operation: String, error: Exception) = failures.failed(operation, error)
+
     private fun <T> native(operation: String, call: () -> T): T? = try { call() }
         catch (error: Exception) { failures.failed(operation, error); null }
         catch (error: LinkageError) { failures.failed(operation, error); null }
@@ -23,6 +25,8 @@ internal object CoreBridge {
     private external fun searchNative(labels: Array<String>, query: String, limit: Int): IntArray
     private external fun classifyNative(extensions: Array<String>): Array<String>
     private external fun renderWallpaperNative(style: Int, width: Int, height: Int): IntArray
+    private external fun openSharedNative(root: String, relative: String): Int
+    private external fun closeSharedNative(fd: Int)
     private external fun policyNative(json: String): String
 
     internal val nativeAvailable: Boolean get() = loaded
@@ -41,6 +45,11 @@ internal object CoreBridge {
         }
         return result
     }
+
+    /** Descriptor ownership transfers to the provider; absence fails this optional handoff closed. */
+    internal fun openShared(root: String, relative: String): Int? = if (!loaded) null
+        else native("shared-file") { openSharedNative(root, relative) }?.takeIf { it >= 0 }
+    internal fun closeShared(fd: Int) { native("shared-file-close") { closeSharedNative(fd) } }
 
     /** Winning label indices in final order: score descending, index ascending. */
     fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray =

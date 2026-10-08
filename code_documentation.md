@@ -17,7 +17,7 @@ Android owns launcher enumeration, permissions, contacts, filesystem access, wid
 | Config | `ConfigModels`, `ConfigCodec`, `ConfigInput`, `ConfigDocuments`, `ConfigDocumentGate` | Strict bounded input; schema/migration authority in Rust; explicit recovery decoder; durable save before publication. |
 | Indexes | `IndexWork`, `IndexWorker`, `IndexCache`, `IndexRevocationGate` | Durable worker token plus current grant/switches; cancellation and cache commit share a lock. |
 | Contacts | `ContactIndex`, `ContactScanBudget`, `ContactActions` | Android aggregate provider; names for search, details on demand; current data/access checked before actions. |
-| Files | `FileIndex`, `FileActions` | Bounded shared-storage metadata walk; canonical containment and link/grant checks before sharing. |
+| Files | `FileIndex`, `FileActions`, `SharedFileProvider` | Bounded shared-storage metadata walk; canonical containment and link/grant checks before sharing. |
 | Wallpaper | `WallpaperCatalog`, `WallpaperRenderer`, `WallpaperImageStore`, `WallpaperImages`, `WallpaperController`, presentation/picker owners | Registry, pixel generation, file slots, decoding and application are separate responsibilities. |
 | Widgets | `WidgetRegistry`, `WidgetFlow`, `WidgetScreen` | Device-local IDs and pending bind/config state; Android host effects remain platform-owned. |
 | Setup / tutorials | `FirstRunState`, setup/pages/motion owners; search tutorial state/session/view owners | Provisional answers; confirmed completion writes; replay keeps current wallpaper. |
@@ -58,7 +58,7 @@ Settings discovery uses an immutable catalogue with typed destinations. Matching
 
 Calculator syntax is bounded arithmetic ending in `=`; no scripting engine or functions. Exact decimal addition/subtraction/multiplication and terminating division preserve values. Nonterminating division uses 34-digit half-even precision and marks approximation. Bounds: 256 input units, 64-unit literals, depth 16, 128 operations, coefficient/scale/output bounds. Invalid syntax, division by zero and limits are separate results. Rust uses arbitrary-precision coefficients; JVM BigDecimal remains the explicit recovery oracle.
 
-Contact details and messaging channels are queried on demand, bounded to 80 useful rows / 1,000 raw rows / a 2.5-second cancellation deadline. Contact action shutdown cancels active provider signals. Phone deduplication preserves JDK 17 BMP digit semantics. Channels are collapsed by app/business variant; WhatsApp targets require both synced contact data and current installation. Dialing opens a dialer confirmation. Before a contact action, details and source/grant authority are rechecked. Shared files receive read-only temporary URI permission; no automatic file contents are indexed or uploaded. Uninstall uses Android's confirmation and advances only one package at a time; cancel stops the remaining batch.
+Contact details and messaging channels are queried on demand, bounded to 80 useful rows / 1,000 raw rows / a 2.5-second cancellation deadline. Contact action shutdown cancels active provider signals. Phone deduplication preserves JDK 17 BMP digit semantics. Channels are collapsed by app/business variant; WhatsApp targets require both synced contact data and current installation. Dialing opens a dialer confirmation. Before a contact action, details and source/grant authority are rechecked. Shared files receive read-only temporary URI permission through `SharedFileProvider`; current source/grant is checked again at provider open, metadata reads and MIME lookup. Rust opens a regular file component-by-component relative to a root descriptor using O_NOFOLLOW, including intermediate directories, and transfers the owned descriptor to Android. Writes/deletion are refused. Native absence fails this optional file handoff closed while Home/search recovery remains available; no automatic file contents are indexed or uploaded. Uninstall uses Android's confirmation and advances only one package at a time; cancel stops the remaining batch.
 
 ## Indexes and cancellation
 
@@ -99,7 +99,7 @@ Automatic local crash capture defaults on and can be disabled. Explicit user rep
 | Exported Settings accepted internal URI/draft extras | Non-exported host plus extras-free public entry Activity | Manifest/source inspection; adversarial Intent test on hardware remains required. |
 | Cancel ignored preference failure; old worker could publish | Revocation gate + durable checked commit under cache lock | Failed-write and concurrent-write tests; Android WorkManager/AtomicFile integration on hardware. |
 | Cache/read/image bounds relied on file stat or stream progress | Exact byte reader, strict UTF-8, row/count bounds, decode bounds | Zero-read/overflow tests; malformed provider and storage-failure device checks. |
-| Indexed file authority could change | Canonical containment, link/ancestor checks, protected-subtree and live grant checks | Symlink scan tests; FileProvider uses path-based handoff, so concurrent external rename races remain a platform boundary requiring adversarial device validation. |
+| Indexed file authority could change | Canonical containment, link/ancestor checks, protected-subtree and live grant checks | Rust leaf/ancestor-link, traversal/protected-path/non-file and concurrent ancestor-swap tests; custom provider opens descriptor-relative and read-only, rechecks grants, and refuses unsafe opens. Android URI-grant/viewer and ARMv7/ARM64/x86-64 behavior still need device validation. |
 | JNI inputs/results and panics | Input/label/total-byte/pixel/envelope/output bounds, per-export panic containment | Native-loaded JVM suite plus malformed result tests; ABI/device checks still required. |
 | Optional wallpaper failure closed launcher | Recover severity and scoped recovery UI | Error-routing tests; actual apply failure on hardware. |
 | Diagnostics collisions/unbounded reads | UUID names, serialized retention, bounded handoff | Privacy/prompt tests and source review; inspect actual email draft on device. |
@@ -121,9 +121,11 @@ The security pass covers source trust boundaries, grants, exported components, p
 | `config_edits.rs` | Folder mutations, pin union and conflict-aware setup merge. |
 | `contacts.rs`, `actions_policy.rs`, `reports.rs` | Stable phone digit normalization, channel collapse/target facts, uninstall queue transitions and safe-field report formatting. |
 | `mime.rs`, `wallpaper.rs` | Grove extension overrides and generated pixels. |
-| `bridge.rs` | JNI conversion, bounds, panic containment and versioned response envelopes. |
+| `shared_file.rs`, `bridge.rs` | Descriptor-relative regular-file opening; Linux/Android FFI, owned FD transfer, JNI conversion, bounds, panic containment and response envelopes. |
 
 Coarse calls operate on a full query, source batch, configuration/edit, image geometry or touch event. Label batches are capped at 1,024 to bound JNI allocation/reference pressure. JNI label arrays cap at 50,000 / 4,096 units per label / 16 MiB total; generated output caps at 16 million pixels. Policy JSON caps input/output at 192 KiB and uses version 1 with exactly one of value/error. Native errors cannot supply Android authority. Results are checked before constructing state/bitmaps.
+
+Linux/Android filesystem opening is also Rust-owned; kernel flags explicitly account for ARMv7 differences and all intermediate links are rejected. File handles transfer exactly once to ParcelFileDescriptor. The cross-platform Home recovery path does not fall back to unsafe path opening.
 
 Remaining Kotlin is intentional for Android API calls, View/resource/binder/provider lifetimes, permission querying, file/preference confirmation, locks, callback sequencing, runtime identity/focus/frame snapshots, DTO projection and bounded bridge guards/recovery. Generic collection slicing or applying a returned DTO remains adapter work. Android Bitmap operations cannot be replaced by portable Rust pixel processing without transferring ownership through the platform. Recovery code intentionally duplicates portable behavior to keep Home usable when a native library is missing or rejected, and is exercised separately from the native path. Portable helper migration continues to be audited under #120; do not treat every remaining Kotlin line as an Android effect merely because it lives in a controller.
 
@@ -200,7 +202,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [CalculatorActions.kt](app/src/main/java/tech/granet/grove/CalculatorActions.kt) | `CalculatorActions`, `open` |
 | [CatalogController.kt](app/src/main/java/tech/granet/grove/CatalogController.kt) | `CatalogController`, `shutdown`, `loadApps`, `publishIcons`, `update` |
 | [CommandFeedback.kt](app/src/main/java/tech/granet/grove/CommandFeedback.kt) | `checked` |
-| [ConfigCodec.kt](app/src/main/java/tech/granet/grove/ConfigCodec.kt) | `ConfigCodec`, `encode`, `parse`, `recovery`, `decode`, `section`, `flag`, `grid`, `dimension` |
+| [ConfigCodec.kt](app/src/main/java/tech/granet/grove/ConfigCodec.kt) | `ConfigCodec`, `encode`, `parse`, `resolveNative`, `recovery`, `decode`, `section`, `flag`, `grid`, `dimension` |
 | [ConfigController.kt](app/src/main/java/tech/granet/grove/ConfigController.kt) | `ConfigController`, `load`, `resume`, `commitConfig`, `activateConfig`, `commit`, `editConfig`, `showConfigRecoveryDialog`, `exportDocument`, `importDocument` |
 | [ConfigDocumentGate.kt](app/src/main/java/tech/granet/grove/ConfigDocumentGate.kt) | `ConfigDocumentGate`, `canActivate` |
 | [ConfigDocuments.kt](app/src/main/java/tech/granet/grove/ConfigDocuments.kt) | `ConfigDocuments`, `read`, `write` |
@@ -211,7 +213,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [ContactChanges.kt](app/src/main/java/tech/granet/grove/ContactChanges.kt) | `ContactChanges`, `settings`, `eligible`, `onChange`, `reconcile` |
 | [ContactIndex.kt](app/src/main/java/tech/granet/grove/ContactIndex.kt) | `ContactIndex`, `Contact`, `Number`, `Channel`, `Details`, `WhatsAppTarget`, `ScanResult`, `Raw`, `ContactCoverage`, `normalizeNumber`, `channelArgs`, `collapseChannels`, `whatsAppTargets`, `load`, `details`, `isPartial` |
 | [ContactScanBudget.kt](app/src/main/java/tech/granet/grove/ContactScanBudget.kt) | `ContactScanBudget`, `expired`, `exhausted`, `visited` |
-| [CoreBridge.kt](app/src/main/java/tech/granet/grove/CoreBridge.kt) | `CoreBridge`, `native`, `normalizeNative`, `searchNative`, `classifyNative`, `renderWallpaperNative`, `policyNative`, `normalizeAll`, `searchOrder`, `fallbackOrder`, `classifyTable`, `extensionOverride`, `renderWallpaper`, `portable` |
+| [CoreBridge.kt](app/src/main/java/tech/granet/grove/CoreBridge.kt) | `CoreBridge`, `malformed`, `native`, `normalizeNative`, `searchNative`, `classifyNative`, `renderWallpaperNative`, `openSharedNative`, `closeSharedNative`, `policyNative`, `normalizeAll`, `openShared`, `closeShared`, `searchOrder`, `fallbackOrder`, `classifyTable`, `extensionOverride`, `renderWallpaper`, `portable` |
 | [CoreRecoveryPolicy.kt](app/src/main/java/tech/granet/grove/CoreRecoveryPolicy.kt) | `CoreRecoveryReason`, `CoreRecoveryState`, `CoreRecoveryPolicy`, `forReason` |
 | [CoreRecoveryView.kt](app/src/main/java/tech/granet/grove/CoreRecoveryView.kt) | `CoreRecoveryView`, `render` |
 | [CrashReporter.kt](app/src/main/java/tech/granet/grove/CrashReporter.kt) | `ReportPromptPolicy`, `ReportHandoffPolicy`, `CrashReporter`, `shouldPrompt`, `hasMailHandler`, `install`, `isEnabled`, `setEnabled`, `developerEmail`, `setDeveloperEmail`, `reportUserRequested`, `promptIfPending`, `reviewPending`, `prompt`, `pendingCount`, `deleteAll`, `buildBody`, `safeDiagnostic`, `pendingReports`, `writeReport`, `reportsDir`, `prefs` |
@@ -295,6 +297,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [SetupController.kt](app/src/main/java/tech/granet/grove/SetupController.kt) | `SetupController`, `restore`, `saveState`, `destroy`, `setupPending`, `settings`, `startFirstRunSetup`, `launcherSettings` |
 | [SetupDefaults.kt](app/src/main/java/tech/granet/grove/SetupDefaults.kt) | `SetupDefaults`, `configuration` |
 | [SetupMergePolicy.kt](app/src/main/java/tech/granet/grove/SetupMergePolicy.kt) | `SetupMergePolicy`, `merge`, `conflict`, `field` |
+| [SharedFileProvider.kt](app/src/main/java/tech/granet/grove/SharedFileProvider.kt) | `SharedFileProvider`, `relative`, `openFile`, `query`, `getType`, `delete` |
 | [StartupController.kt](app/src/main/java/tech/granet/grove/StartupController.kt) | `StartupController`, `beginHome`, `ensureLauncherCallback`, `clearCoreRecovery`, `showCoreRecovery`, `applyStartupPlan` |
 | [StartupCoordinator.kt](app/src/main/java/tech/granet/grove/StartupCoordinator.kt) | `StartupCoordinator`, `Plan`, `coldStart`, `resume` |
 | [SwipePracticeMotion.kt](app/src/main/java/tech/granet/grove/SwipePracticeMotion.kt) | `SwipePracticeMotion`, `Guide`, `touched`, `released`, `resume`, `pause`, `destroy`, `success`, `onAnimationEnd`, `clearSuccess`, `direction`, `start`, `onAnimationRepeat`, `stop`, `onAttachedToWindow`, `onDetachedFromWindow`, `onDraw` |
@@ -322,7 +325,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | Source | Responsibility |
 |---|---|
 | [actions_policy.rs](rust/grove-core/src/actions_policy.rs) | `evaluate` |
-| [bridge.rs](rust/grove-core/src/bridge.rs) | `java_strings`, `Java_tech_granet_grove_CoreBridge_searchNative`, `Java_tech_granet_grove_CoreBridge_classifyNative`, `Java_tech_granet_grove_CoreBridge_renderWallpaperNative`, `Java_tech_granet_grove_CoreBridge_policyNative`, `Java_tech_granet_grove_CoreBridge_normalizeNative` |
+| [bridge.rs](rust/grove-core/src/bridge.rs) | `java_strings`, `Java_tech_granet_grove_CoreBridge_searchNative`, `Java_tech_granet_grove_CoreBridge_classifyNative`, `Java_tech_granet_grove_CoreBridge_renderWallpaperNative`, `Java_tech_granet_grove_CoreBridge_policyNative`, `Java_tech_granet_grove_CoreBridge_normalizeNative`, `Java_tech_granet_grove_CoreBridge_openSharedNative`, `Java_tech_granet_grove_CoreBridge_closeSharedNative` |
 | [calculator.rs](rust/grove-core/src/calculator.rs) | `ten`, `normalize`, `bound`, `add`, `multiply`, `divide`, `text`, `peek`, `whitespace`, `operator`, `expression`, `term`, `factor`, `calculate`, `decimal_and_precedence`, `invalid_and_limits` |
 | [config.rs](rust/grove-core/src/config.rs) | `validate_config`, `canonical`, `migration_and_duplicate_ownership` |
 | [config_edits.rs](rust/grove-core/src/config_edits.rs) | `same_name`, `upper`, `lower`, `evaluate`, `folder_names_match_jvm_simple_case` |
@@ -335,6 +338,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [policy.rs](rust/grove-core/src/policy.rs) | `b`, `n`, `strings`, `distinct`, `normalize`, `evaluate`, `normalization_and_bounds`, `protected_publication`, `pin_and_refresh` |
 | [reports.rs](rust/grove-core/src/reports.rs) | `evaluate`, `bounded_safe_fields` |
 | [search.rs](rust/grove-core/src/search.rs) | `is_java_space`, `cmp_index`, `top_indices`, `prepare_query`, `score_label`, `score_prepared`, `edit_distance_at_most`, `full`, `band_matches_full_matrix_exhaustively` |
+| [shared_file.rs](rust/grove-core/src/shared_file.rs) | `open`, `openat`, `invalid`, `owned`, `open_shared`, `new`, `root`, `drop`, `refuses_escape_links_protected_paths_and_nonfiles`, `swapping_ancestor_for_link_never_opens_outside_file` |
 | [wallpaper.rs](rust/grove-core/src/wallpaper.rs) | `argb_to_f`, `f_to_argb`, `blend_over`, `lerp_color`, `gradient_at`, `render_wallpaper` |
 | `app/build.gradle.kts`, root Gradle files | SDK/build/signing/dependency/native-test configuration. |
 | `scripts/build-rust-android.sh` | Three Android ABIs, locked Cargo build and 16 KiB linking. |
@@ -369,7 +373,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [GroveErrorRoutingTest](app/src/test/java/tech/granet/grove/GroveErrorRoutingTest.kt) | 3 |
 | [IndexRefreshRequestsTest](app/src/test/java/tech/granet/grove/IndexRefreshRequestsTest.kt) | 3 |
 | [IndexStateTest](app/src/test/java/tech/granet/grove/IndexStateTest.kt) | 1 |
-| [NativeEnvelopeTest](app/src/test/java/tech/granet/grove/NativeEnvelopeTest.kt) | 2 |
+| [NativeEnvelopeTest](app/src/test/java/tech/granet/grove/NativeEnvelopeTest.kt) | 3 |
 | [NativeFailureReporterTest](app/src/test/java/tech/granet/grove/NativeFailureReporterTest.kt) | 2 |
 | [NativeParityTest](app/src/test/java/tech/granet/grove/NativeParityTest.kt) | 4 |
 | [NativeResultsTest](app/src/test/java/tech/granet/grove/NativeResultsTest.kt) | 3 |
@@ -398,4 +402,4 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 
 ## Tracked acceptance
 
-#118 current ownership documentation; #119 responsibility splits; #120 portable Rust migration; #121 failure-contract evidence; #123 configuration/native authority; #124 cancellation confirmation; #125 executor lifetime; #126 release versioning; #127 security; #128 measured performance; #129 imports/deprecations/dead structures. #122 tracks overall completion. PR #130 links implementation and current evidence. Issues remain open until their acceptance is actually met; hardware/advisory/release limitations must be recorded explicitly.
+#118 current ownership documentation; #119 responsibility splits; #120 portable Rust migration; #121 failure-contract evidence; #123 configuration/native authority; #124 cancellation confirmation; #125 executor lifetime; #126 release versioning; #127 security; #128 measured performance; #129 imports/deprecations/dead structures. #131 public Settings entry, #132 exact stream bounds, #133 secure file handoff and #134 report retention/handoff track individual security findings. #122 tracks overall completion. PR #130 links implementation and current evidence. Issues remain open until their acceptance is actually met; hardware/advisory/release limitations must be recorded explicitly.
