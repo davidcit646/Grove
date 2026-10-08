@@ -170,4 +170,3 @@ pub(crate) fn render_wallpaper(style: usize, width: usize, height: usize) -> Vec
     }
     out
 }
-

@@ -11,4 +11,3 @@ pub(crate) fn classify(extension: &str) -> Option<(&'static str, &'static str)> 
         _ => return None,
     })
 }
-

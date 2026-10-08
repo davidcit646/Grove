@@ -51,7 +51,8 @@ object FileIndex {
                         // Shared storage can contain links planted by other apps.
                         if (Files.isSymbolicLink(entryPath)) continue
                         if (entry.isDirectory) {
-                            val protected = parent.name == "Android" && (entry.name == "data" || entry.name == "obb")
+                            val protected = parent.name.equals("Android", true) && parent.parentFile?.canonicalPath == rootPath &&
+                                (entry.name.equals("data", true) || entry.name.equals("obb", true))
                             if (!protected && queue.size < 10_000) queue.add(entry)
                             else if (!protected) skippedDirectories++
                         } else if (entry.isFile && found.size < limit) {

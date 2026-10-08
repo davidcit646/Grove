@@ -139,7 +139,7 @@ Device performance evidence must record model/OS/ABI, corpus size, warm/cold sta
 
 ## Build status
 
-CI workflow `.github/workflows/android.yml` is authoritative for each tested SHA. Initial cleanup `0b930bce` passed Rust tests (16), Android debug assembly, 214 JVM tests and lint. Native verification was then added: `4c0f05d3` passed Rust (17) and fallback JVM (220), while the native-loaded suite caught an opaque-ID folder adapter problem. The subsequent implementation corrects the adapter and must pass the latest workflow before approval. `becb9c47` then passed native-loaded and fallback JVM suites, Android build/lint and Rust advisory audit (44 locked dependencies; zero reported vulnerabilities). The first benchmark exposed a typo regression, which was corrected rather than accepted. `e2657c32` passed 19 Rust tests and its benchmark, including result parity; candidate Android/native/advisory checks must still pass at the final SHA.
+CI workflow `.github/workflows/android.yml` is authoritative for each tested SHA; current evidence is linked from [PR #130](https://github.com/davidcit646/Grove/pull/130). Source `1ae8a522` passed the complete [workflow](https://github.com/davidcit646/Grove/actions/runs/37792872827): 22 Rust tests, Android debug assembly, fallback and native-loaded JVM suites, lint, resolved Maven advisory checks and the locked Rust advisory audit. Later changes add a JNI descriptor ownership test, case-insensitive protected directory rejection and strict formatting verification; consult the PR checks for their exact tested head. An earlier native-loaded run caught an opaque-ID folder adapter error, and the first benchmark exposed a typo regression; both were corrected and rerun before this proof.
 
 A passing debug/source run is not a signed release or device acceptance. CI artifacts include resolved dependencies/advisory reports, Cargo.lock, test XML, lint XML, native source and benchmark CSV. Native tests assert the host cdylib actually loaded. Fallback/native suites run separately. The exhaustive fuzzy test compares against a full matrix over every pair of binary words through length six and budgets 0–2. Historical `verification/0.1.*` files are not evidence for this candidate.
 
@@ -338,7 +338,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [policy.rs](rust/grove-core/src/policy.rs) | `b`, `n`, `strings`, `distinct`, `normalize`, `evaluate`, `normalization_and_bounds`, `protected_publication`, `pin_and_refresh` |
 | [reports.rs](rust/grove-core/src/reports.rs) | `evaluate`, `bounded_safe_fields` |
 | [search.rs](rust/grove-core/src/search.rs) | `is_java_space`, `cmp_index`, `top_indices`, `prepare_query`, `score_label`, `score_prepared`, `edit_distance_at_most`, `full`, `band_matches_full_matrix_exhaustively` |
-| [shared_file.rs](rust/grove-core/src/shared_file.rs) | `open`, `openat`, `invalid`, `owned`, `open_shared`, `new`, `root`, `drop`, `refuses_escape_links_protected_paths_and_nonfiles`, `swapping_ancestor_for_link_never_opens_outside_file` |
+| [shared_file.rs](rust/grove-core/src/shared_file.rs) | `open`, `openat`, `invalid`, `protected`, `owned`, `open_shared`, `new`, `root`, `drop`, `refuses_escape_links_protected_paths_and_nonfiles`, `swapping_ancestor_for_link_never_opens_outside_file` |
 | [wallpaper.rs](rust/grove-core/src/wallpaper.rs) | `argb_to_f`, `f_to_argb`, `blend_over`, `lerp_color`, `gradient_at`, `render_wallpaper` |
 | `app/build.gradle.kts`, root Gradle files | SDK/build/signing/dependency/native-test configuration. |
 | `scripts/build-rust-android.sh` | Three Android ABIs, locked Cargo build and 16 KiB linking. |
@@ -375,7 +375,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [IndexStateTest](app/src/test/java/tech/granet/grove/IndexStateTest.kt) | 1 |
 | [NativeEnvelopeTest](app/src/test/java/tech/granet/grove/NativeEnvelopeTest.kt) | 3 |
 | [NativeFailureReporterTest](app/src/test/java/tech/granet/grove/NativeFailureReporterTest.kt) | 2 |
-| [NativeParityTest](app/src/test/java/tech/granet/grove/NativeParityTest.kt) | 4 |
+| [NativeParityTest](app/src/test/java/tech/granet/grove/NativeParityTest.kt) | 5 |
 | [NativeResultsTest](app/src/test/java/tech/granet/grove/NativeResultsTest.kt) | 3 |
 | [OnboardingPolicyTest](app/src/test/java/tech/granet/grove/OnboardingPolicyTest.kt) | 5 |
 | [PinnedAppsTest](app/src/test/java/tech/granet/grove/PinnedAppsTest.kt) | 6 |

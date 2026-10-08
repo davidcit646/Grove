@@ -29,29 +29,63 @@ pub(crate) struct PreparedQuery<'a> {
     terms: Vec<(&'a str, Vec<u16>)>,
 }
 pub(crate) fn prepare_query(text: &str) -> PreparedQuery<'_> {
-    PreparedQuery { text, terms: text.split(is_java_space).filter(|t|!t.is_empty())
-        .map(|term|(term,term.encode_utf16().collect())).collect() }
+    PreparedQuery {
+        text,
+        terms: text
+            .split(is_java_space)
+            .filter(|t| !t.is_empty())
+            .map(|term| (term, term.encode_utf16().collect()))
+            .collect(),
+    }
 }
 #[cfg(test)]
 pub(crate) fn score_label(label: &str, query_text: &str, terms: &[&str]) -> i32 {
-    let query=PreparedQuery {text:query_text,terms:terms.iter().map(|&term|(term,term.encode_utf16().collect())).collect()};
-    score_prepared(label,&query)
+    let query = PreparedQuery {
+        text: query_text,
+        terms: terms
+            .iter()
+            .map(|&term| (term, term.encode_utf16().collect()))
+            .collect(),
+    };
+    score_prepared(label, &query)
 }
 pub(crate) fn score_prepared(label: &str, query: &PreparedQuery<'_>) -> i32 {
-    if query.terms.is_empty() { return 0; }
-    let ok=query.terms.iter().all(|(term, units)| {
-        if label.contains(term) { return true; }
-        units.len() >= 3 && units.len() <= 64 && label.split(is_java_space).any(|word| {
-            let mut word_units = [0u16;64];
-            let mut count=0;
-            for unit in word.encode_utf16() {
-                if count==64 { return false; }
-                word_units[count]=unit;count+=1;
-            }
-            count>=3 && edit_distance_at_most(&word_units[..count],units,if units.len()>=6 {2}else{1})
-        })
+    if query.terms.is_empty() {
+        return 0;
+    }
+    let ok = query.terms.iter().all(|(term, units)| {
+        if label.contains(term) {
+            return true;
+        }
+        units.len() >= 3
+            && units.len() <= 64
+            && label.split(is_java_space).any(|word| {
+                let mut word_units = [0u16; 64];
+                let mut count = 0;
+                for unit in word.encode_utf16() {
+                    if count == 64 {
+                        return false;
+                    }
+                    word_units[count] = unit;
+                    count += 1;
+                }
+                count >= 3
+                    && edit_distance_at_most(
+                        &word_units[..count],
+                        units,
+                        if units.len() >= 6 { 2 } else { 1 },
+                    )
+            })
     });
-    if !ok {-1} else if label==query.text {3} else if label.starts_with(query.text) {2} else {1}
+    if !ok {
+        -1
+    } else if label == query.text {
+        3
+    } else if label.starts_with(query.text) {
+        2
+    } else {
+        1
+    }
 }
 
 /// Bounded Levenshtein over UTF-16 code units — not Unicode scalars.
@@ -70,11 +104,15 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
     // accepted app-name typos need no dynamic-programming row at all.
     if left.len() == right.len() {
         let mut differences = 0;
-        for (a,b) in left.iter().zip(right) {
+        for (a, b) in left.iter().zip(right) {
             differences += usize::from(a != b);
-            if differences > max { break; }
+            if differences > max {
+                break;
+            }
         }
-        if differences <= max { return true; }
+        if differences <= max {
+            return true;
+        }
     }
     // Only the diagonal band can reach the edit budget. Stack arrays avoid two
     // heap allocations per candidate word, and a dead row stops immediately.
@@ -82,7 +120,9 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
     let ceiling = (max + 1) as u8;
     let mut previous = [ceiling; 65];
     let mut current = [ceiling; 65];
-    for (j, cell) in previous.iter_mut().enumerate().take(right.len() + 1) { *cell = j as u8; }
+    for (j, cell) in previous.iter_mut().enumerate().take(right.len() + 1) {
+        *cell = j as u8;
+    }
     for (i, &unit) in left.iter().enumerate() {
         current[..=right.len()].fill(ceiling);
         current[0] = (i + 1) as u8;
@@ -95,7 +135,9 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
                 .min(previous[j - 1] + u8::from(unit != right[j - 1]));
             best = best.min(current[j]);
         }
-        if best as usize > max { return false; }
+        if best as usize > max {
+            return false;
+        }
         std::mem::swap(&mut previous, &mut current);
     }
     previous[right.len()] as usize <= max
@@ -109,7 +151,9 @@ mod band_tests {
         for (i, x) in a.iter().enumerate() {
             let mut next = vec![i + 1; b.len() + 1];
             for (j, y) in b.iter().enumerate() {
-                next[j + 1] = (next[j] + 1).min(row[j + 1] + 1).min(row[j] + usize::from(x != y));
+                next[j + 1] = (next[j] + 1)
+                    .min(row[j + 1] + 1)
+                    .min(row[j] + usize::from(x != y));
             }
             row = next;
         }
@@ -123,8 +167,16 @@ mod band_tests {
                 words.push((0..len).map(|i| ((bits >> i) & 1) as u16).collect());
             }
         }
-        for a in &words { for b in &words { for max in 0..=2 {
-            assert_eq!(edit_distance_at_most(a, b, max), full(a, b) <= max, "{a:?}/{b:?}/{max}");
-        } } }
+        for a in &words {
+            for b in &words {
+                for max in 0..=2 {
+                    assert_eq!(
+                        edit_distance_at_most(a, b, max),
+                        full(a, b) <= max,
+                        "{a:?}/{b:?}/{max}"
+                    );
+                }
+            }
+        }
     }
 }

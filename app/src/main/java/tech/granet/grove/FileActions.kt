@@ -23,7 +23,7 @@ internal class FileActions(
             !Files.isSymbolicLink(file.toPath())) { "File is outside shared storage" }
         require(canonical.isFile && canonical.canRead()) { "File is unavailable" }
         val relative = canonical.relativeTo(root).invariantSeparatorsPath
-        require(!relative.startsWith("Android/data/") && !relative.startsWith("Android/obb/")) {
+        require(!relative.startsWith("Android/data/", ignoreCase = true) && !relative.startsWith("Android/obb/", ignoreCase = true)) {
             "Protected storage is unavailable"
         }
         var ancestor: File? = file.absoluteFile

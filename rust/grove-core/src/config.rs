@@ -17,15 +17,20 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
             if let Some(grid) = root.get(key).filter(|v| !v.is_null()) {
                 let map = grid.as_object().ok_or("Grid must be an object")?;
                 for dimension in ["columns", "rows"] {
-                    let size = map.get(dimension).and_then(Value::as_i64).ok_or("Grid must use integers")?;
-                    if !(1..=10).contains(&size) { return Err("Grid must be 1–10"); }
+                    let size = map
+                        .get(dimension)
+                        .and_then(Value::as_i64)
+                        .ok_or("Grid must use integers")?;
+                    if !(1..=10).contains(&size) {
+                        return Err("Grid must be 1–10");
+                    }
                 }
             }
         }
     }
     if version >= 10 {
         match root.get("themeMode").and_then(Value::as_str) {
-            Some("system" | "light" | "dark" | "wallpaper") => {},
+            Some("system" | "light" | "dark" | "wallpaper") => {}
             _ => return Err("Unknown theme mode"),
         }
     }
@@ -159,39 +164,112 @@ pub(crate) fn validate_config(json: &str) -> Result<(), &'static str> {
 pub(crate) fn canonical(text: &str) -> Result<Value, &'static str> {
     validate_config(text)?;
     let source: Value = serde_json::from_str(text).map_err(|_| "Invalid JSON")?;
-    let version=source["version"].as_i64().ok_or("Missing version")?;
-    let wallpaper=if version>=9 {source["wallpaper"].clone()}else{
-        let index=source["wallpaper"].as_u64().ok_or("Invalid wallpaper")?;
-        Value::String(match index {0=>"grove-fern".into(),1=>"grove-ember".into(),2=>"grove-dusk".into(),3..=12=>format!("commons-{}",index-3),13=>"solid-black".into(),14=>"custom-image".into(),_=>return Err("Invalid wallpaper")})
+    let version = source["version"].as_i64().ok_or("Missing version")?;
+    let wallpaper = if version >= 9 {
+        source["wallpaper"].clone()
+    } else {
+        let index = source["wallpaper"].as_u64().ok_or("Invalid wallpaper")?;
+        Value::String(match index {
+            0 => "grove-fern".into(),
+            1 => "grove-ember".into(),
+            2 => "grove-dusk".into(),
+            3..=12 => format!("commons-{}", index - 3),
+            13 => "solid-black".into(),
+            14 => "custom-image".into(),
+            _ => return Err("Invalid wallpaper"),
+        })
     };
-    let mut output=serde_json::json!({"version":12,"wallpaper":wallpaper,"themeMode":if version>=10 {source["themeMode"].clone()}else{Value::String("system".into())},"homeGrid":if version>=11 {source["homeGrid"].clone()}else{Value::Null},"drawerGrid":if version>=11 {source["drawerGrid"].clone()}else{Value::Null}});
-    for (section,defaults) in [
-        ("gestures",vec![("swipeDownSearch",true),("swipeUpAppDrawer",true),("tapHomeContextMenu",false),("longPressHomeContextMenu",true)]),
-        ("homeScreen",vec![("showAppsButton",true),("showSearchButton",true),("showClock",true),("tapClockOpensClock",true),("showPinnedApps",true),("useWallpaperButtonColors",false),("pinnedAppsAtBottom",true)]),
-        ("search",vec![("contacts",version<7),("files",version<7),("contactIndexing",false),("fileIndexing",false),("calculator",true),("androidSettings",true),("groveSettings",true)])
+    let mut output = serde_json::json!({"version":12,"wallpaper":wallpaper,"themeMode":if version>=10 {source["themeMode"].clone()}else{Value::String("system".into())},"homeGrid":if version>=11 {source["homeGrid"].clone()}else{Value::Null},"drawerGrid":if version>=11 {source["drawerGrid"].clone()}else{Value::Null}});
+    for (section, defaults) in [
+        (
+            "gestures",
+            vec![
+                ("swipeDownSearch", true),
+                ("swipeUpAppDrawer", true),
+                ("tapHomeContextMenu", false),
+                ("longPressHomeContextMenu", true),
+            ],
+        ),
+        (
+            "homeScreen",
+            vec![
+                ("showAppsButton", true),
+                ("showSearchButton", true),
+                ("showClock", true),
+                ("tapClockOpensClock", true),
+                ("showPinnedApps", true),
+                ("useWallpaperButtonColors", false),
+                ("pinnedAppsAtBottom", true),
+            ],
+        ),
+        (
+            "search",
+            vec![
+                ("contacts", version < 7),
+                ("files", version < 7),
+                ("contactIndexing", false),
+                ("fileIndexing", false),
+                ("calculator", true),
+                ("androidSettings", true),
+                ("groveSettings", true),
+            ],
+        ),
     ] {
-        let mut map=serde_json::Map::new();for(key,default)in defaults {map.insert(key.into(),Value::Bool(source[section][key].as_bool().unwrap_or(default)));}output[section]=Value::Object(map);
-    }
-    let mut seen=std::collections::HashSet::new();
-    output["favorites"]=Value::Array(source["favorites"].as_array().ok_or("Invalid favorites")?.iter().filter(|x|seen.insert(x.as_str().unwrap_or("").to_owned())).cloned().collect());
-    let mut folders=Vec::new();let mut names=std::collections::HashSet::new();let mut members=std::collections::HashSet::new();
-    if let Some(items)=source.get("folders").and_then(Value::as_array){for f in items{
-        let name=f["name"].as_str().ok_or("Invalid folder")?.trim();
-        if !names.insert(name.to_lowercase()){return Err("Duplicate folder name");}
-        let mut local=std::collections::HashSet::new();let mut apps=Vec::new();
-        for app in f["apps"].as_array().ok_or("Invalid folder apps")?{
-            let key=app.as_str().ok_or("Invalid folder app")?;
-            if local.insert(key.to_owned()){if !members.insert(key.to_owned()){return Err("App in multiple folders");}apps.push(app.clone());}
+        let mut map = serde_json::Map::new();
+        for (key, default) in defaults {
+            map.insert(
+                key.into(),
+                Value::Bool(source[section][key].as_bool().unwrap_or(default)),
+            );
         }
-        folders.push(serde_json::json!({"name":name,"apps":apps}));
-    }}
-    output["folders"]=Value::Array(folders);Ok(output)
+        output[section] = Value::Object(map);
+    }
+    let mut seen = std::collections::HashSet::new();
+    output["favorites"] = Value::Array(
+        source["favorites"]
+            .as_array()
+            .ok_or("Invalid favorites")?
+            .iter()
+            .filter(|x| seen.insert(x.as_str().unwrap_or("").to_owned()))
+            .cloned()
+            .collect(),
+    );
+    let mut folders = Vec::new();
+    let mut names = std::collections::HashSet::new();
+    let mut members = std::collections::HashSet::new();
+    if let Some(items) = source.get("folders").and_then(Value::as_array) {
+        for f in items {
+            let name = f["name"].as_str().ok_or("Invalid folder")?.trim();
+            if !names.insert(name.to_lowercase()) {
+                return Err("Duplicate folder name");
+            }
+            let mut local = std::collections::HashSet::new();
+            let mut apps = Vec::new();
+            for app in f["apps"].as_array().ok_or("Invalid folder apps")? {
+                let key = app.as_str().ok_or("Invalid folder app")?;
+                if local.insert(key.to_owned()) {
+                    if !members.insert(key.to_owned()) {
+                        return Err("App in multiple folders");
+                    }
+                    apps.push(app.clone());
+                }
+            }
+            folders.push(serde_json::json!({"name":name,"apps":apps}));
+        }
+    }
+    output["folders"] = Value::Array(folders);
+    Ok(output)
 }
 
-#[cfg(test)]mod canonical_tests {use super::*;
-    #[test]fn migration_and_duplicate_ownership(){
-        let v=canonical(r#"{"version":1,"wallpaper":0,"favorites":["x/.A","x/.A"]}"#).unwrap();
-        assert_eq!(v["version"],12);assert_eq!(v["search"]["contacts"],true);assert_eq!(v["favorites"].as_array().unwrap().len(),1);
+#[cfg(test)]
+mod canonical_tests {
+    use super::*;
+    #[test]
+    fn migration_and_duplicate_ownership() {
+        let v = canonical(r#"{"version":1,"wallpaper":0,"favorites":["x/.A","x/.A"]}"#).unwrap();
+        assert_eq!(v["version"], 12);
+        assert_eq!(v["search"]["contacts"], true);
+        assert_eq!(v["favorites"].as_array().unwrap().len(), 1);
         assert!(canonical(r#"{"version":12,"wallpaper":"grove-fern","themeMode":"system","favorites":[],"folders":[{"name":"Work","apps":[]},{"name":"work","apps":[]}] }"#).is_err());
     }
 }

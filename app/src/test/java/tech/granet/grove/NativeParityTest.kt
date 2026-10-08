@@ -41,4 +41,19 @@ class NativeParityTest {
         }
     }
 
+    @Test fun descriptorBridgeTransfersOnlySafeReadHandles() {
+        native()
+        val root = java.nio.file.Files.createTempDirectory("grove-jni-").toFile()
+        try {
+            java.io.File(root, "note.txt").writeText("safe")
+            val fd = CoreBridge.openShared(root.path, "note.txt")
+            assertNotNull(fd)
+            try { assertEquals("safe", java.io.File("/proc/self/fd/$fd").readText()) }
+            finally { CoreBridge.closeShared(fd!!) }
+            assertNull(CoreBridge.openShared(root.path, "../note.txt"))
+            java.nio.file.Files.createSymbolicLink(java.io.File(root, "link.txt").toPath(), java.io.File(root, "note.txt").toPath())
+            assertNull(CoreBridge.openShared(root.path, "link.txt"))
+        } finally { root.deleteRecursively() }
+    }
+
 }
