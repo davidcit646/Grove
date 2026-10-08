@@ -1,14 +1,9 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
 import tech.granet.grove.ui.message
-import java.util.*
 
 /** Active configuration and document/editor flows. Persistence must succeed before publication or completion. */
 internal class ConfigController(private val activity: MainActivity) {

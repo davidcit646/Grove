@@ -1,6 +1,6 @@
 # Grove Launcher
 
-An Android 12+ home launcher by GraNet IT Solutions. Version 1.0.0, version code 32.
+An Android 12+ home launcher by GraNet IT Solutions. Version 1.0.1, version code 33 (cleanup candidate).
 
 ## Features
 
@@ -25,7 +25,7 @@ Choose Grove in Android's default Home app selector. Keep another launcher insta
 
 ## Documentation
 
-- [Code documentation](code_documentation.md): architecture, system catalogue, behavior contract, failure policies, test evidence, historical changes and release instructions.
+- [Code documentation](code_documentation.md): architecture, system catalogue, behavior contract, failure policies, test evidence and release instructions.
 - [Build verification](code_documentation.md#build-status) and [device acceptance](code_documentation.md#testing).
 - [Signing](code_documentation.md#signing-readme) and [Play readiness](code_documentation.md#play-readiness).
 - [Privacy policy](PRIVACY.md). Broad file-search access requires Play policy review before distribution.

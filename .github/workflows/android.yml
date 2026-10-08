@@ -22,6 +22,10 @@ jobs:
         run: |
           cargo build --locked --manifest-path rust/grove-core/Cargo.toml
           ./gradlew testDebugUnitTest -PgroveNativeTests=true --rerun-tasks
+      - name: Audit resolved Android runtime dependencies
+        run: |
+          ./gradlew :app:dependencies --configuration debugRuntimeClasspath > android-dependencies.txt
+          python scripts/audit-maven.py android-dependencies.txt
       - name: Audit Rust dependency advisories
         run: |
           cargo install cargo-audit --locked --version 0.22.2
@@ -50,6 +54,8 @@ jobs:
         with:
           name: grove-source-verification
           path: |
+            android-dependencies.txt
+            maven-audit.json
             cargo-audit.json
             search-benchmark.csv
             rust/grove-core/src/*.rs

@@ -2,19 +2,27 @@ package tech.granet.grove
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
-import android.content.*
+import android.content.Intent
 import android.content.pm.LauncherApps
-import android.graphics.*
+import android.graphics.Color
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
+import android.os.Bundle
+import android.os.UserHandle
+import android.view.View
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.DragEvent
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
-import java.util.*
 
 /** Root HOME activity. Owns navigation; Android owns external apps and widget providers. */
 class MainActivity : AppCompatActivity() {

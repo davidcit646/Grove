@@ -181,3 +181,5 @@ mod decisions;
 mod config_edits;
 
 mod gesture_session;
+
+mod contacts;

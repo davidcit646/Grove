@@ -1,6 +1,6 @@
 # Grove Launcher Privacy Policy
 
-Last updated: October 7, 2026
+Last updated: October 8, 2026
 
 Grove Launcher is developed by GraNet IT Solutions (CITARE HOLDINGS LLC). Questions about this policy can be sent to support@granet.tech or through https://granet.tech/.
 
@@ -41,7 +41,7 @@ Built-in wallpapers are bundled with the app and require no runtime download. Th
 
 ## Retention and deletion
 
-Local settings and committed custom-wallpaper copies remain until replaced/removed or Grove is uninstalled. Abandoned staged wallpaper data is not promoted to the committed slot. Contact/file indexes are separate app-private files, refreshed when stale (contacts after about 15 minutes, files after about one day), on relevant changes, or on retry. Disabling the source/indexing or revoking access deletes the affected cache; uninstalling Grove removes app-private data.
+Local settings and committed custom-wallpaper copies remain until replaced/removed or Grove is uninstalled. Abandoned staged wallpaper data is not promoted to the committed slot. Contact/file indexes are separate app-private files, refreshed when stale (contacts after about 15 minutes, files after about one day), on relevant changes, or on retry. Disabling the source/indexing or revoking access blocks further protected publication and attempts to delete the affected cache. Grove reports persistence or deletion failures so deletion can be retried; it does not claim that an unsuccessful deletion completed. Uninstalling Grove removes app-private data.
 
 Pending reports remain until you delete them, Grove removes older reports under its ten-report limit, or Grove is uninstalled. Copies you explicitly export, share, copy, or send are outside Grove's private storage; deleting a local item does not remove those external copies. For questions or deletion requests about reports sent to the developer, contact support@granet.tech. Grove does not sell personal data.
 

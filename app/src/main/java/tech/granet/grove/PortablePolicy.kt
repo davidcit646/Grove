@@ -14,8 +14,12 @@ internal object PortablePolicy {
     })
     fun ruleBool(name: String, vararg fields: Pair<String, Any?>): Boolean? = rule(name, *fields) as? Boolean
     fun ruleInt(name: String, range: IntRange, vararg fields: Pair<String, Any?>): Int? =
-        (rule(name, *fields) as? Number)?.toInt()?.takeIf { it in range }
+        rule(name, *fields)?.let { value ->
+            if (value !is Int && value !is Long) null else (value as Number).toLong()
+                .takeIf { it in range.first.toLong()..range.last.toLong() }?.toInt() }
     fun bool(operation: String, args: JSONObject): Boolean? = value(operation, args) as? Boolean
     fun int(operation: String, args: JSONObject, range: IntRange): Int? =
-        (value(operation, args) as? Number)?.toLong()?.takeIf { it in range.first.toLong()..range.last.toLong() }?.toInt()
+        value(operation, args)?.let { value ->
+            if (value !is Int && value !is Long) null else (value as Number).toLong()
+                .takeIf { it in range.first.toLong()..range.last.toLong() }?.toInt() }
 }

@@ -1,13 +1,12 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
 import tech.granet.grove.ui.dp
-import java.util.*
 
 /** App snapshot and icon publication. Catalog failure closes to recovery; icons fall back; stale generations are discarded. */
 internal class CatalogController(private val activity: MainActivity) {

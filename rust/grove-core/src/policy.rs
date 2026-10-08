@@ -13,6 +13,7 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
     let a = &v["args"];
     match v["op"].as_str().ok_or("Missing operation")? {
         "gestureSession" => crate::gesture_session::evaluate(v),
+        "phoneDigits" => Ok(json!(crate::contacts::digits(a["text"].as_str().ok_or("Phone text")?))),
         "normalize" => Ok(json!(normalize(a["text"].as_str().ok_or("Missing text")?))),
 
         "gesture" => {

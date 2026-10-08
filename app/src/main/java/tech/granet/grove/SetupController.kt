@@ -1,17 +1,13 @@
 package tech.granet.grove
 
 import android.app.role.RoleManager
-import android.content.*
-import android.graphics.*
+import android.content.Intent
 import android.os.Environment
 import android.provider.Settings
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
+import android.os.Bundle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.message
-import java.util.*
 
 /** Settings and first-run setup. Failed config persistence preserves the setup instance and reopens it for retry. */
 internal class SetupController(private val activity: MainActivity) {

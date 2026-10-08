@@ -42,12 +42,13 @@ internal object ConfigCodec {
 
     }
     fun parse(text: String): Config {
+            ConfigInput.validate(text)
             val response = CoreBridge.portable("config", JSONObject().put("text", text))
             if (response?.has("error") == true) throw IllegalArgumentException(response.getString("error"))
             // Recovery decoder remains available when the native library cannot load.
             return decode(response?.getJSONObject("value") ?: JSONObject(text))
     }
-    internal fun recovery(text: String): Config = decode(JSONObject(text))
+    internal fun recovery(text: String): Config { ConfigInput.validate(text); return decode(JSONObject(text)) }
     private fun decode(root: JSONObject): Config {
             val versionValue = root.get("version")
             require(versionValue is Int || versionValue is Long) { "Configuration version must be an integer" }
@@ -71,7 +72,7 @@ internal object ConfigCodec {
 
             val entries = root.getJSONArray("favorites")
             require(entries.length() <= 100) { "Too many favorites" }
-            val favorites = (0 until entries.length()).map { entries.getString(it) }
+            val favorites = (0 until entries.length()).map { (entries.get(it) as? String ?: throw IllegalArgumentException("Invalid app identifier")) }
             require(favorites.all { it.length in 3..512 && it.contains('/') }) { "Invalid app identifier" }
 
             // Older versions had fewer gesture/home controls. Defaults deliberately preserve
@@ -124,11 +125,11 @@ internal object ConfigCodec {
                 require(array.length() <= 100) { "Too many folders" }
                 (0 until array.length()).map { index ->
                     val item = array.getJSONObject(index)
-                    val name = item.getString("name").trim()
+                    val name = (item.get("name") as? String ?: throw IllegalArgumentException("Invalid folder name")).trim()
                     require(name.length in 1..40) { "Invalid folder name" }
                     val members = item.getJSONArray("apps")
                     require(members.length() <= 500) { "Too many folder apps" }
-                    AppFolder(name, (0 until members.length()).map { members.getString(it) }.also { keys ->
+                    AppFolder(name, (0 until members.length()).map { (members.get(it) as? String ?: throw IllegalArgumentException("Invalid folder app")) }.also { keys ->
                         require(keys.all { it.length in 3..512 && it.contains('/') }) { "Invalid folder app" }
                     }.distinct())
                 }.also { list ->

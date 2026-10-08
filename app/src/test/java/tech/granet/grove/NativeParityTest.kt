@@ -32,4 +32,13 @@ class NativeParityTest {
             assertEquals("version $version", ConfigCodec.recovery(text), ConfigCodec.parse(text))
         }
     }
+    @Test fun strictRecoveryAndNativeRejectTheSameMalformedInputs() {
+        val valid = """{"version":12,"wallpaper":"grove-fern","themeMode":"system","favorites":[]}"""
+        for (invalid in listOf(valid + " x", valid.replace("12", "12.0"), valid.replace("12", "\"12\""),
+            valid.replace("[]", "[123]"), valid.replace("12", "012"), valid.replace("\"version\"", "'version'"))) {
+            assertThrows(IllegalArgumentException::class.java) { ConfigCodec.recovery(invalid) }
+            assertThrows(IllegalArgumentException::class.java) { ConfigCodec.parse(invalid) }
+        }
+    }
+
 }

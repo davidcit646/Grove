@@ -1,6 +1,12 @@
 package tech.granet.grove
 
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Shader
+import android.graphics.Path
 
 internal object WallpaperRenderer {
     private const val ART_WIDTH = 1080

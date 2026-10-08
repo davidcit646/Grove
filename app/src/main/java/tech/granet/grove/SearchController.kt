@@ -1,18 +1,18 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
+import android.graphics.Color
 import android.net.Uri
 import android.os.Environment
-import android.os.*
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
-import android.view.*
-import android.widget.*
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.EditText
 import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
-import java.util.*
 import java.util.concurrent.Executors
 
 /** Query execution and optional source state. Permissions close the affected source; stale queries cannot publish. */

@@ -21,7 +21,8 @@ internal object ContactIndex {
 
     /** Digits-only form of a phone number, used to collapse the same number stored in
      *  different formats (e.g. "917-669-7537" vs "9176697537"). */
-    fun normalizeNumber(raw: String): String = raw.filter { it.isDigit() }
+    fun normalizeNumber(raw: String): String =
+        (PortablePolicy.value("phoneDigits", org.json.JSONObject().put("text", raw)) as? String) ?: raw.filter { it.isDigit() }
 
     /** One menu row per messaging app (and per business variant). WhatsApp syncs several
      *  data rows per contact (profile, voice call, video call) that must not each become

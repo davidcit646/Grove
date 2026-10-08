@@ -1,18 +1,13 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
 import tech.granet.grove.ui.MenuRow
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.infoDialog
 import tech.granet.grove.ui.menuDialog
 import tech.granet.grove.ui.message
-import java.util.*
 import java.io.File
 
 /** External actions and uninstall queue. Adapters check prerequisites; cancel or launch failure stops the batch. */

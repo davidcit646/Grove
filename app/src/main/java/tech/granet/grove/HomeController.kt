@@ -1,17 +1,18 @@
 package tech.granet.grove
 
-import android.content.*
+import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.*
 import android.provider.AlarmClock
-import android.os.*
-import android.view.*
-import android.widget.*
+import android.view.View
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.HorizontalScrollView
 import com.google.android.material.button.MaterialButton
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
-import java.util.*
+import java.util.Calendar
 
 /** Home rendering and scrolling. Android owns the unmodified wallpaper behind transparent Home. */
 internal class HomeController(private val activity: MainActivity) {

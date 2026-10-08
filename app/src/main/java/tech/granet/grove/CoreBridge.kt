@@ -11,10 +11,9 @@ import java.util.PriorityQueue
  */
 internal object CoreBridge {
     private val failures = NativeFailureReporter { operation, error ->
-        runCatching { Log.w("Grove", "Native $operation unavailable; using Kotlin fallback", error) }
+        runCatching { Log.w("Grove", "Native $operation unavailable (${error.javaClass.simpleName}); using Kotlin fallback") }
     }
-    private val loaded = runCatching { System.loadLibrary("grove_core"); true }
-        .onFailure { failures.failed("load", it) }.getOrDefault(false)
+    private val loaded = native("load") { System.loadLibrary("grove_core"); true } ?: false
 
     private fun <T> native(operation: String, call: () -> T): T? = try { call() }
         catch (error: Exception) { failures.failed(operation, error); null }
@@ -111,10 +110,7 @@ internal object CoreBridge {
         if (input.toByteArray(Charsets.UTF_8).size > 196_608) return null
         return native(operation) {
             val text = policyNative(input)
-            require(text.toByteArray(Charsets.UTF_8).size <= 196_608) { "Portable output too large" }
-            org.json.JSONObject(text).also {
-                require(it.getInt("version") == 1 && (it.has("value") xor it.has("error"))) { "Malformed native policy response" }
-            }
+            NativeEnvelope.decode(operation, text)
         }
     }
 }
