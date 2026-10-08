@@ -131,7 +131,7 @@ object CrashReporter {
                 "Review an email draft to ${developerEmail(activity)}? Nothing is sent automatically.",
             positive = "Review email draft",
         ) {
-            sendReports(activity, reports)
+            DiagnosticReportHandoff.sendReports(activity, reports)
         }.setOnDismissListener { prompting = false }
     }
 
@@ -148,104 +148,13 @@ object CrashReporter {
         false
     }
 
-    private fun sendReports(activity: Activity, reports: List<File>) {
-        val body = try {
-            reports.sortedBy { it.name }
-                .joinToString("\n\n====================\n\n") { it.readText() }
-                .take(MAX_BODY_CHARS)
-        } catch (_: Exception) {
-            activity.message("Could not read the saved reports")
-            return
-        }
-        val email = developerEmail(activity)
-        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")).apply {
-            if (email.isNotBlank()) putExtra(Intent.EXTRA_EMAIL, arrayOf(email))
-            putExtra(Intent.EXTRA_SUBJECT, "Grove Launcher problem report")
-            putExtra(Intent.EXTRA_TEXT, body)
-        }
-        val handlerCount = try {
-            activity.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).size
-        } catch (_: Exception) {
-            0
-        }
-        if (!ReportHandoffPolicy.hasMailHandler(handlerCount)) {
-            showCopyFallback(activity, body)
-            return
-        }
-        try {
-            // A chooser launch is not proof of delivery. Reports remain until explicit discard.
-            activity.startActivity(Intent.createChooser(intent, "Send problem report"))
-        } catch (_: Exception) {
-            showCopyFallback(activity, body)
-        }
-    }
-
-    private fun showCopyFallback(activity: Activity, body: String) {
-        val e = GroveErrorRegistry.REPORT_HANDOFF
-        MaterialAlertDialogBuilder(activity)
-            .setTitle("No email app found")
-            .setMessage("${e.codeLine()}\n\nNo mail app accepted the draft. You can copy the report and paste it into a message yourself. The saved report will remain in Grove until you explicitly delete it.")
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Copy report") { _, _ ->
-                val clipboard = activity.getSystemService(ClipboardManager::class.java)
-                val copied = runCatching {
-                    checkNotNull(clipboard).setPrimaryClip(ClipData.newPlainText("Grove problem report", body))
-                }.isSuccess
-                activity.message(if (copied) "Problem report copied" else "Could not copy report")
-            }
-            .show()
-    }
-
-    private fun pendingReports(context: Context): List<File> =
-        reportsDir(context).listFiles { f -> f.isFile && f.name.endsWith(".txt") }
-            ?.sortedBy { it.name }.orEmpty()
-
-    private fun writeReport(context: Context, kind: String, error: GroveError, throwable: Throwable?) {
-        val dir = reportsDir(context).apply { mkdirs() }
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
-        File(dir, "$kind-$stamp.txt").writeText(buildBody(context, kind, error, throwable))
-        // Keep only the newest reports.
-        dir.listFiles { f -> f.isFile && f.name.endsWith(".txt") }
-            ?.sortedBy { it.name }?.dropLast(MAX_REPORTS)?.forEach { it.delete() }
-    }
-
-    internal fun buildBody(context: Context, kind: String, error: GroveError, throwable: Throwable?): String {
-        val version = try {
-            val pi = context.packageManager.getPackageInfo(context.packageName, 0)
-            "${pi.versionName} (${pi.versionCode})"
-        } catch (_: PackageManager.NameNotFoundException) {
-            "unknown"
-        }
-        return buildString {
-            appendLine("Grove Launcher $kind report")
-            appendLine("time: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
-            appendLine("app: $version")
-            appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL}")
-            appendLine("android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("feature: ${error.feature}")
-            appendLine("severity: ${error.severity.label}")
-            appendLine("code: ${error.code}")
-            error.gws?.let { appendLine("gws: $it") }
-            appendLine("summary: ${error.summary}")
-            safeDiagnostic(throwable)?.let {
-                appendLine("--- safe diagnostic ---")
-                append(it)
-            }
-        }
-    }
-
-    internal fun safeDiagnostic(throwable: Throwable?): String? {
-        if (throwable == null) return null
-        return buildString {
-            appendLine("exception: ${throwable.javaClass.name}")
-            throwable.stackTrace.take(24).forEach { frame ->
-                appendLine("at ${frame.className}.${frame.methodName}(${frame.fileName ?: "Unknown"}:${frame.lineNumber})")
-            }
-            appendLine("Exception messages, contact data, file paths, imported configuration, and sensitive values are intentionally omitted.")
-        }
-    }
-
-    private fun reportsDir(context: Context): File = File(context.filesDir, DIR)
+    internal fun buildBody(context: Context, kind: String, error: GroveError, throwable: Throwable?) =
+        DiagnosticReportFormatter.buildBody(context, kind, error, throwable)
+    internal fun safeDiagnostic(throwable: Throwable?) = DiagnosticReportFormatter.safeDiagnostic(throwable)
+    private fun pendingReports(context: Context) = DiagnosticReportStore.pendingReports(context)
+    private fun writeReport(context: Context, kind: String, error: GroveError, throwable: Throwable?) =
+        DiagnosticReportStore.writeReport(context, kind, error, throwable)
+    private fun reportsDir(context: Context) = DiagnosticReportStore.reportsDir(context)
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

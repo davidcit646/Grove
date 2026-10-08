@@ -16,13 +16,14 @@ internal object CoreBridge {
     private val loaded = runCatching { System.loadLibrary("grove_core"); true }
         .onFailure { failures.failed("load", it) }.getOrDefault(false)
 
-    private fun <T> native(operation: String, call: () -> T): T? =
-        runCatching(call).onFailure { failures.failed(operation, it) }.getOrNull()
+    private fun <T> native(operation: String, call: () -> T): T? = try { call() }
+        catch (error: Exception) { failures.failed(operation, error); null }
+        catch (error: LinkageError) { failures.failed(operation, error); null }
 
     private external fun searchNative(labels: Array<String>, query: String, limit: Int): IntArray
     private external fun classifyNative(extensions: Array<String>): Array<String>
     private external fun renderWallpaperNative(style: Int, width: Int, height: Int): IntArray
-    private external fun configErrorNative(json: String): String
+    private external fun policyNative(json: String): String
 
     /** Winning label indices in final order: score descending, index ascending. */
     fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray =
@@ -85,7 +86,17 @@ internal object CoreBridge {
         }
     }
 
-    /** Kotlin's parser stays authoritative while native config validation is migrated. */
-    fun configProblem(json: String): String? =
-        if (loaded) native("config") { configErrorNative(json).ifEmpty { null } } else null
+    /** Versioned portable policy envelope. Null means native unavailable, never invalid input. */
+    internal fun portable(operation: String, args: org.json.JSONObject): org.json.JSONObject? {
+        if (!loaded) return null
+        val input = org.json.JSONObject().put("op", operation).put("args", args).toString()
+        if (input.toByteArray(Charsets.UTF_8).size > 196_608) return null
+        return native(operation) {
+            val text = policyNative(input)
+            require(text.toByteArray(Charsets.UTF_8).size <= 196_608) { "Portable output too large" }
+            org.json.JSONObject(text).also {
+                require(it.getInt("version") == 1 && (it.has("value") xor it.has("error"))) { "Malformed native policy response" }
+            }
+        }
+    }
 }

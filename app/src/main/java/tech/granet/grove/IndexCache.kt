@@ -10,7 +10,7 @@ import java.io.File
 internal object IndexCache {
     private const val MAX_BYTES = 12 * 1024 * 1024
     private const val VERSION = 1
-    private val lock = Any()
+    internal val commitLock = Any()
     private val stateLock = Any()
     val metadataChanges = androidx.lifecycle.MutableLiveData<Map<String, IndexMetadata>>(emptyMap())
     private val metadata = mutableMapOf<String, IndexMetadata>()
@@ -47,7 +47,7 @@ internal object IndexCache {
     data class Snapshot<T>(val items: List<T>, val skipped: Int, val writtenAt: Long)
     private fun target(context: Context, kind: String) = File(context.filesDir, "grove-$kind-index.json")
 
-    fun clear(context: Context, kind: String) = synchronized(lock) {
+    fun clear(context: Context, kind: String) = synchronized(commitLock) {
         AtomicFile(target(context, kind)).delete()
         record(kind, IndexMetadata(IndexValidity.ABSENT))
         published(kind)
@@ -72,7 +72,7 @@ internal object IndexCache {
             .put("skipped", skipped).put("items", rows)
         val bytes = value.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_BYTES) { "Index exceeds local size limit" }
-        synchronized(lock) {
+        synchronized(commitLock) {
             if (!allowed()) return false
             val file = AtomicFile(target(context, kind))
             val stream = file.startWrite()
@@ -91,16 +91,21 @@ internal object IndexCache {
         }
     }
 
-    private fun read(context: Context, kind: String): JSONObject? = synchronized(lock) {
+    private fun read(context: Context, kind: String): JSONObject? = synchronized(commitLock) {
         val file = AtomicFile(target(context, kind))
         if (!file.baseFile.exists()) { record(kind, IndexMetadata(IndexValidity.ABSENT)); return null }
         require(file.baseFile.length() in 1..MAX_BYTES.toLong()) { "Invalid index size" }
-        val value = JSONObject(file.openRead().use { it.readBytes().toString(Charsets.UTF_8) })
+        val value = JSONObject(file.openRead().use { input ->
+            val bytes = BoundedInput.read(input, MAX_BYTES)
+            require(bytes.size <= MAX_BYTES) { "Index exceeds local size limit" }
+            val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+        })
         require(value.getInt("version") == VERSION) { "Unknown index version" }
         value
     }
 
-    fun files(context: Context): Snapshot<IndexedFile>? = synchronized(lock) { read(context, "files")?.let { value ->
+    fun files(context: Context): Snapshot<IndexedFile>? = synchronized(commitLock) { read(context, "files")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 15_000) { "Invalid file count" }
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
@@ -109,7 +114,7 @@ internal object IndexCache {
     }
 
     }
-    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? = synchronized(lock) { read(context, "contacts")?.let { value ->
+    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? = synchronized(commitLock) { read(context, "contacts")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 50_000) { "Invalid contact count" }
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->

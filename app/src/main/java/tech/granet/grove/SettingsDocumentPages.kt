@@ -102,11 +102,11 @@ internal class SettingsDocumentPages(
                     })
                 }
                 content.addView(editor)
-                button(content, "Save email") { feedback(session.commands.email(editor.text.toString())) }
+                button(content, "Save email") { feedback(session.diagnostics.email(editor.text.toString())) }
             }
             "deleteReports" -> {
                 content.addView(activity.bodyText("Delete all ${CrashReporter.pendingCount(activity)} saved local reports?"))
-                button(content, "Delete reports") { if (feedback(session.commands.deleteReports())) navigate("help") }
+                button(content, "Delete reports") { if (feedback(session.diagnostics.deleteReports())) navigate("help") }
             }
         }
     }

@@ -50,7 +50,7 @@ internal object GroveErrorRegistry {
 
     val WALLPAPER_PREVIEW = GroveError(310, GroveErrorOwner.UI_UX, "GWS-READ-01", "Wallpaper preview", ErrorSeverity.DEGRADE,
         "This wallpaper preview is unavailable.")
-    val WALLPAPER_APPLY = GroveError(311, GroveErrorOwner.UI_UX, "GWS-APPLY-01", "Wallpaper apply", ErrorSeverity.STOP,
+    val WALLPAPER_APPLY = GroveError(311, GroveErrorOwner.UI_UX, "GWS-APPLY-01", "Wallpaper apply", ErrorSeverity.RECOVER,
         "Android did not confirm the wallpaper change.")
     val WALLPAPER_SYNC = GroveError(312, GroveErrorOwner.UI_UX, "GWS-WRITE-01", "Wallpaper preference", ErrorSeverity.RECOVER,
         "Android changed the wallpaper, but Grove could not save the matching Home preference.")
@@ -108,23 +108,3 @@ internal object GroveErrorRouting {
     )
 }
 
-internal object GroveErrorPresenter {
-    fun show(activity: Activity, error: GroveError, retry: (() -> Unit)? = null) {
-        val body = "${error.feature} · ${error.severity.label}\n${error.codeLine()}\n\n${error.summary}"
-        val route = GroveErrorRouting.route(error, retry != null)
-        val builder = MaterialAlertDialogBuilder(activity)
-            .setTitle("Grove problem")
-            .setMessage(body)
-            .setNegativeButton(route.dismissLabel, null)
-        if (retry != null) builder.setPositiveButton(route.actionLabel) { _, _ -> retry() }
-        builder.setNeutralButton("Report") { _, _ ->
-            if (CrashReporter.reportUserRequested(activity, error, null)) {
-                activity.message("Problem report saved for your review")
-                CrashReporter.reviewPending(activity)
-            } else {
-                activity.message("Could not save the problem report")
-            }
-        }
-        builder.show()
-    }
-}

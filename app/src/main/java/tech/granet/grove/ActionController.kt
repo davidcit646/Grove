@@ -17,10 +17,11 @@ import java.io.File
 
 /** External actions and uninstall queue. Adapters check prerequisites; cancel or launch failure stops the batch. */
 internal class ActionController(private val activity: MainActivity) {
+    fun shutdown() { contactActions.shutdown(); uninstallBatch.cancel() }
     internal val uninstallBatch = UninstallBatch()
     internal val fileActions by lazy { with(activity) { FileActions(this) { configController.config.search.files } } }
     internal val contactActions by lazy { with(activity) {
-        ContactActions(this, contactWorker, { configController.config }, searchController::hasContactAccess,
+        ContactActions(this, { configController.config }, searchController::hasContactAccess,
             { packageName -> catalogController.apps.any { it.component.packageName == packageName } }, this@ActionController::showActionMenu)
     } }
     internal val searchActions by lazy { with(activity) { SearchActions(this, this@ActionController::showActionMenu) } }

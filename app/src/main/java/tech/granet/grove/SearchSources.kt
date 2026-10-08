@@ -15,12 +15,12 @@ import java.util.concurrent.ExecutorService
 /** UI snapshots of independent GFI/GCI caches. Android and the user's switches authorize each read. */
 internal class SearchSources(
     private val activity: AppCompatActivity,
-    private val worker: ExecutorService,
-    private val contactWorker: ExecutorService,
     private val settings: () -> SearchSettings,
     private val hasContactAccess: () -> Boolean,
     private val redraw: () -> Unit,
 ) {
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val contactWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
     var contacts = emptyList<ContactIndex.Contact>(); private set
     var contactSearch = SearchResults.prepare(contacts) { it.searchName }; private set
     var files = emptyList<IndexedFile>(); private set
@@ -181,6 +181,7 @@ internal class SearchSources(
     fun shutdown() {
         contactGeneration++; fileGeneration++
         contactWorker.shutdownNow()
+        worker.shutdownNow()
         // Persistent work survives Activity destruction.
     }
 

@@ -23,7 +23,6 @@ class ConfigStore(private val prefs: SharedPreferences) {
                     '}', ']' -> depth--
                 }
             }
-            CoreBridge.configProblem(text)?.let { throw IllegalArgumentException(it) }
             Config.parse(text)
         } catch (error: Exception) {
             throw IllegalArgumentException(error.message ?: "Invalid configuration", error)

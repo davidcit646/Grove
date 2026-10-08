@@ -21,9 +21,10 @@ internal enum class WallpaperApplyOutcome {
 /** Loads, validates and applies local wallpaper sources away from launcher navigation code. */
 internal class WallpaperController(
     private val activity: AppCompatActivity,
-    private val worker: ExecutorService,
     private val message: (String) -> Unit,
 ) {
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    fun shutdown() { worker.shutdownNow() }
     init {
         runCatching {
             val wallpaperDir = File(activity.filesDir, "wallpapers")
@@ -72,15 +73,7 @@ internal class WallpaperController(
                 candidate.parentFile?.mkdirs()
                 activity.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(temp).use { output ->
-                        val buffer = ByteArray(16 * 1024)
-                        var total = 0L
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            total += count
-                            require(total <= MAX_CUSTOM_BYTES) { "Wallpaper is too large" }
-                            output.write(buffer, 0, count)
-                        }
+                        output.write(BoundedInput.read(input, MAX_CUSTOM_BYTES.toInt()))
                     }
                 } ?: error("Cannot open selected image")
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -162,7 +155,7 @@ internal class WallpaperController(
                     )
                 ) WallpaperApplyOutcome.LOCAL_SYNC_FAILED
                 else WallpaperApplyOutcome.APPLIED
-            } catch (error: Throwable) {
+            } catch (error: Exception) {
                 Log.w("Grove", "Could not apply wallpaper", error)
                 if (androidApplied) WallpaperApplyOutcome.LOCAL_SYNC_FAILED
                 else WallpaperApplyOutcome.PLATFORM_FAILED

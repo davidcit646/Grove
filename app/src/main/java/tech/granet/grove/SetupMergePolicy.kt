@@ -3,6 +3,12 @@ package tech.granet.grove
 /** Setup edits only its lanes. A concurrent edit to the same lane requires a new review. */
 internal object SetupMergePolicy {
     fun merge(base: Config, draft: Config, current: Config): Config? {
+        val result = CoreBridge.portable("setup", org.json.JSONObject().put("base", org.json.JSONObject(base.json()))
+            .put("draft", org.json.JSONObject(draft.json())).put("current", org.json.JSONObject(current.json())))
+        if (result != null && !result.has("error")) {
+            if (result.isNull("value")) return null
+            return ConfigStore.parse(result.getJSONObject("value").toString())
+        }
         fun <T> conflict(old: T, proposed: T, now: T) = proposed != old && now != old && now != proposed
         if (conflict(base.gestures, draft.gestures, current.gestures) ||
             conflict(base.homeScreen, draft.homeScreen, current.homeScreen) ||

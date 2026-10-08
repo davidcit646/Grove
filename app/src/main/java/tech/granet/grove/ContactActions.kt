@@ -13,12 +13,13 @@ import tech.granet.grove.ui.message
 /** Contact-specific actions; the Activity supplies current permission and package state. */
 internal class ContactActions(
     private val activity: AppCompatActivity,
-    private val worker: ExecutorService,
     private val current: () -> Config,
     private val hasAccess: () -> Boolean,
     private val installed: (String) -> Boolean,
     private val showActionMenu: (String, List<Triple<String, Int, () -> Unit>>) -> Unit,
 ) {
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    fun shutdown() { worker.shutdownNow() }
     private fun menu(title: String, actions: List<Triple<String, Int, () -> Unit>>) {
         if (!current().search.contacts || !hasAccess()) return
         showActionMenu(title, actions.map { (label, icon, action) -> Triple(label, icon) {

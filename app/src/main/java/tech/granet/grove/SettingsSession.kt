@@ -14,6 +14,9 @@ internal data class ConfigCandidate(val config: Config, val base: SettingsSnapsh
 class SettingsSession(app: Application) : AndroidViewModel(app) {
     internal val repository = (app as GroveApp).settingsRepository
     internal val commands = SettingsCommands(app, repository)
+    internal val tutorials = TutorialCommands(app)
+    internal val diagnostics = DiagnosticsCommands(app)
+    internal val indexes = IndexStatusController(app, repository)
     internal var candidate: ConfigCandidate? = null
     internal var draft: String? = null
     internal var editorBase: SettingsSnapshot? = null

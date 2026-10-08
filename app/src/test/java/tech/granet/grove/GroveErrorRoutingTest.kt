@@ -17,9 +17,9 @@ class GroveErrorRoutingTest {
         assertEquals("Recover", route.actionLabel)
     }
 
-    @Test fun stoppedOperationWithActionOffersRetryWithoutClaimingSuccess() {
+    @Test fun wallpaperFailureOffersScopedRecoveryWithoutClaimingSuccess() {
         val route = GroveErrorRouting.route(GroveErrorRegistry.WALLPAPER_APPLY, true)
-        assertEquals("Close", route.dismissLabel)
-        assertEquals("Retry", route.actionLabel)
+        assertEquals("Not now", route.dismissLabel)
+        assertEquals("Recover", route.actionLabel)
     }
 }

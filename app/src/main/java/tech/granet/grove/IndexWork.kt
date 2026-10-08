@@ -49,8 +49,10 @@ internal object IndexWork {
             else -> IndexAccessPolicy.contacts(setting, context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) }
     } catch (_: Exception) { false }
 
+    private val revoked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     fun allowed(context: Context, kind: String, expected: String): Boolean =
-        prefs(context).getString(token(kind), null) == expected && enabled(context, kind)
+        !revoked.contains(kind) && prefs(context).getString(token(kind), null) == expected && enabled(context, kind)
 
     @Synchronized fun begin(context: Context, kind: String, expected: String): Boolean {
         if (!allowed(context, kind, expected)) return false
@@ -71,7 +73,8 @@ internal object IndexWork {
     }
 
     fun enqueue(context: Context, kind: String, cause: IndexRefreshCause): Boolean {
-        if (kind !in listOf("contacts", "files") || !enabled(context, kind)) { cancel(context, kind); return false }
+        require(kind in listOf("contacts", "files")) { "Unknown index" }
+        if (!enabled(context, kind)) { cancel(context, kind); return false }
         val app = context.applicationContext
         scheduler.execute {
             try {
@@ -111,6 +114,7 @@ internal object IndexWork {
             .build()
         if (!prefs(context).edit().putString(token(kind), id)
                 .putString(workId(kind), request.id.toString()).commit()) return false
+        revoked.remove(kind)
         return try {
             val operation = WorkManager.getInstance(context).enqueueUniqueWork(name(kind), if (followUp) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, request)
             scheduler.execute {
@@ -133,24 +137,33 @@ internal object IndexWork {
         }
     }
 
-    @Synchronized fun cancel(context: Context, kind: String) {
-        // Invalidate before cancellation/clearing: a worker already finishing must fail closed.
-        val active = prefs(context).contains(token(kind))
-        val tracked = prefs(context).contains(workId(kind))
-        val cache = java.io.File(context.filesDir, "grove-$kind-index.json").exists()
-        if (!active && !tracked && !cache) return
-        if (active || tracked) {
-            prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit()
-            try { WorkManager.getInstance(context).cancelUniqueWork(name(kind)) }
-            catch (error: Exception) { Log.w("Grove", "Could not cancel $kind index: ${error.javaClass.simpleName}") }
+    @Synchronized fun cancel(context: Context, kind: String): Boolean {
+        require(kind == "contacts" || kind == "files") { "Unknown index" }
+        revoked.add(kind)
+        return synchronized(IndexCache.commitLock) {
+            val store = prefs(context)
+            val confirmed = store.edit().remove(token(kind)).remove(workId(kind))
+                .remove(started(kind)).remove(pending(kind)).commit()
+            if (!confirmed) {
+                failure(kind, "Cancellation could not be saved; protected work is blocked. Retry.")
+                return@synchronized false
+            }
+            try {
+                WorkManager.getInstance(context).cancelUniqueWork(name(kind))
+                IndexCache.clear(context, kind)
+                failure(kind, null)
+                true
+            } catch (error: Exception) {
+                failure(kind, "Cancellation cleanup unavailable; retry")
+                Log.w("Grove", "Index cancellation unavailable: ${error.javaClass.simpleName}")
+                false
+            }
         }
-        if (cache) try { IndexCache.clear(context, kind) }
-            catch (error: Exception) { Log.w("Grove", "Could not delete $kind index: ${error.javaClass.simpleName}") }
     }
 
     @Synchronized fun reconcile(context: Context, kind: String): Boolean {
         if (kind == "contacts") (context.applicationContext as GroveApp).contactChanges.reconcile()
-        if (!enabled(context, kind)) { cancel(context, kind); return true }
+        if (!enabled(context, kind)) return cancel(context, kind)
         val app = context.applicationContext
         scheduler.execute {
             try {
@@ -165,55 +178,3 @@ internal object IndexWork {
     }
 }
 
-internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
-    private val contactCancellation = android.os.CancellationSignal()
-    override fun onStopped() {
-        contactCancellation.cancel()
-        super.onStopped()
-    }
-    override fun doWork(): Result {
-        val kind = inputData.getString("kind") ?: return Result.failure()
-        val token = inputData.getString("token") ?: return Result.failure()
-        if (kind != "contacts" && kind != "files") return Result.failure()
-        val context = applicationContext
-        val allowed = { !isStopped && IndexWork.allowed(context, kind, token) }
-        if (isStopped) return Result.retry()
-        if (!allowed()) {
-            IndexWork.finished(context, kind, token, false)
-            return Result.success()
-        }
-        if (!IndexWork.begin(context, kind, token)) {
-            if (allowed()) return Result.retry()
-            IndexWork.finished(context, kind, token, false)
-            return Result.success()
-        }
-        var retry = false
-        var succeeded = true
-        val outcome = try {
-            val saved = if (kind == "files") {
-                val scan = FileIndex.scan(Environment.getExternalStorageDirectory(), shouldContinue = allowed)
-                allowed() && IndexCache.writeFiles(context, scan, allowed)
-            } else {
-                val changes = (context as GroveApp).contactChanges.changes.value
-                val contacts = ContactIndex.load(context.contentResolver, allowed, contactCancellation)
-                (allowed() && IndexCache.writeContacts(context, contacts, allowed)).also { saved ->
-                    if (saved && changes != context.contactChanges.changes.value) IndexCache.invalidate("contacts")
-                }
-            }
-            succeeded = saved
-            if (!saved && allowed()) error("Index cache was not committed")
-            Result.success() // Superseded is cancellation, not failure.
-        } catch (error: Exception) {
-            Log.w("Grove", "Background $kind index unavailable: ${error.javaClass.simpleName}")
-            if (isStopped) {
-                retry = true
-                Result.retry()
-            } else if (!allowed()) Result.success() else if (runAttemptCount < 2) {
-                retry = true
-                Result.retry()
-            } else { succeeded = false; Result.failure() }
-        }
-        if (!retry) IndexWork.finished(context, kind, token, succeeded)
-        return outcome
-    }
-}

@@ -106,7 +106,7 @@ class SettingsActivity : AppCompatActivity() {
         IndexWork.failures.observe(this) { pages.refreshStatus() }
         for (kind in listOf("contacts", "files")) try {
             WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData(IndexWork.name(kind)).observe(this) {
-                session.commands.observeIndex(kind, it)
+                session.indexes.observeIndex(kind, it)
                 pages.refreshStatus()
             }
         } catch (_: Exception) { message("Background index status unavailable") }

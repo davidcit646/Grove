@@ -36,13 +36,11 @@ class MainActivity : AppCompatActivity() {
     // Framework context avoids AppCompat substitutions in widget RemoteViews.
     internal val manager by lazy { AppWidgetManager.getInstance(applicationContext) }
     internal val host by lazy { AppWidgetHost(applicationContext, 1024) }
-    internal val worker = Executors.newSingleThreadExecutor()
-    internal val contactWorker = Executors.newSingleThreadExecutor()
     internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         searchController.reconcileAccess()
         setupController.firstRunSetup?.refreshPermissions()
     }
-    internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
+    internal val wallpaperController by lazy { WallpaperController(this, this::message) }
     internal val chooseWallpaperImage: ActivityResultLauncher<Array<String>> = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) wallpaperPresentationController.importCustom(uri)
     }
@@ -208,10 +206,11 @@ class MainActivity : AppCompatActivity() {
         }
         touchRouter.cancel()
         searchController.cancelPending()
-        searchController.searchWorker.shutdownNow()
         searchController.shutdown()
         searchController.sources.shutdown()
-        worker.shutdownNow()
+        actionController.shutdown()
+        catalogController.shutdown()
+        wallpaperController.shutdown()
         if (::surface.isInitialized) surface.background = null
         presentationController.shutdown()
         configController.shutdown()

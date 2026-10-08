@@ -111,16 +111,16 @@ internal class SettingsPages(
             "homeGrid", "drawerGrid" -> grids.render(route == "homeGrid", content)
             "help" -> {
                 val tutorials = SettingsGroups.card(content, "Tutorials")
-                val pending = session.commands.replayPending()
+                val pending = session.tutorials.replayPending()
                 row(tutorials, if (pending) "Cancel tutorial replay" else "Replay first-run setup", "Starts when you return Home", R.drawable.ic_settings_help, "tutorial") {
-                    if (feedback(session.commands.replay(!session.commands.replayPending()))) navigate("help")
+                    if (feedback(session.tutorials.replay(!session.tutorials.replayPending()))) navigate("help")
                 }
-                row(tutorials, activity.getString(if (session.commands.searchReplayPending()) R.string.search_tutorial_cancel_replay else R.string.search_tutorial_replay),
+                row(tutorials, activity.getString(if (session.tutorials.searchReplayPending()) R.string.search_tutorial_cancel_replay else R.string.search_tutorial_replay),
                     activity.getString(R.string.search_tutorial_replay_detail), R.drawable.ic_setup_search, "searchTutorial") {
-                    if (feedback(session.commands.replaySearch(!session.commands.searchReplayPending()))) navigate("help")
+                    if (feedback(session.tutorials.replaySearch(!session.tutorials.searchReplayPending()))) navigate("help")
                 }
                 val reports = SettingsGroups.card(content, "Local reports")
-                toggleAction(reports, "Automatic crash reports", CrashReporter.isEnabled(activity), "capture") { session.commands.capture(it) }
+                toggleAction(reports, "Automatic crash reports", CrashReporter.isEnabled(activity), "capture") { session.diagnostics.capture(it) }
                 reports.addView(activity.bodyText("Reports stay on this device until you choose to share them."))
                 row(reports, "Developer email", CrashReporter.developerEmail(activity), R.drawable.ic_settings_mail) { navigate("email") }
                 row(reports, "Review saved reports", "${CrashReporter.pendingCount(activity)} saved", R.drawable.ic_settings_description, "reports") { CrashReporter.reviewPending(activity) }
@@ -159,7 +159,7 @@ internal class SettingsPages(
         statuses["work-$kind"] = activity.bodyText("").also(group::addView)
         group.addView(MaterialButton(activity, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
             tag = "refresh-$kind"; text = "Refresh index"; setIconResource(R.drawable.ic_settings_refresh)
-            setOnClickListener { feedback(session.commands.retryIndex(kind)); refreshStatus() }
+            setOnClickListener { feedback(session.indexes.retryIndex(kind)); refreshStatus() }
         })
     }
     private fun toggle(content: LinearLayout, title: String, checked: Boolean, key: SettingKey, after: (Boolean) -> Unit = {}) =
@@ -181,8 +181,8 @@ internal class SettingsPages(
         if (statuses.isEmpty()) return
         try {
             for (kind in listOf("contacts", "files")) {
-                statuses[kind]?.text = session.commands.indexStatus(kind, activity.permitted(kind))
-                statuses["work-$kind"]?.text = session.commands.indexActivity(kind, activity.permitted(kind))
+                statuses[kind]?.text = session.indexes.indexStatus(kind, activity.permitted(kind))
+                statuses["work-$kind"]?.text = session.indexes.indexActivity(kind, activity.permitted(kind))
                 statuses["access-$kind"]?.text = if (activity.permitted(kind)) "Allowed · tap Android access to manage" else "Not allowed · tap Android access to enable"
             }
             statuses["role"]?.text = if (activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME))

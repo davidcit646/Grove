@@ -7,12 +7,14 @@ use jni::JNIEnv;
 
 fn java_strings(env: &mut JNIEnv, array: &JObjectArray) -> jni::errors::Result<Vec<String>> {
     let count = env.get_array_length(array)?;
+    if count > 50_000 { return Err(jni::errors::Error::NullPtr("Too many labels")); }
     let mut strings = Vec::with_capacity(count as usize);
     for i in 0..count {
         let value = env.get_object_array_element(array, i)?;
         let string = JString::from(value);
         let text: String = env.get_string(&string)?.into();
         env.delete_local_ref(string)?;
+        if text.encode_utf16().count() > 4096 { return Err(jni::errors::Error::NullPtr("Label too long")); }
         strings.push(text);
     }
     Ok(strings)
@@ -84,7 +86,8 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_renderWallpaperNative(
     height: jint,
 ) -> jintArray {
     let result = (|| -> jni::errors::Result<_> {
-        let (w, h) = (width.max(1) as usize, height.max(1) as usize);
+        if width <= 0 || height <= 0 || (width as i64) * (height as i64) > 16_000_000 { return Err(jni::errors::Error::NullPtr("Invalid dimensions")); }
+        let (w, h) = (width as usize, height as usize);
         let pixels: Vec<i32> = render_wallpaper(style.max(0) as usize, w, h)
             .into_iter()
             .map(|p| p as i32)
@@ -110,3 +113,27 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_configErrorNative(
     result.unwrap_or(std::ptr::null_mut())
 }
 
+
+/// Versioned envelope: invalid input is data; panic/JNI failure is native unavailability.
+#[no_mangle]
+pub extern "system" fn Java_tech_granet_grove_CoreBridge_policyNative(
+    mut env: JNIEnv, _this: JObject, input: JString,
+) -> jstring {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> jni::errors::Result<_> {
+        let input: String = env.get_string(&input)?.into();
+        let result = if input.len() > 196_608 { Err("Input exceeds size limit") } else {
+            serde_json::from_str::<serde_json::Value>(&input).map_err(|_| "Invalid JSON").and_then(|v| {
+                if v["op"] == "calculator" { Ok(crate::calculator::calculate(v["args"]["text"].as_str().unwrap_or(""))) }
+                else if v["op"] == "config" {
+                    crate::config::canonical(v["args"]["text"].as_str().ok_or("Missing config")?)
+                } else { crate::policy::evaluate(&v) }
+            })
+        };
+        let response = match result {
+            Ok(value) => serde_json::json!({"version":1,"value":value}),
+            Err(reason) => serde_json::json!({"version":1,"error":reason}),
+        };
+        Ok(env.new_string(response.to_string())?.into_raw())
+    }));
+    match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
+}
