@@ -31,6 +31,10 @@ jobs:
       - run: sdkmanager --install 'platforms;android-36' 'ndk;27.3.13750724'
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --manifest-path rust/grove-core/Cargo.toml
+      - uses: actions/upload-artifact@v7
+        with:
+          name: grove-formatted-native-source
+          path: rust/grove-core/src/*.rs
       - run: cargo test --locked --manifest-path rust/grove-core/Cargo.toml
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
