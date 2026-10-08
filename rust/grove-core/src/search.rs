@@ -24,35 +24,34 @@ pub(crate) fn top_indices(scores: &[i32], limit: usize) -> Vec<i32> {
     idx.into_iter().map(|i| i as i32).collect()
 }
 
+pub(crate) struct PreparedQuery<'a> {
+    text: &'a str,
+    terms: Vec<(&'a str, Vec<u16>)>,
+}
+pub(crate) fn prepare_query(text: &str) -> PreparedQuery<'_> {
+    PreparedQuery { text, terms: text.split(is_java_space).filter(|t|!t.is_empty())
+        .map(|term|(term,term.encode_utf16().collect())).collect() }
+}
+#[cfg(test)]
 pub(crate) fn score_label(label: &str, query_text: &str, terms: &[&str]) -> i32 {
-    if terms.is_empty() {
-        return 0;
-    }
-    let ok = terms.iter().all(|term| {
+    let query=PreparedQuery {text:query_text,terms:terms.iter().map(|&term|(term,term.encode_utf16().collect())).collect()};
+    score_prepared(label,&query)
+}
+pub(crate) fn score_prepared(label: &str, query: &PreparedQuery<'_>) -> i32 {
+    if query.terms.is_empty() { return 0; }
+    let ok=query.terms.iter().all(|(term, units)| {
         if label.contains(term) { return true; }
-        // Length gates count UTF-16 code units, exactly like Kotlin's String.length.
-        let term_units: Vec<u16> = term.encode_utf16().collect();
-        term_units.len() >= 3
-                && label.split(is_java_space).any(|word| {
-                    let word_units: Vec<u16> = word.encode_utf16().collect();
-                    word_units.len() >= 3
-                        && edit_distance_at_most(
-                            &word_units,
-                            &term_units,
-                            if term_units.len() >= 6 { 2 } else { 1 },
-                        )
-                })
+        units.len() >= 3 && units.len() <= 64 && label.split(is_java_space).any(|word| {
+            let mut word_units = [0u16;64];
+            let mut count=0;
+            for unit in word.encode_utf16() {
+                if count==64 { return false; }
+                word_units[count]=unit;count+=1;
+            }
+            count>=3 && edit_distance_at_most(&word_units[..count],units,if units.len()>=6 {2}else{1})
+        })
     });
-    if !ok {
-        return -1;
-    }
-    if label == query_text {
-        3
-    } else if label.starts_with(query_text) {
-        2
-    } else {
-        1
-    }
+    if !ok {-1} else if label==query.text {3} else if label.starts_with(query.text) {2} else {1}
 }
 
 /// Bounded Levenshtein over UTF-16 code units — not Unicode scalars.
@@ -69,26 +68,27 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
     }
     // Only the diagonal band can reach the edit budget. Stack arrays avoid two
     // heap allocations per candidate word, and a dead row stops immediately.
-    let ceiling = max + 1;
+    let max = max.min(64);
+    let ceiling = (max + 1) as u8;
     let mut previous = [ceiling; 65];
     let mut current = [ceiling; 65];
-    for (j, cell) in previous.iter_mut().enumerate().take(right.len() + 1) { *cell = j; }
+    for (j, cell) in previous.iter_mut().enumerate().take(right.len() + 1) { *cell = j as u8; }
     for (i, &unit) in left.iter().enumerate() {
-        current.fill(ceiling);
-        current[0] = i + 1;
+        current[..=right.len()].fill(ceiling);
+        current[0] = (i + 1) as u8;
         let start = (i + 1).saturating_sub(max).max(1);
         let end = (i + 1 + max).min(right.len());
         let mut best = current[0];
         for j in start..=end {
             current[j] = (current[j - 1] + 1)
                 .min(previous[j] + 1)
-                .min(previous[j - 1] + usize::from(unit != right[j - 1]));
+                .min(previous[j - 1] + u8::from(unit != right[j - 1]));
             best = best.min(current[j]);
         }
-        if best > max { return false; }
+        if best as usize > max { return false; }
         std::mem::swap(&mut previous, &mut current);
     }
-    previous[right.len()] <= max
+    previous[right.len()] as usize <= max
 }
 
 #[cfg(test)]

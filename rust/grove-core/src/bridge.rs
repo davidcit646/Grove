@@ -1,4 +1,4 @@
-use crate::{classify, is_java_space, render_wallpaper, score_label, top_indices};
+use crate::{classify, render_wallpaper, score_prepared, prepare_query, top_indices};
 use jni::objects::{JObject, JObjectArray, JString};
 use jni::sys::{jint, jintArray, jobjectArray, jstring};
 use jni::JNIEnv;
@@ -37,13 +37,10 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_searchNative(
         let labels = java_strings(&mut env, &labels)?;
         let query: String = env.get_string(&query)?.into();
         if query.encode_utf16().count() > 256 { return Err(jni::errors::Error::NullPtr("Query too long")); }
-        let terms: Vec<&str> = query
-            .split(is_java_space)
-            .filter(|t| !t.is_empty())
-            .collect();
+        let prepared = prepare_query(&query);
         let scores: Vec<i32> = labels
             .iter()
-            .map(|label| score_label(label, &query, &terms))
+            .map(|label| score_prepared(label, &prepared))
             .collect();
         let order = top_indices(&scores, limit.max(0) as usize);
         let out = env.new_int_array(order.len() as i32)?;

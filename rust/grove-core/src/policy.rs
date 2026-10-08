@@ -47,11 +47,11 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
         "delay" => Ok(json!(if !b(a,"provider") || n(a,"last") <= 0 { 0 } else { 30_000i64.saturating_sub(n(a,"now").saturating_sub(n(a,"last")).max(0)).clamp(0,30_000) })),
         "settingsRank" => {
             let query=a["query"].as_str().ok_or("Query")?;
-            let terms: Vec<&str> = query.split(crate::is_java_space).filter(|t|!t.is_empty()).collect();
+            let prepared = crate::prepare_query(query);
             let labels=a["labels"].as_array().ok_or("Labels")?;
             if labels.len() > 512 || query.encode_utf16().count() > 256 { return Err("Settings bounds"); }
             let scores: Vec<i32> = labels.iter().map(|group| group.as_array().map(|labels|
-                labels.iter().filter_map(Value::as_str).map(|label|crate::score_label(label,query,&terms)).max().unwrap_or(-1)).unwrap_or(-1)).collect();
+                labels.iter().filter_map(Value::as_str).map(|label|crate::score_prepared(label,&prepared)).max().unwrap_or(-1)).unwrap_or(-1)).collect();
             Ok(json!(crate::top_indices(&scores,n(a,"limit").max(0) as usize)))
         }
         "request" => Ok(json!(if a["active"].is_null() { 0 } else if a["active"] != a["started"] || a["pending"] == a["active"] { 1 } else { 2 })),

@@ -6,9 +6,10 @@ mod mime;
 mod search;
 mod wallpaper;
 
+#[cfg(test)]
 use config::validate_config;
 use mime::classify;
-use search::{edit_distance_at_most, is_java_space, score_label, top_indices};
+use search::{score_prepared, prepare_query, top_indices};
 use wallpaper::render_wallpaper;
 
 #[cfg(test)]
@@ -183,3 +184,5 @@ mod config_edits;
 mod gesture_session;
 
 mod contacts;
+
+#[cfg(test)] use search::{edit_distance_at_most, is_java_space, score_label};

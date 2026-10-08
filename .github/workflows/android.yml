@@ -3,7 +3,23 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: write
 jobs:
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --manifest-path rust/grove-core/Cargo.toml
+      - name: Compare search kernels
+        run: |
+          rustc -O verification/performance/search-benchmark.rs -o "$RUNNER_TEMP/search-benchmark"
+          "$RUNNER_TEMP/search-benchmark" | tee search-benchmark.csv
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: grove-portable-verification
+          path: search-benchmark.csv
   build:
+    needs: portable
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
