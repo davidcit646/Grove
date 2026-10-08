@@ -31,7 +31,10 @@ internal class SwipePracticeMotion(private val context: Context, private val ove
     fun pause() { stopped = true; guide.removeCallbacks(restart); guide.stop(); clearSuccess() }
     fun destroy() = pause()
     fun success(announce: Boolean) {
-        if (announce) guide.announceForAccessibility(context.getString(R.string.swipe_practice_done))
+        if (announce) {
+            guide.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            guide.contentDescription = context.getString(R.string.swipe_practice_done)
+        }
         if (feedback != null || !ValueAnimator.areAnimatorsEnabled()) return
         val icon = ImageView(context).apply {
             setImageResource(R.drawable.ic_setup_check)

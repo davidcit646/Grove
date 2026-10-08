@@ -7,4 +7,3 @@ internal object SetupDefaults {
             Config(search = SearchSettings(contactIndexing = true, fileIndexing = true))
         else Config()
 }
-

@@ -31,4 +31,3 @@ object PinnedApps {
         return moved.takeIf { it.size == items.size && it.groupingBy { x -> x }.eachCount() == items.groupingBy { x -> x }.eachCount() }
     }
 }
-

@@ -7,4 +7,3 @@ internal object SearchPublicationGate {
             .put("active", active).put("enabled", enabled).put("access", access).put("superseded", cacheSupersedesLive))
             ?: (generation == currentGeneration && active && enabled && access && !cacheSupersedesLive)
 }
-

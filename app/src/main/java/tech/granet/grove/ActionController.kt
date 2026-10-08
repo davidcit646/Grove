@@ -116,7 +116,7 @@ internal class ActionController(private val activity: MainActivity) {
         with(activity) {
             if (packageName == null) return
             try {
-                uninstallNext.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$packageName"))
+                uninstallNext.launch(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
                     .putExtra(Intent.EXTRA_RETURN_RESULT, true))
             } catch (error: Exception) {
                 uninstallBatch.cancel()

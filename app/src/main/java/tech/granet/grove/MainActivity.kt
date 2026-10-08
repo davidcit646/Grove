@@ -15,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
 import java.util.*
-import java.util.concurrent.Executors
 
 /** Root HOME activity. Owns navigation; Android owns external apps and widget providers. */
 class MainActivity : AppCompatActivity() {
@@ -95,7 +94,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setDecorFitsSystemWindows(false)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         root = LinearLayout(this).apply {

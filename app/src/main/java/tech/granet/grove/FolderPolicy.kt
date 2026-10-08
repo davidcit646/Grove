@@ -56,4 +56,3 @@ internal object FolderPolicy {
         return NativeConfig(if (response.isNull("value")) null else ConfigStore.parse(response.getJSONObject("value").toString()))
     }
 }
-

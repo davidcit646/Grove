@@ -2,7 +2,6 @@ package tech.granet.grove
 
 import android.content.*
 import android.graphics.*
-import android.provider.Settings
 import android.util.Log
 import android.os.*
 import android.view.*

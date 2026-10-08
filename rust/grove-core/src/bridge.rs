@@ -1,4 +1,4 @@
-use crate::{classify, is_java_space, render_wallpaper, score_label, top_indices, validate_config};
+use crate::{classify, is_java_space, render_wallpaper, score_label, top_indices};
 use jni::objects::{JObject, JObjectArray, JString};
 use jni::sys::{jint, jintArray, jobjectArray, jstring};
 use jni::JNIEnv;
@@ -9,12 +9,15 @@ fn java_strings(env: &mut JNIEnv, array: &JObjectArray) -> jni::errors::Result<V
     let count = env.get_array_length(array)?;
     if count > 50_000 { return Err(jni::errors::Error::NullPtr("Too many labels")); }
     let mut strings = Vec::with_capacity(count as usize);
+    let mut bytes = 0usize;
     for i in 0..count {
         let value = env.get_object_array_element(array, i)?;
         let string = JString::from(value);
         let text: String = env.get_string(&string)?.into();
         env.delete_local_ref(string)?;
         if text.encode_utf16().count() > 4096 { return Err(jni::errors::Error::NullPtr("Label too long")); }
+        bytes += text.len();
+        if bytes > 16 * 1024 * 1024 { return Err(jni::errors::Error::NullPtr("Batch too large")); }
         strings.push(text);
     }
     Ok(strings)
@@ -30,9 +33,10 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_searchNative(
     query: JString,
     limit: jint,
 ) -> jintArray {
-    let result = (|| -> jni::errors::Result<_> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> jni::errors::Result<_> {
         let labels = java_strings(&mut env, &labels)?;
         let query: String = env.get_string(&query)?.into();
+        if query.encode_utf16().count() > 256 { return Err(jni::errors::Error::NullPtr("Query too long")); }
         let terms: Vec<&str> = query
             .split(is_java_space)
             .filter(|t| !t.is_empty())
@@ -45,8 +49,8 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_searchNative(
         let out = env.new_int_array(order.len() as i32)?;
         env.set_int_array_region(&out, 0, &order)?;
         Ok(out.into_raw())
-    })();
-    result.unwrap_or(std::ptr::null_mut())
+    }));
+    match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
 }
 
 /// Classify file extensions Grove knows about. Returns "mime|category"
@@ -58,7 +62,7 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_classifyNative(
     _this: JObject,
     extensions: JObjectArray,
 ) -> jobjectArray {
-    let result = (|| -> jni::errors::Result<_> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> jni::errors::Result<_> {
         let extensions = java_strings(&mut env, &extensions)?;
         let out =
             env.new_object_array(extensions.len() as i32, "java/lang/String", JObject::null())?;
@@ -72,8 +76,8 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_classifyNative(
             env.delete_local_ref(value)?;
         }
         Ok(out.into_raw())
-    })();
-    result.unwrap_or(std::ptr::null_mut())
+    }));
+    match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
 }
 
 /// Render a generative wallpaper style to ARGB pixels (row-major).
@@ -85,7 +89,7 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_renderWallpaperNative(
     width: jint,
     height: jint,
 ) -> jintArray {
-    let result = (|| -> jni::errors::Result<_> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> jni::errors::Result<_> {
         if width <= 0 || height <= 0 || (width as i64) * (height as i64) > 16_000_000 { return Err(jni::errors::Error::NullPtr("Invalid dimensions")); }
         let (w, h) = (width as usize, height as usize);
         let pixels: Vec<i32> = render_wallpaper(style.max(0) as usize, w, h)
@@ -95,24 +99,9 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_renderWallpaperNative(
         let out = env.new_int_array(pixels.len() as i32)?;
         env.set_int_array_region(&out, 0, &pixels)?;
         Ok(out.into_raw())
-    })();
-    result.unwrap_or(std::ptr::null_mut())
+    }));
+    match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
 }
-
-#[no_mangle]
-pub extern "system" fn Java_tech_granet_grove_CoreBridge_configErrorNative(
-    mut env: JNIEnv,
-    _this: JObject,
-    json: JString,
-) -> jstring {
-    let result = (|| -> jni::errors::Result<_> {
-        let json: String = env.get_string(&json)?.into();
-        let error = validate_config(&json).err().unwrap_or("");
-        Ok(env.new_string(error)?.into_raw())
-    })();
-    result.unwrap_or(std::ptr::null_mut())
-}
-
 
 /// Versioned envelope: invalid input is data; panic/JNI failure is native unavailability.
 #[no_mangle]
@@ -134,6 +123,24 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_policyNative(
             Err(reason) => serde_json::json!({"version":1,"error":reason}),
         };
         Ok(env.new_string(response.to_string())?.into_raw())
+    }));
+    match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
+}
+
+/// Batch label normalization. Local references are released after each output row.
+#[no_mangle]
+pub extern "system" fn Java_tech_granet_grove_CoreBridge_normalizeNative(
+    mut env: JNIEnv, _this: JObject, labels: JObjectArray,
+) -> jobjectArray {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> jni::errors::Result<_> {
+        let labels = java_strings(&mut env, &labels)?;
+        let out = env.new_object_array(labels.len() as i32, "java/lang/String", JObject::null())?;
+        for (i, label) in labels.iter().enumerate() {
+            let value = env.new_string(crate::policy::normalize(label))?;
+            env.set_object_array_element(&out, i as i32, &value)?;
+            env.delete_local_ref(value)?;
+        }
+        Ok(out.into_raw())
     }));
     match result { Ok(Ok(value)) => value, _ => std::ptr::null_mut() }
 }

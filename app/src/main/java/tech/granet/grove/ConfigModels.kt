@@ -1,7 +1,5 @@
 package tech.granet.grove
 
-import org.json.JSONArray
-import org.json.JSONObject
 
 /** Gesture behavior for the launcher home screen. */
 data class GestureSettings(

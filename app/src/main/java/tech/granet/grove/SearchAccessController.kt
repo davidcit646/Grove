@@ -16,7 +16,7 @@ internal class SearchAccessController(private val activity: MainActivity) {
     }
 
     fun requestContactAccess() {
-        with(activity) { requestContacts.launch(Manifest.permission.READ_CONTACTS) 
+        with(activity) { requestContacts.launch(Manifest.permission.READ_CONTACTS)
         }
     }
 

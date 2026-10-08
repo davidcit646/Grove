@@ -1,3 +1,4 @@
+// Reference kernel from main 0e9eb607. Benchmark only; never shipped.
 use std::cmp::Ordering;
 
 /// Java's \s without UNICODE_CHARACTER_CLASS: ASCII whitespace only.
@@ -29,10 +30,10 @@ pub(crate) fn score_label(label: &str, query_text: &str, terms: &[&str]) -> i32 
         return 0;
     }
     let ok = terms.iter().all(|term| {
-        if label.contains(term) { return true; }
         // Length gates count UTF-16 code units, exactly like Kotlin's String.length.
         let term_units: Vec<u16> = term.encode_utf16().collect();
-        term_units.len() >= 3
+        label.contains(term)
+            || (term_units.len() >= 3
                 && label.split(is_java_space).any(|word| {
                     let word_units: Vec<u16> = word.encode_utf16().collect();
                     word_units.len() >= 3
@@ -41,7 +42,7 @@ pub(crate) fn score_label(label: &str, query_text: &str, terms: &[&str]) -> i32 
                             &term_units,
                             if term_units.len() >= 6 { 2 } else { 1 },
                         )
-                })
+                }))
     });
     if !ok {
         return -1;
@@ -67,54 +68,16 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
     if left.len().abs_diff(right.len()) > max {
         return false;
     }
-    // Only the diagonal band can reach the edit budget. Stack arrays avoid two
-    // heap allocations per candidate word, and a dead row stops immediately.
-    let ceiling = max + 1;
-    let mut previous = [ceiling; 65];
-    let mut current = [ceiling; 65];
-    for (j, cell) in previous.iter_mut().enumerate().take(right.len() + 1) { *cell = j; }
+    let mut previous: Vec<usize> = (0..=right.len()).collect();
+    let mut current = vec![0usize; right.len() + 1];
     for (i, &unit) in left.iter().enumerate() {
-        current.fill(ceiling);
         current[0] = i + 1;
-        let start = (i + 1).saturating_sub(max).max(1);
-        let end = (i + 1 + max).min(right.len());
-        let mut best = current[0];
-        for j in start..=end {
-            current[j] = (current[j - 1] + 1)
-                .min(previous[j] + 1)
-                .min(previous[j - 1] + usize::from(unit != right[j - 1]));
-            best = best.min(current[j]);
+        for (j, &other) in right.iter().enumerate() {
+            current[j + 1] = (current[j] + 1)
+                .min(previous[j + 1] + 1)
+                .min(previous[j] + usize::from(unit != other));
         }
-        if best > max { return false; }
         std::mem::swap(&mut previous, &mut current);
     }
     previous[right.len()] <= max
-}
-
-#[cfg(test)]
-mod band_tests {
-    use super::*;
-    fn full(a: &[u16], b: &[u16]) -> usize {
-        let mut row: Vec<usize> = (0..=b.len()).collect();
-        for (i, x) in a.iter().enumerate() {
-            let mut next = vec![i + 1; b.len() + 1];
-            for (j, y) in b.iter().enumerate() {
-                next[j + 1] = (next[j] + 1).min(row[j + 1] + 1).min(row[j] + usize::from(x != y));
-            }
-            row = next;
-        }
-        row[b.len()]
-    }
-    #[test]
-    fn band_matches_full_matrix_exhaustively() {
-        let mut words = vec![Vec::new()];
-        for len in 1..=6 {
-            for bits in 0..(1 << len) {
-                words.push((0..len).map(|i| ((bits >> i) & 1) as u16).collect());
-            }
-        }
-        for a in &words { for b in &words { for max in 0..=2 {
-            assert_eq!(edit_distance_at_most(a, b, max), full(a, b) <= max, "{a:?}/{b:?}/{max}");
-        } } }
-    }
 }

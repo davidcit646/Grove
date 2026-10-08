@@ -13,7 +13,7 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
     let a = &v["args"];
     match v["op"].as_str().ok_or("Missing operation")? {
         "normalize" => Ok(json!(normalize(a["text"].as_str().ok_or("Missing text")?))),
-        "digits" => Ok(json!(a["text"].as_str().ok_or("Missing text")?.chars().filter(|c| c.is_ascii_digit()).collect::<String>())),
+
         "gesture" => {
             let dx = a["dx"].as_f64().ok_or("dx")? as f32;
             let dy = a["dy"].as_f64().ok_or("dy")? as f32;
@@ -21,6 +21,13 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
             let valid = (0..=700).contains(&n(a,"duration")) && dy.abs() >= min && dy.abs() > dx.abs() * 1.2;
             Ok(json!(if valid && dy > 0.0 && b(a,"down") { 1 } else if valid && dy < 0.0 && b(a,"up") { 2 } else { 0 }))
         }
+        "drawerClose" => {
+            let dx = a["dx"].as_f64().ok_or("dx")? as f32;
+            let dy = a["dy"].as_f64().ok_or("dy")? as f32;
+            let minimum = a["minimum"].as_f64().ok_or("minimum")? as f32;
+            Ok(json!(b(a,"top") && (0..=700).contains(&n(a,"duration")) && dy >= minimum && dy.abs() > dx.abs() * 1.2))
+        }
+        "columns" => Ok(json!(if n(a,"custom") > 0 { n(a,"custom") } else if n(a,"width") >= 600 { 6 } else { 4 })),
         "grid" => {
             let capacity = n(a,"capacity"); let count = n(a,"count").max(0);
             let pages = if capacity <= 0 { 1 } else { ((count + capacity - 1) / capacity).max(1) };

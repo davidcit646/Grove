@@ -10,5 +10,3 @@ internal object IndexAccessPolicy {
         PortablePolicy.bool("access", org.json.JSONObject().put("search", search).put("index", index).put("permitted", permitted))
             ?: (search && index && permitted)
 }
-
-

@@ -47,10 +47,16 @@ internal object IndexCache {
     data class Snapshot<T>(val items: List<T>, val skipped: Int, val writtenAt: Long)
     private fun target(context: Context, kind: String) = File(context.filesDir, "grove-$kind-index.json")
 
-    fun clear(context: Context, kind: String) = synchronized(commitLock) {
-        AtomicFile(target(context, kind)).delete()
+    fun clear(context: Context, kind: String): Boolean = synchronized(commitLock) {
+        val target = target(context, kind)
+        AtomicFile(target).delete()
+        if (listOf(target, File(target.path + ".bak"), File(target.path + ".new")).any { it.exists() }) {
+            record(kind, IndexMetadata(IndexValidity.CORRUPT, invalidated = true))
+            return@synchronized false
+        }
         record(kind, IndexMetadata(IndexValidity.ABSENT))
         published(kind)
+        true
     }
 
     fun writeFiles(context: Context, result: FileIndex.ScanResult, allowed: () -> Boolean): Boolean {
@@ -108,8 +114,12 @@ internal object IndexCache {
     fun files(context: Context): Snapshot<IndexedFile>? = synchronized(commitLock) { read(context, "files")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 15_000) { "Invalid file count" }
+        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) })
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
-            IndexedFile(row.getString("name"), row.getString("mime"), File(row.getString("path")), row.getString("category"))
+            require(row.getString("name").length in 1..512 && row.getString("path").length in 1..4096
+                && File(row.getString("path")).isAbsolute && row.getString("mime").length in 1..256
+                && row.getString("category") in listOf("Images", "Videos", "Audio", "Documents")) { "Invalid file row" }
+            IndexedFile(row.getString("name"), row.getString("mime"), File(row.getString("path")), row.getString("category"), normalized[i])
         } }, maxOf(value.getInt("skipped"), if (rows.length() >= 15_000) 1 else 0), value.getLong("writtenAt")).also { verified("files", value) }
     }
 
@@ -117,9 +127,11 @@ internal object IndexCache {
     fun contacts(context: Context): Snapshot<ContactIndex.Contact>? = synchronized(commitLock) { read(context, "contacts")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 50_000) { "Invalid contact count" }
+        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) })
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
-            require(row.getLong("id") > 0 && row.getString("key").isNotBlank() && row.getString("name").isNotBlank()) { "Invalid contact row" }
-            ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"))
+            require(row.getLong("id") > 0 && row.getString("key").isNotBlank() && row.getString("key").length <= 512
+                && row.getString("name").isNotBlank() && row.getString("name").length <= 512) { "Invalid contact row" }
+            ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"), normalized[i])
         } }, maxOf(value.getInt("skipped"), if (rows.length() >= 50_000) 1 else 0), value.getLong("writtenAt")).also { verified("contacts", value) }
     }
     }

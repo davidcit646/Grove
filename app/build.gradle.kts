@@ -11,9 +11,14 @@ android {
         manifestPlaceholders["appLabel"] = "Grove Launcher"
         minSdk = 31
         targetSdk = 36
-        versionCode = 32
-        versionName = "1.0.0"
+        versionCode = 33
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    testOptions.unitTests.all {
+        if (providers.gradleProperty("groveNativeTests").orNull == "true") {
+            it.jvmArgs("-Djava.library.path=${rootDir}/rust/grove-core/target/debug", "-Dgrove.native.tests=true")
+        }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

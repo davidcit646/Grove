@@ -2,13 +2,10 @@ package tech.granet.grove
 
 import android.content.*
 import android.graphics.*
-import android.provider.Settings
 import android.util.Log
 import android.os.*
 import android.view.*
 import android.widget.*
-import tech.granet.grove.ui.dp
-import tech.granet.grove.ui.message
 
 /** Essential startup checks and recovery. Failed config or launcher service prevents downstream normal Home startup. */
 internal class StartupController(private val activity: MainActivity) {

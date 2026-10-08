@@ -10,9 +10,15 @@ internal object IndexRefreshRequests {
         return (30_000L - (now - lastStarted).coerceAtLeast(0)).coerceIn(0, 30_000)
     }
     fun request(active: String?, started: String?, pending: String?,
-                schedule: () -> Boolean, defer: () -> Boolean): Boolean = when {
+                schedule: () -> Boolean, defer: () -> Boolean): Boolean {
+        val decision = PortablePolicy.int("request", org.json.JSONObject()
+            .put("active", active ?: org.json.JSONObject.NULL).put("started", started ?: org.json.JSONObject.NULL)
+            .put("pending", pending ?: org.json.JSONObject.NULL), 0..2)
+        if (decision != null) return when (decision) { 0 -> schedule(); 1 -> true; else -> defer() }
+        return when {
         active == null -> schedule()
         started != active || pending == active -> true
         else -> defer()
+        }
     }
 }

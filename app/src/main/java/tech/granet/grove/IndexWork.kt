@@ -8,8 +8,6 @@ import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.Worker
-import androidx.work.WorkerParameters
 import androidx.work.WorkManager
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -30,7 +28,8 @@ internal object IndexWork {
         val state = infos.firstOrNull { it.id.toString() == id }?.state
         synchronized(this) {
             if (IndexRecoveryPolicy.release(expected, prefs(context).getString(token(kind), null), state != null, state?.isFinished == true)) {
-                prefs(context).edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()
+                if (!prefs(context).edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit())
+                    failure(kind, "Work recovery could not be saved; retry")
             }
         }
     }
@@ -49,10 +48,10 @@ internal object IndexWork {
             else -> IndexAccessPolicy.contacts(setting, context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) }
     } catch (_: Exception) { false }
 
-    private val revoked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val revocation = IndexRevocationGate(IndexCache.commitLock)
 
     fun allowed(context: Context, kind: String, expected: String): Boolean =
-        !revoked.contains(kind) && prefs(context).getString(token(kind), null) == expected && enabled(context, kind)
+        revocation.allowed(kind) && prefs(context).getString(token(kind), null) == expected && enabled(context, kind)
 
     @Synchronized fun begin(context: Context, kind: String, expected: String): Boolean {
         if (!allowed(context, kind, expected)) return false
@@ -64,8 +63,11 @@ internal object IndexWork {
         val store = prefs(context)
         if (store.getString(token(kind), null) != expected) return
         val followUp = store.getString(pending(kind), null) == expected
-        if (!store.edit().remove(token(kind)).remove(started(kind)).remove(pending(kind)).commit()) return
-        if (succeeded) store.edit().remove(repair(kind)).commit()
+        if (!store.edit().remove(token(kind)).remove(started(kind)).remove(pending(kind))
+                .apply { if (succeeded) remove(repair(kind)) }.commit()) {
+            failure(kind, "Work completion could not be saved; retry")
+            return
+        }
         if (succeeded && followUp && enabled(context, kind)) {
             // Append one delayed scan after this worker; never cancel a scan to refresh it.
             schedule(context, kind, followUp = true, delayMillis = 30_000)
@@ -114,7 +116,7 @@ internal object IndexWork {
             .build()
         if (!prefs(context).edit().putString(token(kind), id)
                 .putString(workId(kind), request.id.toString()).commit()) return false
-        revoked.remove(kind)
+        revocation.renew(kind)
         return try {
             val operation = WorkManager.getInstance(context).enqueueUniqueWork(name(kind), if (followUp) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, request)
             scheduler.execute {
@@ -122,7 +124,8 @@ internal object IndexWork {
                 catch (error: Exception) {
                     synchronized(this) {
                         if (prefs(context).getString(token(kind), null) == id)
-                            prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit()
+                            if (!prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit())
+                                failure(kind, "Failed work cleanup could not be saved; retry")
                     }
                     failure(kind, "Scheduling failed")
                     Log.w("Grove", "Index enqueue failed for $kind", error)
@@ -131,7 +134,8 @@ internal object IndexWork {
             true
         } catch (error: Exception) {
             if (prefs(context).getString(token(kind), null) == id)
-                prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit()
+                if (!prefs(context).edit().remove(token(kind)).remove(workId(kind)).remove(started(kind)).remove(pending(kind)).commit())
+                                failure(kind, "Failed work cleanup could not be saved; retry")
             Log.w("Grove", "Could not schedule $kind index: ${error.javaClass.simpleName}")
             false
         }
@@ -139,25 +143,25 @@ internal object IndexWork {
 
     @Synchronized fun cancel(context: Context, kind: String): Boolean {
         require(kind == "contacts" || kind == "files") { "Unknown index" }
-        revoked.add(kind)
-        return synchronized(IndexCache.commitLock) {
-            val store = prefs(context)
-            val confirmed = store.edit().remove(token(kind)).remove(workId(kind))
-                .remove(started(kind)).remove(pending(kind)).commit()
-            if (!confirmed) {
-                failure(kind, "Cancellation could not be saved; protected work is blocked. Retry.")
-                return@synchronized false
-            }
-            try {
+        val store = prefs(context)
+        return try {
+            revocation.cancel(kind, persist = {
+                val confirmed = store.edit().remove(token(kind)).remove(workId(kind))
+                    .remove(started(kind)).remove(pending(kind)).commit()
+                if (!confirmed) failure(kind, "Cancellation could not be saved; protected work is blocked. Retry.")
+                confirmed
+            }, cleanup = {
+                // Durable token removal already prevents every old worker from publishing.
+                // WorkManager cancellation is asynchronous; it does not authorize cache writes.
                 WorkManager.getInstance(context).cancelUniqueWork(name(kind))
-                IndexCache.clear(context, kind)
-                failure(kind, null)
-                true
-            } catch (error: Exception) {
-                failure(kind, "Cancellation cleanup unavailable; retry")
-                Log.w("Grove", "Index cancellation unavailable: ${error.javaClass.simpleName}")
-                false
-            }
+                val cleared = IndexCache.clear(context, kind)
+                failure(kind, if (cleared) null else "Index deletion failed; retry")
+                cleared
+            })
+        } catch (error: Exception) {
+            failure(kind, "Cancellation cleanup unavailable; retry")
+            Log.w("Grove", "Index cancellation unavailable: ${error.javaClass.simpleName}")
+            false
         }
     }
 
@@ -177,4 +181,3 @@ internal object IndexWork {
         return true
     }
 }
-

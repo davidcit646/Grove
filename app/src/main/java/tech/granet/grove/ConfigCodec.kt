@@ -45,8 +45,13 @@ internal object ConfigCodec {
             val response = CoreBridge.portable("config", JSONObject().put("text", text))
             if (response?.has("error") == true) throw IllegalArgumentException(response.getString("error"))
             // Recovery decoder remains available when the native library cannot load.
-            val root = response?.getJSONObject("value") ?: JSONObject(text)
-            val version = root.getInt("version")
+            return decode(response?.getJSONObject("value") ?: JSONObject(text))
+    }
+    internal fun recovery(text: String): Config = decode(JSONObject(text))
+    private fun decode(root: JSONObject): Config {
+            val versionValue = root.get("version")
+            require(versionValue is Int || versionValue is Long) { "Configuration version must be an integer" }
+            val version = (versionValue as Number).toLong().also { require(it in 1..12) }.toInt()
             require(version in 1..12) { "Unsupported configuration version" }
 
             val wallpaper = if (version >= 9) {
@@ -54,7 +59,12 @@ internal object ConfigCodec {
                 require(value is String) { "Wallpaper selection is invalid" }
                 WallpaperArt.indexForId(value) ?: throw IllegalArgumentException("Wallpaper selection is invalid")
             } else {
-                root.getInt("wallpaper").also {
+                root.get("wallpaper").let { value ->
+                    require(value is Int || value is Long) { "Wallpaper selection must be an integer" }
+                    val number = (value as Number).toLong()
+                    require(number in 0..Int.MAX_VALUE)
+                    number.toInt()
+                }.also {
                     require(WallpaperArt.source(it) != null) { "Wallpaper selection is invalid" }
                 }
             }
@@ -122,7 +132,7 @@ internal object ConfigCodec {
                         require(keys.all { it.length in 3..512 && it.contains('/') }) { "Invalid folder app" }
                     }.distinct())
                 }.also { list ->
-                    require(list.map { it.name.lowercase() }.distinct().size == list.size) { "Duplicate folder name" }
+                    require(list.map { it.name.lowercase(java.util.Locale.ROOT) }.distinct().size == list.size) { "Duplicate folder name" }
                     require(list.flatMap { it.apps }.distinct().size == list.sumOf { it.apps.size }) { "App in multiple folders" }
                 }
             } else emptyList()

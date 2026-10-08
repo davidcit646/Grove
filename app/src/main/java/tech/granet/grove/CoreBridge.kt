@@ -20,10 +20,28 @@ internal object CoreBridge {
         catch (error: Exception) { failures.failed(operation, error); null }
         catch (error: LinkageError) { failures.failed(operation, error); null }
 
+    private external fun normalizeNative(labels: Array<String>): Array<String>
     private external fun searchNative(labels: Array<String>, query: String, limit: Int): IntArray
     private external fun classifyNative(extensions: Array<String>): Array<String>
     private external fun renderWallpaperNative(style: Int, width: Int, height: Int): IntArray
     private external fun policyNative(json: String): String
+
+    internal val nativeAvailable: Boolean get() = loaded
+
+    /** One bounded array call per source batch, with a recovery path for the entire batch. */
+    fun normalizeAll(labels: List<String>): List<String>? {
+        if (!loaded || labels.any { it.length > 4096 }) return null
+        val result = ArrayList<String>(labels.size)
+        for (batch in labels.chunked(1024)) {
+            val normalized = native("normalize") {
+                normalizeNative(batch.toTypedArray()).also { output ->
+                    require(output.size == batch.size && output.all { it.length <= 8192 })
+                }
+            } ?: return null
+            result.addAll(normalized)
+        }
+        return result
+    }
 
     /** Winning label indices in final order: score descending, index ascending. */
     fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray =

@@ -9,8 +9,8 @@ import android.provider.ContactsContract
 
 /** Android's aggregate provider includes Google, OEM, and synced contact accounts. */
 internal object ContactIndex {
-    data class Contact(val id: Long, val lookupKey: String, val name: String) {
-        val searchName = Search.normalize(name.take(512))
+    data class Contact(val id: Long, val lookupKey: String, val name: String, private val preparedName: String? = null) {
+        val searchName = preparedName ?: Search.normalize(name.take(512))
         val uri: Uri get() = ContactsContract.Contacts.getLookupUri(id, lookupKey)
     }
     data class Number(val value: String, val label: String)
@@ -49,7 +49,8 @@ internal object ContactIndex {
     fun load(resolver: ContentResolver, shouldContinue: () -> Boolean = { true },
              cancellation: CancellationSignal? = null, maxDurationMs: Long = Long.MAX_VALUE,
              maxRawRows: Int = 100_000): ScanResult {
-        val result = ArrayList<Contact>()
+        data class Raw(val id: Long, val key: String, val name: String)
+        val result = ArrayList<Raw>()
         val signal = cancellation ?: CancellationSignal()
         val budget = ContactScanBudget(maxRawRows, maxDurationMs, android.os.SystemClock::elapsedRealtime)
         val deadline = if (maxDurationMs == Long.MAX_VALUE) null else
@@ -68,7 +69,7 @@ internal object ContactIndex {
                     budget.visited()
                     val name = cursor.getString(2)?.take(512)?.trim().orEmpty()
                     val key = cursor.getString(1)
-                    if (name.isNotEmpty() && !key.isNullOrEmpty()) result.add(Contact(cursor.getLong(0), key, name))
+                    if (name.isNotEmpty() && !key.isNullOrEmpty()) result.add(Raw(cursor.getLong(0), key.take(512), name))
                 }
             } ?: error("The device's contacts provider is unavailable")
         } catch (error: android.os.OperationCanceledException) {
@@ -76,7 +77,9 @@ internal object ContactIndex {
             partial = true // Deadline reached: useful rows are partial, never Ready(empty).
         } finally { deadline?.cancel(false) }
         if (!shouldContinue()) throw android.os.OperationCanceledException()
-        return ScanResult(result, partial)
+        val normalized = Search.normalizeAll(result.map { it.name })
+        if (!shouldContinue()) throw android.os.OperationCanceledException()
+        return ScanResult(result.mapIndexed { i, row -> Contact(row.id, row.key, row.name, normalized[i]) }, partial)
     }
 
     fun details(resolver: ContentResolver, resources: Resources, contact: Contact): Details {

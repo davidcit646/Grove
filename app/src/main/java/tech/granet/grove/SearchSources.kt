@@ -1,16 +1,11 @@
 package tech.granet.grove
 
-import android.database.ContentObserver
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
-import android.provider.ContactsContract
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import java.util.concurrent.ExecutorService
 
 /** UI snapshots of independent GFI/GCI caches. Android and the user's switches authorize each read. */
 internal class SearchSources(

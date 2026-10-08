@@ -1,6 +1,5 @@
 package tech.granet.grove
 
-import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.LinearLayout

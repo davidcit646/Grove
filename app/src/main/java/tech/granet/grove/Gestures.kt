@@ -38,6 +38,10 @@ object Gestures {
         minimumDistance: Float,
         startedAtTop: Boolean,
     ): Boolean {
+        if (dx.isFinite() && dy.isFinite() && minimumDistance.isFinite())
+            PortablePolicy.bool("drawerClose", org.json.JSONObject().put("dx", dx.toDouble()).put("dy", dy.toDouble())
+                .put("minimum", minimumDistance.toDouble()).put("duration", durationMs).put("top", startedAtTop))
+                ?.let { return it }
         if (!startedAtTop || durationMs !in 0..700) return false
         if (dy < minimumDistance) return false
         return abs(dy) > abs(dx) * 1.2f

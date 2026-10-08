@@ -3,7 +3,6 @@ package tech.granet.grove
 import android.app.role.RoleManager
 import android.content.*
 import android.graphics.*
-import android.net.Uri
 import android.os.Environment
 import android.provider.Settings
 import android.util.Log
@@ -11,7 +10,6 @@ import android.os.*
 import android.view.*
 import android.widget.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import tech.granet.grove.ui.infoDialog
 import tech.granet.grove.ui.message
 import java.util.*
 

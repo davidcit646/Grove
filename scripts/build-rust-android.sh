@@ -23,7 +23,7 @@ export CARGO_TARGET_X86_64_LINUX_ANDROID_RUSTFLAGS="$page_flags"
 cd "$project_dir/rust/grove-core"
 for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
   rustup target add "$target"
-  cargo build --release --target "$target"
+  cargo build --locked --release --target "$target"
 done
 
 output="$project_dir/app/build/rustJniLibs"

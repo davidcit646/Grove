@@ -8,10 +8,14 @@ object Search {
     private val marks = Regex("\\p{M}+")
     private val whitespace = Regex("\\s+")
     data class Query(val text: String, val terms: List<String>)
+    fun normalizeAll(values: List<String>): List<String> = CoreBridge.normalizeAll(values)
+        ?: values.map(::normalizeFallback)
+    internal fun normalizeFallback(value: String): String =
+        Normalizer.normalize(value, Normalizer.Form.NFD).replace(marks, "").lowercase(Locale.ROOT).trim()
     fun normalize(value: String): String {
         if (value.length <= 4096) (PortablePolicy.value("normalize", org.json.JSONObject().put("text", value)) as? String)
             ?.takeIf { it.length <= 8192 }?.let { return it }
-        return Normalizer.normalize(value, Normalizer.Form.NFD).replace(marks, "").lowercase(Locale.ROOT).trim()
+        return normalizeFallback(value)
     }
     fun prepare(value: String): Query {
         val text = normalize(value.take(256))

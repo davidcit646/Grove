@@ -1,8 +1,5 @@
 package tech.granet.grove
 
-import android.app.Activity
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import tech.granet.grove.ui.message
 
 internal enum class GroveErrorOwner(val range: IntRange) {
     CONFIGURATION(100..199),
@@ -107,4 +104,3 @@ internal object GroveErrorRouting {
         },
     )
 }
-

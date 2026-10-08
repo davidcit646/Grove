@@ -8,8 +8,8 @@ import java.nio.file.Path
 import java.util.ArrayDeque
 import java.util.Locale
 
-data class IndexedFile(val name: String, val mime: String, val file: File, val category: String) {
-    val searchName = Search.normalize(name.take(512))
+data class IndexedFile(val name: String, val mime: String, val file: File, val category: String, private val preparedName: String? = null) {
+    val searchName = preparedName ?: Search.normalize(name.take(512))
 }
 
 /** Scans accessible shared storage off the UI thread. Android owns access and file opening. */
@@ -66,12 +66,13 @@ object FileIndex {
         // One native call classifies every extension Grove knows about; anything
         // unknown falls back to Android's MimeTypeMap, exactly as before.
         val table = CoreBridge.classifyTable(found.map { it.ext })
+        val normalized = Search.normalizeAll(found.map { it.name.take(512) })
         val files = found.mapIndexed { index, item ->
             val extra = table[index]
             val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(item.ext)
                 ?: extra?.first
                 ?: "application/octet-stream"
-            IndexedFile(item.name, mime, item.file, extra?.second ?: categoryOf(mime))
+            IndexedFile(item.name, mime, item.file, extra?.second ?: categoryOf(mime), normalized[index])
         }
         return ScanResult(files, skippedDirectories, truncated)
     }

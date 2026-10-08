@@ -7,7 +7,6 @@ import android.provider.ContactsContract
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
-import java.util.concurrent.ExecutorService
 import tech.granet.grove.ui.message
 
 /** Contact-specific actions; the Activity supplies current permission and package state. */

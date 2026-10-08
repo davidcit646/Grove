@@ -100,4 +100,3 @@ internal object SettingsCatalogue {
         .map { it.destination as SettingsDestination.Grove }
         .firstOrNull { it.route == route && it.anchor == anchor }
 }
-

@@ -8,9 +8,9 @@ import android.graphics.Canvas
 import java.util.concurrent.ExecutorService
 
 /** A launchable activity and its prepared search label. */
-internal data class App(val component: ComponentName, val label: String) {
+internal data class App(val component: ComponentName, val label: String, private val preparedName: String? = null) {
     val key = component.flattenToString()
-    val searchName = Search.normalize(label.take(512))
+    val searchName = preparedName ?: Search.normalize(label.take(512))
 }
 
 /** Explicit app-catalog outcome. Icon failure degrades visuals without removing launchable apps. */
@@ -97,9 +97,12 @@ internal class AppCatalog(
         worker.execute {
             val pipeline = CatalogPipeline(
                 enumerate = {
-                    launcher.getActivityList(null, android.os.Process.myUserHandle())
+                    val entries = launcher.getActivityList(null, android.os.Process.myUserHandle())
                         .filter { it.componentName.packageName != ownPackage }
-                        .map { App(it.componentName, it.label.toString().take(512)) }
+
+                    val labels = entries.map { it.label.toString().take(512) }
+                    val normalized = Search.normalizeAll(labels)
+                    entries.mapIndexed { index, item -> App(item.componentName, labels[index], normalized[index]) }
                         .sortedBy { it.searchName }
                 },
                 key = { app: App -> app.key },

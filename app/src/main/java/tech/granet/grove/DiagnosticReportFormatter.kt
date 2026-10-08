@@ -1,20 +1,8 @@
 package tech.granet.grove
 
-import android.app.Activity
-import android.app.Application
 import android.content.Context
-import android.content.Intent
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import tech.granet.grove.ui.confirmDialog
-import tech.granet.grove.ui.message
-import java.io.File
-import java.io.PrintWriter
-import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

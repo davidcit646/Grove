@@ -1,18 +1,10 @@
 package tech.granet.grove
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Environment
 import android.util.Log
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import androidx.work.WorkManager
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 /** Persistent per-source work; the token prevents an older canceled job from committing. */
 internal class IndexWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
