@@ -27,22 +27,34 @@ internal object ContactIndex {
     /** One menu row per messaging app (and per business variant). WhatsApp syncs several
      *  data rows per contact (profile, voice call, video call) that must not each become
      *  a separate "Open in WhatsApp" row. */
-    fun collapseChannels(channels: List<Channel>): List<Channel> =
-        channels.distinctBy { it.label to it.mime.contains("w4b") }
+    private fun channelArgs(channels: List<Channel>) = org.json.JSONObject().put("items", org.json.JSONArray().apply {
+        channels.forEach { put(org.json.JSONObject().put("label", it.label).put("mime", it.mime)) }
+    })
+    fun collapseChannels(channels: List<Channel>): List<Channel> {
+        val value = PortablePolicy.value("channels", channelArgs(channels)) as? org.json.JSONArray
+        if (value != null) {
+            val order = (0 until value.length()).map(value::getInt)
+            if (order.distinct().size == order.size && order.all { it in channels.indices }) return order.map(channels::get)
+        }
+        return channels.distinctBy { it.label to it.mime.contains("w4b") }
+    }
 
     data class WhatsAppTarget(val packageName: String, val label: String)
 
     /** "Message via WhatsApp" targets for a contact. A target is offered only when that
      *  WhatsApp account actually synced data for this contact — never merely because the
      *  app is installed on this device and the contact has a phone number. */
-    fun whatsAppTargets(channels: List<Channel>, installed: (String) -> Boolean): List<WhatsAppTarget> =
-        listOf(
+    fun whatsAppTargets(channels: List<Channel>, installed: (String) -> Boolean): List<WhatsAppTarget> {
+        val matches = (PortablePolicy.value("whatsApp", channelArgs(channels)) as? org.json.JSONArray)
+            ?.takeIf { it.length() == 2 && it.get(0) is Boolean && it.get(1) is Boolean }
+        return listOf(
             WhatsAppTarget("com.whatsapp", "WhatsApp") to
-                channels.any { it.label == "WhatsApp" && !it.mime.contains("w4b") },
+                (matches?.optBoolean(0) ?: channels.any { it.label == "WhatsApp" && !it.mime.contains("w4b") }),
             WhatsAppTarget("com.whatsapp.w4b", "WhatsApp Business") to
-                channels.any { it.mime.contains("w4b") },
+                (matches?.optBoolean(1) ?: channels.any { it.mime.contains("w4b") }),
         ).filter { (target, contactHasIt) -> contactHasIt && installed(target.packageName) }
             .map { (target, _) -> target }
+    }
 
     data class ScanResult(val contacts: List<Contact>, val truncated: Boolean)
 

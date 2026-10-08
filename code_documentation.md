@@ -50,7 +50,7 @@ Android document pickers supply URIs. The settings ViewModel reads at most 64 Ki
 
 ## Search, settings and actions
 
-Labels are bounded and prepared once per catalogue/cache/scan batch. Native normalization uses NFD, removes marks, lowercases and trims with the JVM-compatible contract. `Search.prepare` limits query text to 256 UTF-16 units and splits Java ASCII whitespace. App/contact/file ranking requires every term; exact, prefix, then substring/fuzzy matches use stable original-index ties. Fuzzy distance counts UTF-16 units, permits one edit (two for terms of at least six units), and rejects words over 64 units. Rust uses diagonal-band Levenshtein with early row termination and stack buffers; top-K avoids sorting all rejected rows. Kotlin recovery preserves ranking semantics.
+Labels are bounded and prepared once per catalogue/cache/scan batch. Native normalization uses NFD, removes marks, lowercases and trims with the JVM-compatible contract. `Search.prepare` limits query text to 256 UTF-16 units and splits Java ASCII whitespace. App/contact/file ranking requires every term; exact, prefix, then substring/fuzzy matches use stable original-index ties. Fuzzy distance counts UTF-16 units, permits one edit (two for terms of at least six units), and rejects words over 64 units. Rust uses diagonal-band Levenshtein with an equal-length Hamming shortcut, early row termination and compact stack buffers; top-K avoids sorting all rejected rows. Kotlin recovery preserves ranking semantics.
 
 Search providers are independent: apps, optional contacts/files, calculator, Grove settings, Android settings, and explicit external web/Play actions. Empty successful source results are Ready(0); disabled, permission-required, loading, partial and failed states are distinct. Cached source readiness includes age and invalidation; stale/unavailable caches use bounded live search when allowed. A late live result cannot replace a newly ready authoritative cache. Identical UI frames do not rebuild rows or disturb focus/scroll.
 
@@ -58,7 +58,7 @@ Settings discovery uses an immutable catalogue with typed destinations. Matching
 
 Calculator syntax is bounded arithmetic ending in `=`; no scripting engine or functions. Exact decimal addition/subtraction/multiplication and terminating division preserve values. Nonterminating division uses 34-digit half-even precision and marks approximation. Bounds: 256 input units, 64-unit literals, depth 16, 128 operations, coefficient/scale/output bounds. Invalid syntax, division by zero and limits are separate results. Rust uses arbitrary-precision coefficients; JVM BigDecimal remains the explicit recovery oracle.
 
-Contact details and messaging channels are queried on demand, bounded to 80 rows. Phone deduplication preserves JDK 17 BMP digit semantics. Channels are collapsed by app/business variant; WhatsApp targets require both synced contact data and current installation. Dialing opens a dialer confirmation. Before a contact action, details and source/grant authority are rechecked. Shared files receive read-only temporary URI permission; no automatic file contents are indexed or uploaded. Uninstall uses Android's confirmation and advances only one package at a time; cancel stops the remaining batch.
+Contact details and messaging channels are queried on demand, bounded to 80 useful rows / 1,000 raw rows / a 2.5-second cancellation deadline. Contact action shutdown cancels active provider signals. Phone deduplication preserves JDK 17 BMP digit semantics. Channels are collapsed by app/business variant; WhatsApp targets require both synced contact data and current installation. Dialing opens a dialer confirmation. Before a contact action, details and source/grant authority are rechecked. Shared files receive read-only temporary URI permission; no automatic file contents are indexed or uploaded. Uninstall uses Android's confirmation and advances only one package at a time; cancel stops the remaining batch.
 
 ## Indexes and cancellation
 
@@ -119,7 +119,7 @@ The security pass covers source trust boundaries, grants, exported components, p
 | `gesture_session.rs` | Complete portable touch-event transition. |
 | `decisions.rs` | Source/cache/recovery/trust/report/setup/tutorial rules and page/pin decisions. |
 | `config_edits.rs` | Folder mutations, pin union and conflict-aware setup merge. |
-| `contacts.rs` | Stable phone digit normalization. |
+| `contacts.rs`, `actions_policy.rs`, `reports.rs` | Stable phone digit normalization, channel collapse/target facts, uninstall queue transitions and safe-field report formatting. |
 | `mime.rs`, `wallpaper.rs` | Grove extension overrides and generated pixels. |
 | `bridge.rs` | JNI conversion, bounds, panic containment and versioned response envelopes. |
 
@@ -131,13 +131,13 @@ Remaining Kotlin is intentional for Android API calls, View/resource/binder/prov
 
 Changes remove per-row JNI normalization, use bounded batches, short-circuit exact search before UTF-16 allocation, replace full fuzzy matrices with diagonal bands/early exit/stack arrays, prepare smaller wallpaper previews, avoid idle cancellation writes, and move large cache decoding outside the cancellation lock. Existing lazy filesystem walking, bounded live queries, prepared labels, top-K selection and icon batches remain enforced.
 
-`verification/performance/search-baseline.rs` is the unchanged baseline kernel from `0e9eb607`, used only for comparison and never linked into the app. `search-benchmark.rs` runs 35 samples for 15,000/50,000 synthetic rows, exact/typo/no-match queries, checks result parity and records p50/p95 CPU microseconds. Both paths use the same top-K to isolate scoring changes. CI uploads `search-benchmark.csv`. This host kernel benchmark does not measure JNI, Android UI, realistic provider/storage costs, device memory or frame time. Do not extrapolate it into device latency claims.
+`verification/performance/search-baseline.rs` is the unchanged baseline kernel from `0e9eb607`, used only for comparison and never linked into the app. `search-benchmark.rs` runs 35 samples for 15,000/50,000 synthetic rows, exact/typo/no-match queries, checks result parity and records p50/p95 CPU microseconds. Both paths use the same top-K to isolate scoring changes. CI uploads `search-benchmark.csv`. On `e2657c32`, the 50k-row baseline/candidate p50 microseconds were 1348/467 (exact), 6654/1013 (typo), and 22324/12765 (no match); p95 were 1383/508, 6741/1051 and 23341/12887. These compare the current prepared-query path against the original per-label term preparation, not just matrix arithmetic. This host kernel benchmark does not measure JNI, Android UI, realistic provider/storage costs, device memory or frame time. Do not extrapolate it into device latency claims.
 
 Device performance evidence must record model/OS/ABI, corpus size, warm/cold state, build SHA, median/p95 and memory before/after. Cover cold Home launch, icon publication, 15k files/50k contacts, rapid typing, large directory/provider behavior, canceled work, wallpaper previews and Activity teardown. Use the checklist below; no Android emulator/VM is assumed.
 
 ## Build status
 
-CI workflow `.github/workflows/android.yml` is authoritative for each tested SHA. Initial cleanup `0b930bce` passed Rust tests (16), Android debug assembly, 214 JVM tests and lint. Native verification was then added: `4c0f05d3` passed Rust (17) and fallback JVM (220), while the native-loaded suite caught an opaque-ID folder adapter problem. The subsequent implementation corrects the adapter and must pass the latest workflow before approval. Final evidence will be recorded here after the candidate run completes.
+CI workflow `.github/workflows/android.yml` is authoritative for each tested SHA. Initial cleanup `0b930bce` passed Rust tests (16), Android debug assembly, 214 JVM tests and lint. Native verification was then added: `4c0f05d3` passed Rust (17) and fallback JVM (220), while the native-loaded suite caught an opaque-ID folder adapter problem. The subsequent implementation corrects the adapter and must pass the latest workflow before approval. `becb9c47` then passed native-loaded and fallback JVM suites, Android build/lint and Rust advisory audit (44 locked dependencies; zero reported vulnerabilities). The first benchmark exposed a typo regression, which was corrected rather than accepted. `e2657c32` passed 19 Rust tests and its benchmark, including result parity; candidate Android/native/advisory checks must still pass at the final SHA.
 
 A passing debug/source run is not a signed release or device acceptance. CI artifacts include resolved dependencies/advisory reports, Cargo.lock, test XML, lint XML, native source and benchmark CSV. Native tests assert the host cdylib actually loaded. Fallback/native suites run separately. The exhaustive fuzzy test compares against a full matrix over every pair of binary words through length six and budgets 0–2. Historical `verification/0.1.*` files are not evidence for this candidate.
 
@@ -207,15 +207,15 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [ConfigInput.kt](app/src/main/java/tech/granet/grove/ConfigInput.kt) | `ConfigInput`, `Parser`, `validate`, `fail`, `whitespace`, `take`, `document`, `value`, `literal`, `number`, `digits`, `string` |
 | [ConfigModels.kt](app/src/main/java/tech/granet/grove/ConfigModels.kt) | `GestureSettings`, `HomeScreenSettings`, `AppFolder`, `SearchSettings`, `Config`, `json`, `parse` |
 | [ConfigStore.kt](app/src/main/java/tech/granet/grove/ConfigStore.kt) | `ConfigStore`, `parse`, `load`, `save`, `activate` |
-| [ContactActions.kt](app/src/main/java/tech/granet/grove/ContactActions.kt) | `ContactActions`, `shutdown`, `menu`, `launch`, `show`, `launchCurrent`, `action`, `callRow`, `textRow` |
+| [ContactActions.kt](app/src/main/java/tech/granet/grove/ContactActions.kt) | `ContactActions`, `shutdown`, `details`, `menu`, `launch`, `show`, `launchCurrent`, `action`, `callRow`, `textRow` |
 | [ContactChanges.kt](app/src/main/java/tech/granet/grove/ContactChanges.kt) | `ContactChanges`, `settings`, `eligible`, `onChange`, `reconcile` |
-| [ContactIndex.kt](app/src/main/java/tech/granet/grove/ContactIndex.kt) | `ContactIndex`, `Contact`, `Number`, `Channel`, `Details`, `WhatsAppTarget`, `ScanResult`, `Raw`, `ContactCoverage`, `normalizeNumber`, `collapseChannels`, `whatsAppTargets`, `load`, `details`, `isPartial` |
+| [ContactIndex.kt](app/src/main/java/tech/granet/grove/ContactIndex.kt) | `ContactIndex`, `Contact`, `Number`, `Channel`, `Details`, `WhatsAppTarget`, `ScanResult`, `Raw`, `ContactCoverage`, `normalizeNumber`, `channelArgs`, `collapseChannels`, `whatsAppTargets`, `load`, `details`, `isPartial` |
 | [ContactScanBudget.kt](app/src/main/java/tech/granet/grove/ContactScanBudget.kt) | `ContactScanBudget`, `expired`, `exhausted`, `visited` |
 | [CoreBridge.kt](app/src/main/java/tech/granet/grove/CoreBridge.kt) | `CoreBridge`, `native`, `normalizeNative`, `searchNative`, `classifyNative`, `renderWallpaperNative`, `policyNative`, `normalizeAll`, `searchOrder`, `fallbackOrder`, `classifyTable`, `extensionOverride`, `renderWallpaper`, `portable` |
 | [CoreRecoveryPolicy.kt](app/src/main/java/tech/granet/grove/CoreRecoveryPolicy.kt) | `CoreRecoveryReason`, `CoreRecoveryState`, `CoreRecoveryPolicy`, `forReason` |
 | [CoreRecoveryView.kt](app/src/main/java/tech/granet/grove/CoreRecoveryView.kt) | `CoreRecoveryView`, `render` |
 | [CrashReporter.kt](app/src/main/java/tech/granet/grove/CrashReporter.kt) | `ReportPromptPolicy`, `ReportHandoffPolicy`, `CrashReporter`, `shouldPrompt`, `hasMailHandler`, `install`, `isEnabled`, `setEnabled`, `developerEmail`, `setDeveloperEmail`, `reportUserRequested`, `promptIfPending`, `reviewPending`, `prompt`, `pendingCount`, `deleteAll`, `buildBody`, `safeDiagnostic`, `pendingReports`, `writeReport`, `reportsDir`, `prefs` |
-| [DiagnosticReportFormatter.kt](app/src/main/java/tech/granet/grove/DiagnosticReportFormatter.kt) | `DiagnosticReportFormatter`, `buildBody`, `safeDiagnostic` |
+| [DiagnosticReportFormatter.kt](app/src/main/java/tech/granet/grove/DiagnosticReportFormatter.kt) | `DiagnosticReportFormatter`, `legacyPackageInfo`, `buildBody`, `safeDiagnostic` |
 | [DiagnosticReportHandoff.kt](app/src/main/java/tech/granet/grove/DiagnosticReportHandoff.kt) | `DiagnosticReportHandoff`, `sendReports`, `showCopyFallback` |
 | [DiagnosticReportStore.kt](app/src/main/java/tech/granet/grove/DiagnosticReportStore.kt) | `DiagnosticReportStore`, `reportsDir`, `pendingReports`, `writeReport` |
 | [DiagnosticsCommands.kt](app/src/main/java/tech/granet/grove/DiagnosticsCommands.kt) | `DiagnosticsCommands`, `capture`, `email`, `deleteReports` |
@@ -303,7 +303,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [TutorialCommands.kt](app/src/main/java/tech/granet/grove/TutorialCommands.kt) | `TutorialCommands`, `searchReplayPending`, `replaySearch`, `replayPending`, `replay` |
 | [TutorialReplay.kt](app/src/main/java/tech/granet/grove/TutorialReplay.kt) | `TutorialReplayDecision`, `TutorialReplayPolicy`, `decide`, `shouldSeedFavoritesOnSkip` |
 | [TutorialSwipeHost.kt](app/src/main/java/tech/granet/grove/TutorialSwipeHost.kt) | `TutorialSwipeHost`, `onInterceptTouchEvent`, `onTouchEvent`, `performClick` |
-| [UninstallBatch.kt](app/src/main/java/tech/granet/grove/UninstallBatch.kt) | `UninstallBatch`, `start`, `accepted`, `cancel`, `advance` |
+| [UninstallBatch.kt](app/src/main/java/tech/granet/grove/UninstallBatch.kt) | `UninstallBatch`, `native`, `start`, `accepted`, `cancel`, `advance` |
 | [WallpaperArt.kt](app/src/main/java/tech/granet/grove/WallpaperArt.kt) | `WallpaperArt`, `source`, `indexForId`, `customFile`, `customCandidateFile`, `customBackupFile`, `create` |
 | [WallpaperCatalog.kt](app/src/main/java/tech/granet/grove/WallpaperCatalog.kt) | `WallpaperKind`, `WallpaperSource`, `CommonsWallpaper`, `UriCompat`, `WallpaperCatalog`, `encodeTitle`, `source`, `indexForId` |
 | [WallpaperController.kt](app/src/main/java/tech/granet/grove/WallpaperController.kt) | `WallpaperApplyOutcome`, `WallpaperController`, `shutdown`, `artwork`, `importCustom`, `background`, `preview`, `apply`, `validateCustomImage`, `promoteCandidate`, `decode`, `centerCrop` |
@@ -321,10 +321,11 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 
 | Source | Responsibility |
 |---|---|
+| [actions_policy.rs](rust/grove-core/src/actions_policy.rs) | `evaluate` |
 | [bridge.rs](rust/grove-core/src/bridge.rs) | `java_strings`, `Java_tech_granet_grove_CoreBridge_searchNative`, `Java_tech_granet_grove_CoreBridge_classifyNative`, `Java_tech_granet_grove_CoreBridge_renderWallpaperNative`, `Java_tech_granet_grove_CoreBridge_policyNative`, `Java_tech_granet_grove_CoreBridge_normalizeNative` |
 | [calculator.rs](rust/grove-core/src/calculator.rs) | `ten`, `normalize`, `bound`, `add`, `multiply`, `divide`, `text`, `peek`, `whitespace`, `operator`, `expression`, `term`, `factor`, `calculate`, `decimal_and_precedence`, `invalid_and_limits` |
 | [config.rs](rust/grove-core/src/config.rs) | `validate_config`, `canonical`, `migration_and_duplicate_ownership` |
-| [config_edits.rs](rust/grove-core/src/config_edits.rs) | `evaluate` |
+| [config_edits.rs](rust/grove-core/src/config_edits.rs) | `same_name`, `upper`, `lower`, `evaluate`, `folder_names_match_jvm_simple_case` |
 | [contacts.rs](rust/grove-core/src/contacts.rs) | `digits`, `unicode_phone_digits` |
 | [decisions.rs](rust/grove-core/src/decisions.rs) | `evaluate` |
 | [gesture_session.rs](rust/grove-core/src/gesture_session.rs) | `f`, `gesture`, `evaluate` |
@@ -332,7 +333,8 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [lib.rs](rust/grove-core/src/lib.rs) | `score`, `search_provider_schema_matches_kotlin_validation`, `theme_schema_accepts_all_modes_and_rejects_invalid_values`, `ranking_preserves_existing_search_order`, `top_k_matches_kotlin_priority_queue_selection`, `top_k_large_scale_keeps_earliest_equal_scores`, `utf16_edit_distance_matches_kotlin_for_non_ascii`, `grids_validate_types_bounds_and_legacy`, `legacy_configuration_ignores_retired_fields`, `categories_and_configs`, `wallpaper_renders_opaque_pixels_at_expected_size` |
 | [mime.rs](rust/grove-core/src/mime.rs) | `classify` |
 | [policy.rs](rust/grove-core/src/policy.rs) | `b`, `n`, `strings`, `distinct`, `normalize`, `evaluate`, `normalization_and_bounds`, `protected_publication`, `pin_and_refresh` |
-| [search.rs](rust/grove-core/src/search.rs) | `is_java_space`, `cmp_index`, `top_indices`, `score_label`, `edit_distance_at_most`, `full`, `band_matches_full_matrix_exhaustively` |
+| [reports.rs](rust/grove-core/src/reports.rs) | `evaluate`, `bounded_safe_fields` |
+| [search.rs](rust/grove-core/src/search.rs) | `is_java_space`, `cmp_index`, `top_indices`, `prepare_query`, `score_label`, `score_prepared`, `edit_distance_at_most`, `full`, `band_matches_full_matrix_exhaustively` |
 | [wallpaper.rs](rust/grove-core/src/wallpaper.rs) | `argb_to_f`, `f_to_argb`, `blend_over`, `lerp_color`, `gradient_at`, `render_wallpaper` |
 | `app/build.gradle.kts`, root Gradle files | SDK/build/signing/dependency/native-test configuration. |
 | `scripts/build-rust-android.sh` | Three Android ABIs, locked Cargo build and 16 KiB linking. |
@@ -357,7 +359,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [ContactLifecycleTest](app/src/test/java/tech/granet/grove/ContactLifecycleTest.kt) | 7 |
 | [CoreRecoveryPolicyTest](app/src/test/java/tech/granet/grove/CoreRecoveryPolicyTest.kt) | 3 |
 | [CrashReporterPrivacyTest](app/src/test/java/tech/granet/grove/CrashReporterPrivacyTest.kt) | 1 |
-| [DrawerStateTest](app/src/test/java/tech/granet/grove/DrawerStateTest.kt) | 3 |
+| [DrawerStateTest](app/src/test/java/tech/granet/grove/DrawerStateTest.kt) | 4 |
 | [FileIndexTest](app/src/test/java/tech/granet/grove/FileIndexTest.kt) | 3 |
 | [FirstRunStateTest](app/src/test/java/tech/granet/grove/FirstRunStateTest.kt) | 3 |
 | [GestureSessionTest](app/src/test/java/tech/granet/grove/GestureSessionTest.kt) | 4 |

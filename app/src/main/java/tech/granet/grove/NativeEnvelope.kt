@@ -16,10 +16,10 @@ internal object NativeEnvelope {
         }
         val value = response.get("value")
         when (operation) {
-            "config", "calculator", "grid", "crop", "gestureSession" -> require(value is JSONObject)
+            "config", "calculator", "grid", "crop", "gestureSession", "uninstall" -> require(value is JSONObject)
             "setup", "folder" -> require(value is JSONObject || value == JSONObject.NULL)
-            "normalize", "phoneDigits" -> require(value is String)
-            "pin", "settingsRank" -> require(value is JSONArray)
+            "normalize", "phoneDigits", "diagnostic", "report" -> require(value is String)
+            "pin", "settingsRank", "channels", "whatsApp" -> require(value is JSONArray)
             "gesture", "columns", "indexState", "delay", "request", "imageSample" -> require(value is Int || value is Long)
             "publication", "access", "drawerClose", "imageValid" -> require(value is Boolean)
             "rule" -> require(value is Boolean || value is Int || value is Long || value is JSONArray || value is JSONObject)
