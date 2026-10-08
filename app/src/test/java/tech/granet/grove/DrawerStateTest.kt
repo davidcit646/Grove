@@ -40,4 +40,11 @@ class DrawerStateTest {
         assertNull(DrawerState.movePin(original, "missing", "b"))
         assertEquals(listOf("b", "a"), DrawerState.movePin(original, "a", "b")!!.favorites)
     }
+    @Test fun folderNamesUseSimpleUnicodeCaseWithoutLocaleDrift() {
+        for ((existing, candidate) in listOf("i" to "İ", "I" to "ı", "Σ" to "ς")) {
+            assertNull(DrawerState.createFolder(Config(folders = listOf(AppFolder(existing, emptyList()))), candidate, emptyList()))
+        }
+        assertTrue(DrawerState.createFolder(Config(folders = listOf(AppFolder("ß", emptyList()))), "s", emptyList()) != null)
+    }
+
 }

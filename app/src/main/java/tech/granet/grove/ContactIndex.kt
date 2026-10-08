@@ -83,18 +83,25 @@ internal object ContactIndex {
         return ScanResult(result.mapIndexed { i, row -> Contact(row.id, row.key, row.name, normalized[i]) }, partial || ContactCoverage.isPartial(result.size, 50_000))
     }
 
-    fun details(resolver: ContentResolver, resources: Resources, contact: Contact): Details {
-        val resolved = ContactsContract.Contacts.lookupContact(resolver, contact.uri)
-            ?: error("This contact no longer exists")
-        val currentId = ContentUris.parseId(resolved)
+    fun details(resolver: ContentResolver, resources: Resources, contact: Contact,
+                cancellation: CancellationSignal = CancellationSignal()): Details {
+        val deadline = deadlines.schedule({ cancellation.cancel() }, 2500L, java.util.concurrent.TimeUnit.MILLISECONDS)
+        try {
+        cancellation.throwIfCanceled()
+        val currentId = resolver.query(contact.uri, arrayOf(ContactsContract.Contacts._ID),
+            null, null, null, cancellation)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) else null
+            } ?: error("This contact no longer exists")
         val numbers = ArrayList<Number>()
         val seenNumbers = HashSet<String>()
         val channels = linkedSetOf<Channel>()
         resolver.query(ContactsContract.Data.CONTENT_URI,
             arrayOf(ContactsContract.Data._ID, ContactsContract.Data.MIMETYPE,
                 ContactsContract.Data.DATA1, ContactsContract.Data.DATA2, ContactsContract.Data.DATA3),
-            "${ContactsContract.Data.CONTACT_ID}=?", arrayOf(currentId.toString()), null)?.use { cursor ->
-            while (cursor.moveToNext() && numbers.size + channels.size < 80) {
+            "${ContactsContract.Data.CONTACT_ID}=?", arrayOf(currentId.toString()), null, cancellation)?.use { cursor ->
+            var visited = 0
+            while (visited++ < 1000 && cursor.moveToNext() && numbers.size + channels.size < 80) {
+                cancellation.throwIfCanceled()
                 val mime = cursor.getString(1) ?: continue
                 when {
                     mime == ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
@@ -114,7 +121,9 @@ internal object ContactIndex {
                 }
             }
         } ?: error("The device's contact details provider is unavailable")
+        cancellation.throwIfCanceled()
         return Details(numbers.toList(), channels.toList())
+        } finally { deadline.cancel(false) }
     }
 }
 

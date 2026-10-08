@@ -66,6 +66,16 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
     if left.len().abs_diff(right.len()) > max {
         return false;
     }
+    // Hamming distance is a valid upper bound for equal-length strings. Most
+    // accepted app-name typos need no dynamic-programming row at all.
+    if left.len() == right.len() {
+        let mut differences = 0;
+        for (a,b) in left.iter().zip(right) {
+            differences += usize::from(a != b);
+            if differences > max { break; }
+        }
+        if differences <= max { return true; }
+    }
     // Only the diagonal band can reach the edit budget. Stack arrays avoid two
     // heap allocations per candidate word, and a dead row stops immediately.
     let max = max.min(64);

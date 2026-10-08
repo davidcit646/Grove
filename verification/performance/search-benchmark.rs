@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[path = "search-baseline.rs"] mod baseline;
 #[path = "../../rust/grove-core/src/search.rs"] mod candidate;
 use std::time::Instant;
