@@ -12,6 +12,7 @@ enum class ThemeMode(val id: String, val label: String) {
 
 internal object PresentationPolicy {
     fun wallpaperColors(mode: ThemeMode, legacyColors: Boolean): Boolean =
-        mode == ThemeMode.WALLPAPER || (mode == ThemeMode.SYSTEM && legacyColors)
-    fun sourceChanged(which: Int, homeFlag: Int): Boolean = which and homeFlag != 0
+        PortablePolicy.ruleBool("wallpaperColors", "mode" to mode.id, "legacy" to legacyColors)
+            ?: (mode == ThemeMode.WALLPAPER || (mode == ThemeMode.SYSTEM && legacyColors))
+    fun sourceChanged(which: Int, homeFlag: Int): Boolean = PortablePolicy.ruleBool("sourceChanged", "which" to which, "home" to homeFlag) ?: (which and homeFlag != 0)
 }

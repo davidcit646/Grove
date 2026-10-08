@@ -11,5 +11,5 @@ internal object WallpaperArt {
     fun customFile(filesDir: File) = WallpaperImageStore.customFile(filesDir)
     fun customCandidateFile(filesDir: File) = WallpaperImageStore.customCandidateFile(filesDir)
     fun customBackupFile(filesDir: File) = WallpaperImageStore.customBackupFile(filesDir)
-    fun create(style: Int) = WallpaperRenderer.create(style)
+    fun create(style: Int, width: Int = 1080, height: Int = 2400) = WallpaperRenderer.create(style, width, height)
 }

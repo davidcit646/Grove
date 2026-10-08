@@ -16,13 +16,20 @@ internal sealed interface SearchSourceState {
             else Ready(count)
 
         fun resolve(enabled: Boolean, access: Boolean, loading: Boolean,
-                    failed: Boolean, count: Int, skippedDirectories: Int = 0): SearchSourceState = when {
+                    failed: Boolean, count: Int, skippedDirectories: Int = 0): SearchSourceState {
+            PortablePolicy.ruleInt("sourceState", 0..5, "enabled" to enabled, "access" to access,
+                "loading" to loading, "failed" to failed, "skipped" to skippedDirectories)?.let {
+                return when (it) { 0 -> Disabled; 1 -> PermissionRequired; 2 -> Failed; 3 -> Loading
+                    4 -> Partial(count, skippedDirectories); else -> Ready(count) }
+            }
+            return when {
             !enabled -> Disabled
             !access -> PermissionRequired
             failed -> Failed
             loading -> Loading
             skippedDirectories > 0 -> Partial(count, skippedDirectories)
             else -> Ready(count)
+            }
         }
     }
 }

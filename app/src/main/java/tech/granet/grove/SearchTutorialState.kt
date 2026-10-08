@@ -22,6 +22,7 @@ internal class SearchTutorialState(page: Int = 0, var sessionSuppressed: Boolean
     companion object {
         const val VERSION = 1
         fun shouldShow(savedVersion: Int, replay: Boolean, suppressed: Boolean) =
-            !suppressed && (replay || savedVersion < VERSION)
+            PortablePolicy.ruleBool("tutorialShow", "suppressed" to suppressed, "replay" to replay, "saved" to savedVersion)
+                ?: (!suppressed && (replay || savedVersion < VERSION))
     }
 }

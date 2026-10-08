@@ -144,17 +144,19 @@ internal object IndexWork {
     @Synchronized fun cancel(context: Context, kind: String): Boolean {
         require(kind == "contacts" || kind == "files") { "Unknown index" }
         val store = prefs(context)
+        val hadWork = store.contains(token(kind)) || store.contains(workId(kind))
         return try {
             revocation.cancel(kind, persist = {
-                val confirmed = store.edit().remove(token(kind)).remove(workId(kind))
+                val idle = listOf(token(kind), workId(kind), started(kind), pending(kind)).none(store::contains)
+                val confirmed = idle || store.edit().remove(token(kind)).remove(workId(kind))
                     .remove(started(kind)).remove(pending(kind)).commit()
                 if (!confirmed) failure(kind, "Cancellation could not be saved; protected work is blocked. Retry.")
                 confirmed
             }, cleanup = {
                 // Durable token removal already prevents every old worker from publishing.
                 // WorkManager cancellation is asynchronous; it does not authorize cache writes.
-                WorkManager.getInstance(context).cancelUniqueWork(name(kind))
-                val cleared = IndexCache.clear(context, kind)
+                if (hadWork) WorkManager.getInstance(context).cancelUniqueWork(name(kind))
+                val cleared = !IndexCache.exists(context, kind) || IndexCache.clear(context, kind)
                 failure(kind, if (cleared) null else "Index deletion failed; retry")
                 cleared
             })

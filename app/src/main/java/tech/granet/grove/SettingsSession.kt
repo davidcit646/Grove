@@ -70,7 +70,7 @@ class SettingsSession(app: Application) : AndroidViewModel(app) {
     internal fun apply(): CommandFeedback {
         val pending = candidate ?: return CommandFeedback(false, "Choose or edit a configuration first.")
         val now = repository.snapshot()
-        if (now != pending.base) return CommandFeedback(false, "Settings changed. Reopen the editor or import again to review the latest configuration.")
+        if (!ConfigDocumentGate.canActivate(pending.base, now)) return CommandFeedback(false, "Settings changed. Reopen the editor or import again to review the latest configuration.")
         val result = commands.replace(pending.config, pending.base.revision)
         if (result.saved) { candidate = null; draft = null; editorBase = null }
         return result

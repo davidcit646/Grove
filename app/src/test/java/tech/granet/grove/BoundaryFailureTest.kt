@@ -30,10 +30,12 @@ class BoundaryFailureTest {
         } }
         writer.start()
         assertTrue(writing.await(2, TimeUnit.SECONDS))
-        val cancel = Thread { assertTrue(gate.cancel("files", { true }, { snapshot = false; true })) }
+        val result = java.util.concurrent.FutureTask { gate.cancel("files", { true }, { snapshot = false; true }) }
+        val cancel = Thread(result)
         cancel.start()
         finish.countDown()
         writer.join(2000); cancel.join(2000)
+        assertTrue(result.get(2, TimeUnit.SECONDS))
         assertFalse(writer.isAlive); assertFalse(cancel.isAlive)
         assertFalse(snapshot); assertFalse(gate.allowed("files"))
     }

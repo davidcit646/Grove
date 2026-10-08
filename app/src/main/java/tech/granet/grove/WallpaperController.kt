@@ -44,19 +44,19 @@ internal class WallpaperController(
         }.onFailure { Log.w("Grove", "Could not reconcile wallpaper storage", it) }
     }
 
-    fun artwork(index: Int, preferPendingCustom: Boolean = false): Bitmap {
+    fun artwork(index: Int, preferPendingCustom: Boolean = false, maxWidth: Int = 1440, maxHeight: Int = 2560): Bitmap {
         val source = WallpaperArt.source(index) ?: error("Unknown wallpaper source")
         return when (source.kind) {
-            WallpaperKind.GENERATED -> WallpaperArt.create(index)
-            WallpaperKind.COMMONS -> decodeBundled(source.resourceId ?: error("Bundled wallpaper resource missing"))
+            WallpaperKind.GENERATED -> WallpaperArt.create(index, minOf(maxWidth, 1080), minOf(maxHeight, 2400))
+            WallpaperKind.COMMONS -> WallpaperImages.decodeBundled(activity.resources, source.resourceId ?: error("Bundled wallpaper resource missing"), maxWidth, maxHeight)
                 ?: error("Bundled wallpaper is unavailable")
             WallpaperKind.SOLID_BLACK ->
-                Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
+                Bitmap.createBitmap(minOf(maxWidth, 1080), minOf(maxHeight, 2400), Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
             WallpaperKind.CUSTOM -> {
                 val pending = WallpaperArt.customCandidateFile(activity.filesDir)
                 val file = if (preferPendingCustom && pending.exists()) pending
                     else WallpaperArt.customFile(activity.filesDir)
-                decode(file) ?: error("Custom wallpaper is unavailable")
+                WallpaperImages.decode(file, maxWidth, maxHeight) ?: error("Custom wallpaper is unavailable")
             }
         }
     }
@@ -113,7 +113,7 @@ internal class WallpaperController(
     fun preview(index: Int, done: (Bitmap?) -> Unit) {
         worker.execute {
             val preview = runCatching {
-                val full = artwork(index, preferPendingCustom = true)
+                val full = artwork(index, preferPendingCustom = true, maxWidth = 360, maxHeight = 800)
                 val cropped = centerCrop(full, 360, 800)
                 val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
                 if (cropped !== scaled && cropped !== full) cropped.recycle()
@@ -168,23 +168,12 @@ internal class WallpaperController(
         }
     }
 
-    private fun decodeBundled(resourceId: Int): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeResource(activity.resources, resourceId, bounds)
-        if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null
-        var sample = 1
-        while (bounds.outWidth / sample > 1440 || bounds.outHeight / sample > 2560) sample *= 2
-        return BitmapFactory.decodeResource(
-            activity.resources,
-            resourceId,
-            BitmapFactory.Options().apply { inSampleSize = sample },
-        )
-    }
-
     companion object {
         private const val MAX_CUSTOM_BYTES = 20L * 1024 * 1024
 
         fun validateCustomImage(mime: String, bytes: Long, width: Int, height: Int) {
+            PortablePolicy.bool("imageValid", org.json.JSONObject().put("mime", mime).put("bytes", bytes)
+                .put("width", width).put("height", height))?.let { require(it) { "Invalid wallpaper image" }; return }
             require(mime.lowercase(Locale.ROOT).startsWith("image/")) { "Selected document is not an image" }
             require(bytes in 1..MAX_CUSTOM_BYTES) { "Wallpaper is too large" }
             require(width in 1..8192 && height in 1..8192) { "Invalid wallpaper dimensions" }
@@ -202,35 +191,9 @@ internal class WallpaperController(
             return false
         }
 
-        fun decode(file: File): Bitmap? {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(file.absolutePath, bounds)
-            if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null
-            var sample = 1
-            while (bounds.outWidth / sample > 1440 || bounds.outHeight / sample > 2560) sample *= 2
-            return BitmapFactory.decodeFile(
-                file.absolutePath,
-                BitmapFactory.Options().apply { inSampleSize = sample },
-            )
-        }
+        fun decode(file: File): Bitmap? = WallpaperImages.decode(file)
+        fun centerCrop(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap =
+            WallpaperImages.centerCrop(source, targetWidth, targetHeight)
 
-        fun centerCrop(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
-            if (targetWidth <= 0 || targetHeight <= 0) return source
-            val targetRatio = targetWidth.toFloat() / targetHeight
-            val sourceRatio = source.width.toFloat() / source.height
-            val cropWidth: Int
-            val cropHeight: Int
-            if (sourceRatio > targetRatio) {
-                cropHeight = source.height
-                cropWidth = (source.height * targetRatio).toInt().coerceIn(1, source.width)
-            } else {
-                cropWidth = source.width
-                cropHeight = (source.width / targetRatio).toInt().coerceIn(1, source.height)
-            }
-            val left = (source.width - cropWidth) / 2
-            val top = (source.height - cropHeight) / 2
-            if (left == 0 && top == 0 && cropWidth == source.width && cropHeight == source.height) return source
-            return Bitmap.createBitmap(source, left, top, cropWidth, cropHeight)
-        }
     }
 }

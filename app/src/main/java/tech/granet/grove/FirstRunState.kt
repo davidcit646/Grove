@@ -12,8 +12,15 @@ internal class FirstRunState(private val initial: Config, private val availableA
     var practicedDown = false
     var practicedHold = false
 
-    fun pages(): List<Int> = if (gestures.swipeDownSearch || gestures.swipeUpAppDrawer)
+    fun pages(): List<Int> {
+        val native = PortablePolicy.rule("setupPages", "down" to gestures.swipeDownSearch, "up" to gestures.swipeUpAppDrawer) as? org.json.JSONArray
+        if (native != null) {
+            val pages = (0 until native.length()).map { native.getInt(it) }
+            if (pages == listOf(0,1,2,3,4,5,6,7) || pages == listOf(0,1,3,4,5,6,7)) return pages
+        }
+        return if (gestures.swipeDownSearch || gestures.swipeUpAppDrawer)
         listOf(0, 1, 2, 3, 4, 5, 6, 7) else listOf(0, 1, 3, 4, 5, 6, 7)
+    }
 
     fun back(): Boolean {
         val visible = pages()
@@ -46,7 +53,8 @@ internal class FirstRunState(private val initial: Config, private val availableA
     }
 
     fun togglePin(key: String, checked: Boolean): Boolean {
-        if (checked && key !in pins && pins.size >= 12) return false
+        if ((PortablePolicy.ruleBool("setupPin", "checked" to checked, "contained" to (key in pins), "count" to pins.size)
+            ?: (!checked || key in pins || pins.size < 12)) == false) return false
         if (checked) pins.add(key) else pins.remove(key)
         return true
     }

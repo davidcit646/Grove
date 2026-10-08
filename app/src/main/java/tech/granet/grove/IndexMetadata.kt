@@ -8,6 +8,7 @@ internal data class IndexMetadata(
     val invalidated: Boolean = false,
 ) {
     fun fresh(kind: String, now: Long = System.currentTimeMillis()): Boolean =
-        validity == IndexValidity.AVAILABLE && !invalidated &&
-            now - writtenAt in 0..(if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000)
+        PortablePolicy.ruleBool("cacheFresh", "available" to (validity == IndexValidity.AVAILABLE), "invalid" to invalidated,
+            "now" to now, "written" to writtenAt, "kind" to kind) ?: (validity == IndexValidity.AVAILABLE && !invalidated &&
+            now - writtenAt in 0..(if (kind == "files") 24L * 60 * 60_000 else 15L * 60_000))
 }

@@ -175,3 +175,9 @@ mod tests {
         assert_ne!(a, b);
     }
 }
+
+mod image_policy;
+mod decisions;
+mod config_edits;
+
+mod gesture_session;

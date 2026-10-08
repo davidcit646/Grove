@@ -14,6 +14,7 @@ jobs:
       - uses: android-actions/setup-android@v4
       - run: sdkmanager --install 'platforms;android-36' 'ndk;27.3.13750724'
       - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --manifest-path rust/grove-core/Cargo.toml
       - run: cargo test --locked --manifest-path rust/grove-core/Cargo.toml
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
@@ -21,6 +22,10 @@ jobs:
         run: |
           cargo build --locked --manifest-path rust/grove-core/Cargo.toml
           ./gradlew testDebugUnitTest -PgroveNativeTests=true --rerun-tasks
+      - name: Audit Rust dependency advisories
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo audit --file rust/grove-core/Cargo.lock --json | tee cargo-audit.json
       - name: Compare search kernels
         run: |
           rustc -O verification/performance/search-benchmark.rs -o "$RUNNER_TEMP/search-benchmark"
@@ -41,10 +46,13 @@ jobs:
           ./gradlew assembleRelease bundleRelease
           bash scripts/verify-release.sh
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: grove-source-verification
           path: |
+            cargo-audit.json
             search-benchmark.csv
+            rust/grove-core/src/*.rs
             rust/grove-core/Cargo.lock
             app/build/reports/lint-results-debug.xml
             app/build/test-results/testDebugUnitTest/*.xml

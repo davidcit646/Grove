@@ -3,8 +3,10 @@ package tech.granet.grove
 internal data class SettingsHandler(val packageName: String, val enabled: Boolean,
     val applicationEnabled: Boolean, val exported: Boolean, val system: Boolean, val permitted: Boolean)
 internal object SettingsCapabilities {
-    fun trusted(handler: SettingsHandler) = handler.enabled && handler.applicationEnabled &&
-        handler.exported && handler.system && handler.permitted
+    fun trusted(handler: SettingsHandler) = PortablePolicy.ruleBool("trustedSettings",
+        "enabled" to handler.enabled, "application" to handler.applicationEnabled,
+        "exported" to handler.exported, "system" to handler.system, "permitted" to handler.permitted)
+        ?: (handler.enabled && handler.applicationEnabled && handler.exported && handler.system && handler.permitted)
     fun allowed(handler: SettingsHandler, settingsPackages: Set<String>) =
         trusted(handler) && handler.packageName in settingsPackages
     enum class Availability { READY, UNAVAILABLE, FAILED }

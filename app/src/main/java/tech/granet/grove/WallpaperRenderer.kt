@@ -6,18 +6,18 @@ internal object WallpaperRenderer {
     private const val ART_WIDTH = 1080
     private const val ART_HEIGHT = 2400
 
-    fun create(style: Int): Bitmap {
+    fun create(style: Int, width: Int = ART_WIDTH, height: Int = ART_HEIGHT): Bitmap {
         // The generative art lives in the Rust core now; the Canvas painter
         // below stays as the fallback when the native library is absent.
-        CoreBridge.renderWallpaper(style, ART_WIDTH, ART_HEIGHT)?.let { pixels ->
-            return Bitmap.createBitmap(pixels, 0, ART_WIDTH, ART_WIDTH, ART_HEIGHT, Bitmap.Config.ARGB_8888)
+        CoreBridge.renderWallpaper(style, width, height)?.let { pixels ->
+            return Bitmap.createBitmap(pixels, 0, width, width, height, Bitmap.Config.ARGB_8888)
         }
-        return createCanvas(style)
+        return createCanvas(style, width, height)
     }
 
-    private fun createCanvas(style: Int): Bitmap {
-        val bitmap = Bitmap.createBitmap(ART_WIDTH, ART_HEIGHT, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+    private fun createCanvas(style: Int, width: Int, height: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap).apply { scale(width.toFloat() / ART_WIDTH, height.toFloat() / ART_HEIGHT) }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         val colors = when(style) {
             1 -> intArrayOf(0xffe5b886.toInt(), 0xffa25440.toInt(), 0xff263c37.toInt())

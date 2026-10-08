@@ -212,7 +212,6 @@ class MainActivity : AppCompatActivity() {
         wallpaperController.shutdown()
         if (::surface.isInitialized) surface.background = null
         presentationController.shutdown()
-        configController.shutdown()
         super.onDestroy()
     }
     override fun onSaveInstanceState(outState: Bundle) {

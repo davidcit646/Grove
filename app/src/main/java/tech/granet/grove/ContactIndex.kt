@@ -79,7 +79,7 @@ internal object ContactIndex {
         if (!shouldContinue()) throw android.os.OperationCanceledException()
         val normalized = Search.normalizeAll(result.map { it.name })
         if (!shouldContinue()) throw android.os.OperationCanceledException()
-        return ScanResult(result.mapIndexed { i, row -> Contact(row.id, row.key, row.name, normalized[i]) }, partial)
+        return ScanResult(result.mapIndexed { i, row -> Contact(row.id, row.key, row.name, normalized[i]) }, partial || ContactCoverage.isPartial(result.size, 50_000))
     }
 
     fun details(resolver: ContentResolver, resources: Resources, contact: Contact): Details {
@@ -118,5 +118,6 @@ internal object ContactIndex {
 }
 
 internal object ContactCoverage {
-    fun isPartial(count: Int, limit: Int): Boolean = count >= limit
+    fun isPartial(count: Int, limit: Int): Boolean =
+        PortablePolicy.ruleBool("coverage", "count" to count, "limit" to limit) ?: (count >= limit)
 }

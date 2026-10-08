@@ -16,7 +16,6 @@ internal class ConfigController(private val activity: MainActivity) {
     internal val repository get() = app.settingsRepository
     internal val config get() = repository.snapshot().config
     internal val configStore get() = app.settingsStore
-    internal val workflow by lazy { ConfigWorkflow({ config }, ::activateConfig) }
     private var reconciled: Config? = null
 
     fun load(): Config = repository.snapshot().config
@@ -74,9 +73,4 @@ internal class ConfigController(private val activity: MainActivity) {
         activity.startActivity(Intent(activity, SettingsActivity::class.java).putExtra("importUri", uri.toString()))
     }
 
-    fun shutdown() = Unit
-}
-
-internal object ConfigDocumentGate {
-    fun canActivate(startedWith: Config, current: Config): Boolean = startedWith == current
 }

@@ -3,28 +3,24 @@ package tech.granet.grove
 import org.junit.Assert.*
 import org.junit.Test
 
+/** Exercises the live publication authority after retiring ConfigTransaction. */
 class ConfigTransactionTest {
     @Test fun persistenceFailureKeepsActiveStateAndStopsPublication() {
-        var active = "previous"
-        var failures = 0
-        assertFalse(ConfigTransaction.commit("next", { throw IllegalStateException("disk") },
-            { active = it }, { failures++ }))
-        assertEquals("previous", active)
-        assertEquals(1, failures)
+        var notifications = 0
+        val repository = SettingsRepository({ Config() }, { error("disk") }, {}, published = { notifications++ })
+        val before = repository.snapshot()
+        assertTrue(repository.update { it.copy(themeMode = ThemeMode.DARK) } is SettingsOutcome.Unavailable)
+        assertEquals(before, repository.snapshot()); assertEquals(0, notifications)
     }
     @Test fun persistenceCompletesBeforePublication() {
         val events = mutableListOf<String>()
-        assertTrue(ConfigTransaction.commit("next", { events += "persist:$it" },
-            { events += "publish:$it" }, { fail("Unexpected failure") }))
-        assertEquals(listOf("persist:next", "publish:next"), events)
+        val repository = SettingsRepository({ Config() }, { events += "persist" }, {}, published = { events += "publish" })
+        assertTrue(repository.update { it.copy(themeMode = ThemeMode.DARK) } is SettingsOutcome.Saved)
+        assertEquals(listOf("persist", "publish"), events)
     }
     @Test fun publicationInvariantIsNotReportedAsPersistenceFailure() {
-        var failures = 0
-        try {
-            ConfigTransaction.commit("next", {}, { error("invariant") }, { failures++ })
-            fail("Publication invariant must propagate")
-        } catch (_: IllegalStateException) {
-            assertEquals(0, failures)
-        }
+        val repository = SettingsRepository({ Config() }, {}, {}, published = { error("invariant") })
+        try { repository.update { it.copy(themeMode = ThemeMode.DARK) }; fail() }
+        catch (_: IllegalStateException) { assertEquals(ThemeMode.DARK, repository.snapshot().config.themeMode) }
     }
 }

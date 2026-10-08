@@ -2,16 +2,17 @@
 use serde_json::{json, Value};
 use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
 
-fn b(v: &Value, key: &str) -> bool { v[key].as_bool().unwrap_or(false) }
-fn n(v: &Value, key: &str) -> i64 { v[key].as_i64().unwrap_or(0) }
-fn strings(v: &Value) -> Vec<String> { v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_owned)).collect()).unwrap_or_default() }
-fn distinct(a: Vec<String>) -> Vec<String> { let mut seen = std::collections::HashSet::new(); a.into_iter().filter(|x| seen.insert(x.clone())).collect() }
+pub(crate) fn b(v: &Value, key: &str) -> bool { v[key].as_bool().unwrap_or(false) }
+pub(crate) fn n(v: &Value, key: &str) -> i64 { v[key].as_i64().unwrap_or(0) }
+pub(crate) fn strings(v: &Value) -> Vec<String> { v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_owned)).collect()).unwrap_or_default() }
+pub(crate) fn distinct(a: Vec<String>) -> Vec<String> { let mut seen = std::collections::HashSet::new(); a.into_iter().filter(|x| seen.insert(x.clone())).collect() }
 pub(crate) fn normalize(s: &str) -> String {
     s.nfd().filter(|c| !is_combining_mark(*c)).collect::<String>().to_lowercase().trim_matches(|c: char| (c as u32) <= 32).to_owned()
 }
 pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
     let a = &v["args"];
     match v["op"].as_str().ok_or("Missing operation")? {
+        "gestureSession" => crate::gesture_session::evaluate(v),
         "normalize" => Ok(json!(normalize(a["text"].as_str().ok_or("Missing text")?))),
 
         "gesture" => {
@@ -27,6 +28,7 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
             let minimum = a["minimum"].as_f64().ok_or("minimum")? as f32;
             Ok(json!(b(a,"top") && (0..=700).contains(&n(a,"duration")) && dy >= minimum && dy.abs() > dx.abs() * 1.2))
         }
+        "imageSample" | "imageValid" | "crop" => crate::image_policy::evaluate(v),
         "columns" => Ok(json!(if n(a,"custom") > 0 { n(a,"custom") } else if n(a,"width") >= 600 { 6 } else { 4 })),
         "grid" => {
             let capacity = n(a,"capacity"); let count = n(a,"count").max(0);
@@ -42,6 +44,15 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
         "publication" => Ok(json!(n(a,"generation") == n(a,"current") && b(a,"active") && b(a,"enabled") && b(a,"access") && !b(a,"superseded"))),
         "access" => Ok(json!(b(a,"search") && b(a,"index") && b(a,"permitted"))),
         "delay" => Ok(json!(if !b(a,"provider") || n(a,"last") <= 0 { 0 } else { 30_000i64.saturating_sub(n(a,"now").saturating_sub(n(a,"last")).max(0)).clamp(0,30_000) })),
+        "settingsRank" => {
+            let query=a["query"].as_str().ok_or("Query")?;
+            let terms: Vec<&str> = query.split(crate::is_java_space).filter(|t|!t.is_empty()).collect();
+            let labels=a["labels"].as_array().ok_or("Labels")?;
+            if labels.len() > 512 || query.encode_utf16().count() > 256 { return Err("Settings bounds"); }
+            let scores: Vec<i32> = labels.iter().map(|group| group.as_array().map(|labels|
+                labels.iter().filter_map(Value::as_str).map(|label|crate::score_label(label,query,&terms)).max().unwrap_or(-1)).unwrap_or(-1)).collect();
+            Ok(json!(crate::top_indices(&scores,n(a,"limit").max(0) as usize)))
+        }
         "request" => Ok(json!(if a["active"].is_null() { 0 } else if a["active"] != a["started"] || a["pending"] == a["active"] { 1 } else { 2 })),
         "pin" => {
             let mut items = strings(&a["items"]); let item = a["item"].as_str().ok_or("item")?;
@@ -53,46 +64,8 @@ pub(crate) fn evaluate(v: &Value) -> Result<Value, &'static str> {
             }
             Ok(json!(items))
         }
-        "setup" => {
-            let base=&a["base"]; let draft=&a["draft"]; let mut current=a["current"].clone();
-            for key in ["gestures","homeScreen","favorites"] {
-                if draft[key] != base[key] {
-                    if current[key] != base[key] && current[key] != draft[key] { return Ok(Value::Null); }
-                    current[key]=draft[key].clone();
-                }
-            }
-            for key in ["contacts","files","contactIndexing","fileIndexing","calculator","androidSettings","groveSettings"] {
-                if draft["search"][key] != base["search"][key] {
-                    if current["search"][key] != base["search"][key] && current["search"][key] != draft["search"][key] { return Ok(Value::Null); }
-                    current["search"][key]=draft["search"][key].clone();
-                }
-            }
-            Ok(current)
-        }
-        "folder" => {
-            let mut config=a["config"].clone(); let name=a["name"].as_str().unwrap_or("").trim();
-            let action=a["action"].as_str().ok_or("action")?; let keys=distinct(strings(&a["keys"]));
-            let folders=config["folders"].as_array_mut().ok_or("folders")?;
-            match action {
-                "create" => {
-                    if !(1..=40).contains(&name.encode_utf16().count()) || folders.iter().any(|f|f["name"].as_str().unwrap_or("").to_lowercase()==name.to_lowercase()) { return Ok(Value::Null); }
-                    for f in folders.iter_mut() { f["apps"]=json!(strings(&f["apps"]).into_iter().filter(|k|!keys.contains(k)).collect::<Vec<_>>()); }
-                    folders.push(json!({"name":name,"apps":keys}));
-                }
-                "rename" => {
-                    let old=a["old"].as_str().ok_or("old")?;
-                    if !(1..=40).contains(&name.encode_utf16().count()) || !folders.iter().any(|f|f["name"]==old) || folders.iter().any(|f|f["name"]!=old && f["name"].as_str().unwrap_or("").to_lowercase()==name.to_lowercase()) { return Ok(Value::Null); }
-                    for f in folders.iter_mut() { if f["name"]==old { f["name"]=json!(name); } }
-                }
-                "delete" => { if !folders.iter().any(|f|f["name"]==name) {return Ok(Value::Null);} folders.retain(|f|f["name"]!=name); }
-                "move" | "remove" => {
-                    if action=="move" && (keys.is_empty() || !folders.iter().any(|f|f["name"]==name)) {return Ok(Value::Null);}
-                    for f in folders.iter_mut() { let members=strings(&f["apps"]); f["apps"]=if action=="move" && f["name"]==name { json!(distinct([members,keys.clone()].concat())) } else { json!(members.into_iter().filter(|k|!keys.contains(k)).collect::<Vec<_>>()) }; }
-                }
-                _ => return Err("Unknown folder action"),
-            }
-            Ok(config)
-        }
+        "setup" | "folder" => crate::config_edits::evaluate(v),
+        "rule" => crate::decisions::evaluate(v),
         _ => Err("Unknown operation"),
     }
 }

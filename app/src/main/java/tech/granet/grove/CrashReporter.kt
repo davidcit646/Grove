@@ -5,7 +5,6 @@ import android.app.Application
 import android.content.Context
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.message
-import java.io.File
 
 /**
  * Crash and error reporting with no third-party SDK and no network of its own.
@@ -23,21 +22,19 @@ import java.io.File
 internal object ReportPromptPolicy {
     fun shouldPrompt(reportCount: Int, automaticCaptureEnabled: Boolean,
                      alreadyPrompting: Boolean, explicitReview: Boolean): Boolean =
-        reportCount > 0 && !alreadyPrompting && (explicitReview || automaticCaptureEnabled)
+        PortablePolicy.ruleBool("reportPrompt", "count" to reportCount, "prompting" to alreadyPrompting,
+            "explicit" to explicitReview, "automatic" to automaticCaptureEnabled)
+            ?: (reportCount > 0 && !alreadyPrompting && (explicitReview || automaticCaptureEnabled))
 }
 
 internal object ReportHandoffPolicy {
-    fun hasMailHandler(handlerCount: Int): Boolean = handlerCount > 0
+    fun hasMailHandler(handlerCount: Int): Boolean = PortablePolicy.ruleBool("mailHandler", "count" to handlerCount) ?: (handlerCount > 0)
 }
 
 object CrashReporter {
-    private const val TAG = "Grove"
     private const val PREFS = "crash_reports"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_EMAIL = "developer_email"
-    private const val DIR = "crash-reports"
-    private const val MAX_REPORTS = 10
-    private const val MAX_BODY_CHARS = 60_000
     private const val DEFAULT_EMAIL = "support@granet.tech"
     @Volatile private var prompting = false
 
@@ -66,23 +63,6 @@ object CrashReporter {
 
     fun setDeveloperEmail(context: Context, email: String): Boolean =
         prefs(context).edit().putString(KEY_EMAIL, email.trim()).commit()
-
-    /** File a report for a caught exception; surfaced at the next [promptIfPending]. */
-    fun reportNonFatal(context: Context, tag: String, throwable: Throwable) {
-        try {
-            if (isEnabled(context)) writeReport(context, kind = "error",
-                error = GroveErrorRegistry.GENERIC_NONFATAL,
-                throwable = throwable)
-        } catch (_: Exception) {
-        }
-    }
-
-    internal fun reportNonFatal(context: Context, error: GroveError, throwable: Throwable?) {
-        try {
-            if (isEnabled(context)) writeReport(context, kind = "error", error = error, throwable = throwable)
-        } catch (_: Exception) {
-        }
-    }
 
     /** Explicit user report is allowed even when automatic crash/error capture is disabled. */
     internal fun reportUserRequested(context: Context, error: GroveError, throwable: Throwable?): Boolean = try {
