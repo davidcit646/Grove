@@ -23,6 +23,7 @@ object FileIndex {
         data class Raw(val name: String, val ext: String, val file: File)
         val found = ArrayList<Raw>()
         val queue = ArrayDeque<File>()
+        if (!shouldContinue()) return ScanResult(emptyList(), 0, true)
         val rootPath = root.canonicalPath
         val visited = HashSet<String>()
         var scannedEntries = 0
@@ -72,10 +73,13 @@ object FileIndex {
         val truncated = queue.isNotEmpty() || found.size >= limit || scannedEntries >= 100_000 || expired()
         // One native call classifies every extension Grove knows about; anything
         // unknown falls back to Android's MimeTypeMap, exactly as before.
-        val table = CoreBridge.classifyTable(found.map { it.ext })
-        val normalized = Search.normalizeAll(found.map { it.name.take(512) })
+        val extensions = found.map { it.ext }.distinct()
+        val table = extensions.zip(CoreBridge.classifyTable(extensions)).toMap()
+        if (!shouldContinue()) return ScanResult(emptyList(), skippedDirectories, true)
+        val normalized = Search.normalizeAll(found.map { it.name.take(512) }, shouldContinue)
+        if (!shouldContinue()) return ScanResult(emptyList(), skippedDirectories, true)
         val files = found.mapIndexed { index, item ->
-            val extra = table[index]
+            val extra = table[item.ext]
             val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(item.ext)
                 ?: extra?.first
                 ?: "application/octet-stream"

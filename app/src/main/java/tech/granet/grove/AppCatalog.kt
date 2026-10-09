@@ -42,6 +42,7 @@ internal class CatalogPipeline<E, I>(
         onFailure: (Exception) -> Unit,
     ) {
         try {
+            if (!current()) return
             val entries = enumerate()
             if (!current()) return
             val fallbackIcon = fallback()
@@ -101,7 +102,7 @@ internal class AppCatalog(
                         .filter { it.componentName.packageName != ownPackage }
 
                     val labels = entries.map { it.label.toString().take(512) }
-                    val normalized = Search.normalizeAll(labels)
+                    val normalized = Search.normalizeAll(labels, current)
                     entries.mapIndexed { index, item -> App(item.componentName, labels[index], normalized[index]) }
                         .sortedBy { it.searchName }
                 },

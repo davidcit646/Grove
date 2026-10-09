@@ -100,14 +100,16 @@ internal object IndexCache {
         }
     }
 
-    private fun read(context: Context, kind: String): JSONObject? {
+    private fun read(context: Context, kind: String, shouldContinue: () -> Boolean): JSONObject? {
         // Only bounded I/O holds the publication lock. JSON decoding and native
         // preparation can be expensive and must not delay a UI cancellation.
         val bytes = synchronized(commitLock) {
+            Search.checkCurrent(shouldContinue)
             val file = AtomicFile(target(context, kind))
             if (!exists(context, kind)) { record(kind, IndexMetadata(IndexValidity.ABSENT)); return null }
-            file.openRead().use { input -> BoundedInput.read(input, MAX_BYTES) }
+            file.openRead().use { input -> BoundedInput.read(input, MAX_BYTES, shouldContinue) }
         }
+        Search.checkCurrent(shouldContinue)
         require(bytes.isNotEmpty()) { "Invalid index size" }
         val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
         val value = JSONObject(decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString())
@@ -119,13 +121,16 @@ internal object IndexCache {
         verified(kind, value)
     }
 
-    fun files(context: Context): Snapshot<IndexedFile>? {
+    fun files(context: Context, shouldContinue: () -> Boolean = { true }): Snapshot<IndexedFile>? {
         val expected = generation("files")
-        return read(context, "files")?.let { value ->
+        val current = { generation("files") == expected && shouldContinue() }
+        return read(context, "files", current)?.let { value ->
+        Search.checkCurrent(current)
         val rows = value.getJSONArray("items")
         require(rows.length() <= 15_000) { "Invalid file count" }
-        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) })
+        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) }, current)
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
+            if (i % 1024 == 0) Search.checkCurrent(current)
             require(row.getString("name").length in 1..512 && row.getString("path").length in 1..4096
                 && File(row.getString("path")).isAbsolute && row.getString("mime").length in 1..256
                 && row.getString("category") in listOf("Images", "Videos", "Audio", "Documents")) { "Invalid file row" }
@@ -134,13 +139,16 @@ internal object IndexCache {
     }
 
     }
-    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? {
+    fun contacts(context: Context, shouldContinue: () -> Boolean = { true }): Snapshot<ContactIndex.Contact>? {
         val expected = generation("contacts")
-        return read(context, "contacts")?.let { value ->
+        val current = { generation("contacts") == expected && shouldContinue() }
+        return read(context, "contacts", current)?.let { value ->
+        Search.checkCurrent(current)
         val rows = value.getJSONArray("items")
         require(rows.length() <= 50_000) { "Invalid contact count" }
-        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) })
+        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) }, current)
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
+            if (i % 1024 == 0) Search.checkCurrent(current)
             require(row.getLong("id") > 0 && row.getString("key").isNotBlank() && row.getString("key").length <= 512
                 && row.getString("name").isNotBlank() && row.getString("name").length <= 512) { "Invalid contact row" }
             ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"), normalized[i])

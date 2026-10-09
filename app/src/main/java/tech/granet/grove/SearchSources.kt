@@ -88,8 +88,10 @@ internal class SearchSources(
         loadedContacts = revision
         val generation = ++contactGeneration
         contactWorker.execute {
+            val current = { generation == contactGeneration && revision == IndexCache.generation("contacts") && !activity.isDestroyed }
+            if (!current()) return@execute
             val cache = try { Result.success(run {
-                val snapshot = IndexCache.contacts(activity)
+                val snapshot = IndexCache.contacts(activity, current)
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { contact -> contact.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {
@@ -123,8 +125,10 @@ internal class SearchSources(
         loadedFiles = revision
         val generation = ++fileGeneration
         worker.execute {
+            val current = { generation == fileGeneration && revision == IndexCache.generation("files") && !activity.isDestroyed }
+            if (!current()) return@execute
             val cache = try { Result.success(run {
-                val snapshot = IndexCache.files(activity)
+                val snapshot = IndexCache.files(activity, current)
                 snapshot to snapshot?.let { SearchResults.prepare(it.items) { file -> file.searchName } }
             }) } catch (error: Exception) { Result.failure(error) }
             activity.runOnUiThread {

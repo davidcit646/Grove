@@ -90,7 +90,7 @@ internal object ContactIndex {
             partial = true // Deadline reached: useful rows are partial, never Ready(empty).
         } finally { deadline?.cancel(false) }
         if (!shouldContinue()) throw android.os.OperationCanceledException()
-        val normalized = Search.normalizeAll(result.map { it.name })
+        val normalized = Search.normalizeAll(result.map { it.name }, shouldContinue)
         if (!shouldContinue()) throw android.os.OperationCanceledException()
         return ScanResult(result.mapIndexed { i, row -> Contact(row.id, row.key, row.name, normalized[i]) }, partial || ContactCoverage.isPartial(result.size, 50_000))
     }

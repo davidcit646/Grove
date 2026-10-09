@@ -50,4 +50,29 @@ class BoundaryFailureTest {
         }
         assertArrayEquals(byteArrayOf(7), BoundedInput.read(zeroBulk, 2))
     }
+    @Test fun supersededReadStopsBeforeAnotherIoChunk() {
+        var reads = 0
+        val input = object : InputStream() {
+            override fun read(): Int = error("bulk only")
+            override fun read(bytes: ByteArray, off: Int, len: Int): Int {
+                reads++
+                bytes.fill(1, off, off + len)
+                return len
+            }
+        }
+        assertThrows(java.util.concurrent.CancellationException::class.java) {
+            BoundedInput.read(input, 12 * 1024 * 1024) { reads == 0 }
+        }
+        assertEquals(1, reads)
+    }
+
+    @Test fun normalizationStopsBetweenBatchesInBothBridgeModes() {
+        var checks = 0
+        assertThrows(java.util.concurrent.CancellationException::class.java) {
+            Search.normalizeAll(List(50_000) { "CAFÉ" }) { ++checks < 4 }
+        }
+        assertEquals(4, checks)
+        assertEquals(listOf("cafe", "東京"), Search.normalizeAll(listOf("CAFÉ", "東京")) { true })
+    }
+
 }

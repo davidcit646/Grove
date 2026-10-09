@@ -110,18 +110,19 @@ internal class WallpaperController(
     }
 
     /** A small preview is decoded off the UI thread. Pending custom selection is allowed only inside the picker. */
-    fun preview(index: Int, done: (Bitmap?) -> Unit) {
+    fun preview(index: Int, current: () -> Boolean = { true }, done: (Bitmap?) -> Unit) {
         worker.execute {
+            if (!current() || activity.isDestroyed) return@execute
             val preview = runCatching {
-                val full = artwork(index, preferPendingCustom = true, maxWidth = 360, maxHeight = 800)
-                val cropped = centerCrop(full, 360, 800)
-                val scaled = Bitmap.createScaledBitmap(cropped, 360, 800, true)
-                if (cropped !== scaled && cropped !== full) cropped.recycle()
-                if (full !== scaled) full.recycle()
-                scaled
+                val full = PerformanceTrace.measure("Grove.wallpaper.decode") {
+                    artwork(index, preferPendingCustom = true, maxWidth = 360, maxHeight = 800)
+                }
+                try {
+                    PerformanceTrace.measure("Grove.wallpaper.thumbnail") { WallpaperImages.thumbnail(full, 360, 800) }.also { if (it !== full) full.recycle() }
+                } catch (error: Throwable) { full.recycle(); throw error }
             }.onFailure { Log.w("Grove", "Wallpaper preview failed", it) }.getOrNull()
             activity.runOnUiThread {
-                if (activity.isDestroyed) preview?.recycle() else done(preview)
+                if (activity.isDestroyed || !current()) preview?.recycle() else done(preview)
             }
         }
     }

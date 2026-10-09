@@ -28,7 +28,7 @@ Android owns launcher enumeration, permissions, contacts, filesystem access, wid
 
 `CatalogController`, `SearchController`, `SearchSources`, `SearchLiveQueries`, `ContactActions` and `WallpaperController` own their executors. `MainActivity.onDestroy` delegates shutdown to those owners; generations/cancellation signals invalidate late results. `SettingsSession.onCleared` cancels document generations, shuts down its executor and removes callbacks. Durable WorkManager work survives Activity destruction. `IndexWork` scheduling and the contact deadline scheduler live for the process lifetime. `ContactChanges` registers only while source/grant eligibility holds; Activity observers are lifecycle-scoped.
 
-Executors do not authorize publication. Every protected result must still match its current generation, source switch, Android grant and source/cache state. Shutdown interruption is best effort; provider/file operations also receive explicit cancellation checks.
+Executors do not authorize publication. Every protected result must still match its current generation, source switch, Android grant and source/cache state. Queued catalogue/color/cache/preview work checks current generation before expensive execution. Native/fallback label normalization checks cancellation every 1,024 rows; cache reads check it between 4 KiB chunks. Shutdown interruption is best effort; provider/file operations also receive explicit cancellation checks.
 
 ## Configuration contract
 
@@ -54,6 +54,8 @@ Labels are bounded and prepared once per catalogue/cache/scan batch. Native norm
 
 Search providers are independent: apps, optional contacts/files, calculator, Grove settings, Android settings, and explicit external web/Play actions. Empty successful source results are Ready(0); disabled, permission-required, loading, partial and failed states are distinct. Cached source readiness includes age and invalidation; stale/unavailable caches use bounded live search when allowed. A late live result cannot replace a newly ready authoritative cache. Identical UI frames do not rebuild rows or disturb focus/scroll.
 
+Repeated searches use `SearchResults.Prepared`'s snapshot-owned, read-only direct UTF-8 buffer: version 1, little-endian row counts/byte lengths, at most 50,000 rows / 16 MiB including framing / 4,096 UTF-16 units per label. `SearchBuffer` is Android/JNI transport glue, not ranking policy. Malformed UTF-16 bypasses packing to preserve the existing recovery behavior. Rust `search_buffer` validates framing/UTF-8/bounds and borrows label slices only for the synchronous JNI call; it retains no pointer, handle, global reference or source authority. Result indices still pass `NativeResults.search`. Malformed/unavailable packed calls recover through the array bridge and Kotlin ranking. Cached snapshots pack once; transient live-query lists use the array path to avoid one-use direct-buffer allocation. The buffer adds bounded native memory alongside the JVM labels and is released by JVM direct-buffer reclamation when its snapshot is unreachable; phone memory testing remains required.
+
 Settings discovery uses an immutable catalogue with typed destinations. Matching scores all aliases, aggregates by entry, then returns stable ordering. Android Settings routes resolve only enabled/exported/system/permitted activities from the currently resolved Settings packages, and resolve again at launch. Missing routes and launch failures are distinct; generic Android search is a labeled fallback. Web/Play/AI queries leave the device only after the user chooses the external action; links are encoded and HTTPS-checked. Grove itself declares no INTERNET permission.
 
 Calculator syntax is bounded arithmetic ending in `=`; no scripting engine or functions. Exact decimal addition/subtraction/multiplication and terminating division preserve values. Nonterminating division uses 34-digit half-even precision and marks approximation. Bounds: 256 input units, 64-unit literals, depth 16, 128 operations, coefficient/scale/output bounds. Invalid syntax, division by zero and limits are separate results. Rust uses arbitrary-precision coefficients; JVM BigDecimal remains the explicit recovery oracle.
@@ -68,7 +70,7 @@ WorkManager jobs have per-source durable UUID tokens and constraints requiring n
 
 Cancellation blocks the source in `IndexRevocationGate` before acquiring the commit lock. Under the same lock used by `IndexCache.write`, it confirms removal of durable token/work metadata, requests WorkManager cancellation and deletes the cache. A failed preference commit stays blocked in-process and reports failure; cleanup is skipped. After confirmed revocation every old worker is ineligible even if WorkManager takes time to stop it. Deletion checks base/backup/new files before declaring the cache absent. Failure reports a retryable status rather than claiming success. Repeated cancellation with no reservation/cache avoids unnecessary writes/work notifications. A newly confirmed reservation may renew eligibility.
 
-Only bounded I/O and final metadata confirmation hold the cache lock. Large JSON decoding and label preparation run outside it; a generation check rejects a snapshot changed while decoding. Cache metadata/count/row bounds are checked before exposure. Android grant and source switches are always rechecked by the source owner and action owner; stored preferences/native code cannot grant access.
+Only bounded I/O and final metadata confirmation hold the cache lock. Large JSON decoding and label preparation run outside it; superseded cache generations/hosts stop before decoding or between row/normalization batches; a generation check rejects a snapshot changed while decoding. Cache metadata/count/row bounds are checked before exposure. Android grant and source switches are always rechecked by the source owner and action owner; stored preferences/native code cannot grant access.
 
 ## Home, grids, gestures, setup and widgets
 
@@ -184,6 +186,23 @@ Hardware acceptance is separate and pending until recorded against the final SHA
 - Disable automatic capture, explicitly report, inspect draft privacy/recipient, cancel chooser, copy fallback and discard failure. No delivery or deletion is inferred from a launched composer.
 - Record cold/warm performance and memory with the same corpus/device before/after; test supported ABIs and at least one 16 KiB page-size device when available. Record actual signed-release verification before distribution.
 
+## Performance verification
+
+Performance follow-ups #136–#139 use merged baseline `0ebe6ed21303bea2466318044109676f66406c75`. `SearchBufferTest.compareJniTransports` runs against the same loaded host library and queries for both array and prepared transports: five warmups, 35 alternating samples per path, 15k/50k rows, exact/typo/no-match queries, parity checks, p50/p95, preparation time and retained buffer bytes. Timing is evidence, not a flaky pass/fail threshold. Host JVM/native measurements do not establish Android UI latency or battery savings. A local JDK 17 / Kotlin 2.1.21 / x86-64 Linux run using the unoptimized Rust host library is recorded in [jni-transport-host.csv](verification/performance/jni-transport-host.csv): all six transport cases improved, with 50k-row p50 array/buffer timings of 117,982/28,415 µs exact, 154,198/64,897 µs typo and 398,519/300,720 µs no-match. This compares JNI transports using the same current kernel/build, not the previous optimized Rust-only benchmark. The 50k synthetic buffer retains 2,038,898 bytes and was prepared once in 11,045 µs. Exact workloads/results and the timing loop live in SearchBufferTest; the focused native-loaded JVM suite and fallback mode pass (native-only transport checks are intentionally skipped without native loading); all 23 Rust tests pass. Independent file/wallpaper helpers compile against Android 36. Full Android CI remains pending upload approval.
+
+Source-level work reductions: already-obsolete catalogue tasks enumerate zero times; superseded cache reads stop between 4 KiB chunks, and normalization between 1,024-row batches; file MIME classification submits distinct extensions rather than every file; wallpaper previews draw crop/scale directly into one final bitmap rather than materializing a cropped intermediate, preserving source alpha/color space. Bundled image pixel sampling disables density upscaling. Preview generations discard queued stale decode work and recycle completed obsolete output. No bitmap still owned by a view is recycled by the icon cache.
+
+`PerformanceTrace` emits only fixed `Grove.search.prepare`, `Grove.search.rank`, `Grove.wallpaper.decode` and `Grove.wallpaper.thumbnail` system trace names when tracing is enabled. It owns no persistent log, query text, paths, contacts or upload. Android Trace availability is optional; JVM stubs leave tracing off. Existing frame deduplication is retained; no further rendering change is justified without phone traces.
+
+Run `bash scripts/profile-device.sh tech.granet.grove.test search 30` from a computer connected to David's physical phone. The script rejects emulator mode, captures local Perfetto/frame/memory evidence, records model/API/ABI/package version and local source SHA, and never uploads output. Raw device captures are git-ignored. Verify that the installed APK matches the source SHA recorded locally; record build type, battery/thermal state and corpus counts separately. Repeat identical workloads against the baseline and candidate, with at least 35 usable samples for timing distributions and five warmups. Define regression budgets from repeatable baseline variability, not invented absolute limits.
+
+- Startup (#136): compare cold/warm interactive Home, catalogue and icon completion separately; repeat with the same app/widget corpus. Use platform launch/frame timings plus traces, not `am start` timing as a claim of interactive readiness.
+- Search (#137): compare input-to-visible-frame p50/p95 and `Grove.search.rank` duration during rapid typing/deleting. Check exact/typo/no-match, selection order, keyboard/scroll and revoked sources.
+- Images (#138): run `... wallpaper 30` while rapidly browsing landscape/portrait/custom images, then repeat Home/drawer navigation. Compare peak/native/Java memory and frame delays; inspect crop quality, theme colors, density sizes, cancellation and recreation. One-pass filtering is subject to visual acceptance on hardware.
+- Indexes (#139): run `... indexing 120` during the same contact/file corpus scans and revocation/cancellation, and repeat during idle. Compare CPU/storage work, queue/cancellation delay and cache outcomes. Record battery over a longer controlled interval separately; a short trace alone is insufficient to establish battery savings. Uncooperative Android providers can still outlive requested cancellation.
+
+No current candidate phone timings, bitmap visual acceptance or long-interval battery measurements are asserted. These checks remain pending even though David accepted PR #130's earlier phone build.
+
 ## Play readiness
 
 Source cleanup does not resolve store eligibility. `MANAGE_EXTERNAL_STORAGE` remains an optional file-search capability with a Play policy gate (#111); submission materials/approval remain #112. Backup is disabled, there is no INTERNET permission, and PRIVACY.md describes source/index defaults, retention, recovery and explicit handoffs. Review actual merged manifest/data-safety/store declarations before submission. Do not close hardware, Play or release tasks based only on CI.
@@ -213,7 +232,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [ContactChanges.kt](app/src/main/java/tech/granet/grove/ContactChanges.kt) | `ContactChanges`, `settings`, `eligible`, `onChange`, `reconcile` |
 | [ContactIndex.kt](app/src/main/java/tech/granet/grove/ContactIndex.kt) | `ContactIndex`, `Contact`, `Number`, `Channel`, `Details`, `WhatsAppTarget`, `ScanResult`, `Raw`, `ContactCoverage`, `normalizeNumber`, `channelArgs`, `collapseChannels`, `whatsAppTargets`, `load`, `details`, `isPartial` |
 | [ContactScanBudget.kt](app/src/main/java/tech/granet/grove/ContactScanBudget.kt) | `ContactScanBudget`, `expired`, `exhausted`, `visited` |
-| [CoreBridge.kt](app/src/main/java/tech/granet/grove/CoreBridge.kt) | `CoreBridge`, `malformed`, `native`, `normalizeNative`, `searchNative`, `classifyNative`, `renderWallpaperNative`, `openSharedNative`, `closeSharedNative`, `policyNative`, `normalizeAll`, `openShared`, `closeShared`, `searchOrder`, `fallbackOrder`, `classifyTable`, `extensionOverride`, `renderWallpaper`, `portable` |
+| [CoreBridge.kt](app/src/main/java/tech/granet/grove/CoreBridge.kt) | `CoreBridge`, `malformed`, `native`, `normalizeNative`, `searchNative`, `searchBufferNative`, `classifyNative`, `renderWallpaperNative`, `openSharedNative`, `closeSharedNative`, `policyNative`, `normalizeAll`, `openShared`, `closeShared`, `searchOrder`, `preparedOrder`, `fallbackOrder`, `classifyTable`, `extensionOverride`, `renderWallpaper`, `portable` |
 | [CoreRecoveryPolicy.kt](app/src/main/java/tech/granet/grove/CoreRecoveryPolicy.kt) | `CoreRecoveryReason`, `CoreRecoveryState`, `CoreRecoveryPolicy`, `forReason` |
 | [CoreRecoveryView.kt](app/src/main/java/tech/granet/grove/CoreRecoveryView.kt) | `CoreRecoveryView`, `render` |
 | [CrashReporter.kt](app/src/main/java/tech/granet/grove/CrashReporter.kt) | `ReportPromptPolicy`, `ReportHandoffPolicy`, `CrashReporter`, `shouldPrompt`, `hasMailHandler`, `install`, `isEnabled`, `setEnabled`, `developerEmail`, `setDeveloperEmail`, `reportUserRequested`, `promptIfPending`, `reviewPending`, `prompt`, `pendingCount`, `deleteAll`, `buildBody`, `safeDiagnostic`, `pendingReports`, `writeReport`, `reportsDir`, `prefs` |
@@ -261,10 +280,12 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [PinDragController.kt](app/src/main/java/tech/granet/grove/PinDragController.kt) | `PinDragController`, `Drag`, `scrollNearEdge`, `releaseHold`, `finishDrag`, `attach` |
 | [PinnedApps.kt](app/src/main/java/tech/granet/grove/PinnedApps.kt) | `PinnedApps`, `moveTo`, `shift`, `native` |
 | [PortablePolicy.kt](app/src/main/java/tech/granet/grove/PortablePolicy.kt) | `PortablePolicy`, `value`, `rule`, `ruleBool`, `ruleInt`, `bool`, `int` |
+| [PerformanceTrace.kt](app/src/main/java/tech/granet/grove/PerformanceTrace.kt) | `PerformanceTrace`, `measure` |
 | [PresentationController.kt](app/src/main/java/tech/granet/grove/PresentationController.kt) | `PresentationController`, `start`, `applyTheme`, `refresh`, `shutdown` |
-| [Search.kt](app/src/main/java/tech/granet/grove/Search.kt) | `Search`, `Query`, `normalizeAll`, `normalizeFallback`, `normalize`, `prepare`, `score`, `scoreNormalized`, `editDistanceAtMost` |
+| [Search.kt](app/src/main/java/tech/granet/grove/Search.kt) | `Search`, `Query`, `checkCurrent`, `normalizeAll`, `normalizeFallback`, `normalize`, `prepare`, `score`, `scoreNormalized`, `editDistanceAtMost` |
 | [SearchAccessController.kt](app/src/main/java/tech/granet/grove/SearchAccessController.kt) | `SearchAccessController`, `hasContactAccess`, `requestContactAccess`, `explainContactAccess`, `requestFileAccess`, `explainFileAccess` |
 | [SearchActions.kt](app/src/main/java/tech/granet/grove/SearchActions.kt) | `SearchActions`, `openWeb`, `openPlayStore`, `webResultMenu`, `playStoreMenu` |
+| [SearchBuffer.kt](app/src/main/java/tech/granet/grove/SearchBuffer.kt) | `SearchBuffer`, `prepare`, `validUtf16` |
 | [SearchCalculator.kt](app/src/main/java/tech/granet/grove/SearchCalculator.kt) | `SearchCalculator`, `Result`, `NotCalculation`, `Answer`, `Invalid`, `Reason`, `InvalidExpression`, `Parser`, `calculate`, `fallback`, `parse`, `expression`, `term`, `factor`, `number`, `bounded`, `operator`, `peek`, `whitespace`, `fail` |
 | [SearchController.kt](app/src/main/java/tech/granet/grove/SearchController.kt) | `SearchController`, `refreshSettings`, `sourceKey`, `refreshSources`, `cancelPending`, `shutdown`, `reconcileAccess`, `indexFiles`, `refreshContacts`, `hasContactAccess`, `requestContactAccess`, `explainContactAccess`, `requestFileAccess`, `explainFileAccess`, `applySearchSettings`, `showSearch`, `beforeTextChanged`, `onTextChanged`, `afterTextChanged`, `renderSearch`, `refreshLiveDisplay`, `displaySearch` |
 | [SearchFrameGate.kt](app/src/main/java/tech/granet/grove/SearchFrameGate.kt) | `SearchFrameGate`, `shouldRender` |
@@ -309,9 +330,9 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [UninstallBatch.kt](app/src/main/java/tech/granet/grove/UninstallBatch.kt) | `UninstallBatch`, `native`, `start`, `accepted`, `cancel`, `advance` |
 | [WallpaperArt.kt](app/src/main/java/tech/granet/grove/WallpaperArt.kt) | `WallpaperArt`, `source`, `indexForId`, `customFile`, `customCandidateFile`, `customBackupFile`, `create` |
 | [WallpaperCatalog.kt](app/src/main/java/tech/granet/grove/WallpaperCatalog.kt) | `WallpaperKind`, `WallpaperSource`, `CommonsWallpaper`, `UriCompat`, `WallpaperCatalog`, `encodeTitle`, `source`, `indexForId` |
-| [WallpaperController.kt](app/src/main/java/tech/granet/grove/WallpaperController.kt) | `WallpaperApplyOutcome`, `WallpaperController`, `shutdown`, `artwork`, `importCustom`, `background`, `preview`, `apply`, `validateCustomImage`, `promoteCandidate`, `decode`, `centerCrop` |
+| [WallpaperController.kt](app/src/main/java/tech/granet/grove/WallpaperController.kt) | `WallpaperApplyOutcome`, `WallpaperController`, `shutdown`, `artwork`, `importCustom`, `background`, `preview`, `apply`, `validateCustomImage`, `promoteCandidate`, `decode`, `centerCrop`, `thumbnail`, `cropBounds` |
 | [WallpaperImageStore.kt](app/src/main/java/tech/granet/grove/WallpaperImageStore.kt) | `WallpaperImageStore`, `customFile`, `customCandidateFile`, `customBackupFile` |
-| [WallpaperImages.kt](app/src/main/java/tech/granet/grove/WallpaperImages.kt) | `WallpaperImages`, `sample`, `decodeBundled`, `decode`, `centerCrop` |
+| [WallpaperImages.kt](app/src/main/java/tech/granet/grove/WallpaperImages.kt) | `WallpaperImages`, `sample`, `decodeBundled`, `decode`, `centerCrop`, `thumbnail`, `cropBounds` |
 | [WallpaperPicker.kt](app/src/main/java/tech/granet/grove/WallpaperPicker.kt) | `WallpaperPicker`, `show`, `iconButton`, `move`, `load`, `chooseDestination`, `showCredits` |
 | [WallpaperPresentationController.kt](app/src/main/java/tech/granet/grove/WallpaperPresentationController.kt) | `WallpaperPresentationController`, `wallpapers`, `importCustom`, `commitHomeSelection`, `applySelection` |
 | [WallpaperRenderer.kt](app/src/main/java/tech/granet/grove/WallpaperRenderer.kt) | `WallpaperRenderer`, `create`, `createCanvas` |
@@ -325,7 +346,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | Source | Responsibility |
 |---|---|
 | [actions_policy.rs](rust/grove-core/src/actions_policy.rs) | `evaluate` |
-| [bridge.rs](rust/grove-core/src/bridge.rs) | `java_strings`, `Java_tech_granet_grove_CoreBridge_searchNative`, `Java_tech_granet_grove_CoreBridge_classifyNative`, `Java_tech_granet_grove_CoreBridge_renderWallpaperNative`, `Java_tech_granet_grove_CoreBridge_policyNative`, `Java_tech_granet_grove_CoreBridge_normalizeNative`, `Java_tech_granet_grove_CoreBridge_openSharedNative`, `Java_tech_granet_grove_CoreBridge_closeSharedNative` |
+| [bridge.rs](rust/grove-core/src/bridge.rs) | `java_strings`, `Java_tech_granet_grove_CoreBridge_searchNative`, `Java_tech_granet_grove_CoreBridge_searchBufferNative`, `Java_tech_granet_grove_CoreBridge_classifyNative`, `Java_tech_granet_grove_CoreBridge_renderWallpaperNative`, `Java_tech_granet_grove_CoreBridge_policyNative`, `Java_tech_granet_grove_CoreBridge_normalizeNative`, `Java_tech_granet_grove_CoreBridge_openSharedNative`, `Java_tech_granet_grove_CoreBridge_closeSharedNative` |
 | [calculator.rs](rust/grove-core/src/calculator.rs) | `ten`, `normalize`, `bound`, `add`, `multiply`, `divide`, `text`, `peek`, `whitespace`, `operator`, `expression`, `term`, `factor`, `calculate`, `decimal_and_precedence`, `invalid_and_limits` |
 | [config.rs](rust/grove-core/src/config.rs) | `validate_config`, `canonical`, `migration_and_duplicate_ownership` |
 | [config_edits.rs](rust/grove-core/src/config_edits.rs) | `same_name`, `upper`, `lower`, `evaluate`, `folder_names_match_jvm_simple_case` |
@@ -337,6 +358,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [mime.rs](rust/grove-core/src/mime.rs) | `classify` |
 | [policy.rs](rust/grove-core/src/policy.rs) | `b`, `n`, `strings`, `distinct`, `normalize`, `evaluate`, `normalization_and_bounds`, `protected_publication`, `pin_and_refresh` |
 | [reports.rs](rust/grove-core/src/reports.rs) | `evaluate`, `bounded_safe_fields` |
+| [search_buffer.rs](rust/grove-core/src/search_buffer.rs) | `integer`, `search`, `pack`, `matches_array_ranking_and_rejects_malformed_buffers` |
 | [search.rs](rust/grove-core/src/search.rs) | `is_java_space`, `cmp_index`, `top_indices`, `prepare_query`, `score_label`, `score_prepared`, `edit_distance_at_most`, `full`, `band_matches_full_matrix_exhaustively` |
 | [shared_file.rs](rust/grove-core/src/shared_file.rs) | `open`, `openat`, `invalid`, `protected`, `owned`, `open_shared`, `new`, `root`, `drop`, `refuses_escape_links_protected_paths_and_nonfiles`, `swapping_ancestor_for_link_never_opens_outside_file` |
 | [wallpaper.rs](rust/grove-core/src/wallpaper.rs) | `argb_to_f`, `f_to_argb`, `blend_over`, `lerp_color`, `gradient_at`, `render_wallpaper` |
@@ -352,8 +374,8 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 
 | Test | Test methods |
 |---|---:|
-| [AppCatalogTest](app/src/test/java/tech/granet/grove/AppCatalogTest.kt) | 5 |
-| [BoundaryFailureTest](app/src/test/java/tech/granet/grove/BoundaryFailureTest.kt) | 3 |
+| [AppCatalogTest](app/src/test/java/tech/granet/grove/AppCatalogTest.kt) | 6 |
+| [BoundaryFailureTest](app/src/test/java/tech/granet/grove/BoundaryFailureTest.kt) | 5 |
 | [ConfigDocumentGateTest](app/src/test/java/tech/granet/grove/ConfigDocumentGateTest.kt) | 3 |
 | [ConfigDocumentsTest](app/src/test/java/tech/granet/grove/ConfigDocumentsTest.kt) | 3 |
 | [ConfigTest](app/src/test/java/tech/granet/grove/ConfigTest.kt) | 25 |
@@ -381,6 +403,7 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 | [PinnedAppsTest](app/src/test/java/tech/granet/grove/PinnedAppsTest.kt) | 6 |
 | [PresentationPolicyTest](app/src/test/java/tech/granet/grove/PresentationPolicyTest.kt) | 5 |
 | [ReportPromptPolicyTest](app/src/test/java/tech/granet/grove/ReportPromptPolicyTest.kt) | 4 |
+| [SearchBufferTest](app/src/test/java/tech/granet/grove/SearchBufferTest.kt) | 3 |
 | [SearchCalculatorTest](app/src/test/java/tech/granet/grove/SearchCalculatorTest.kt) | 8 |
 | [SearchFeaturesTest](app/src/test/java/tech/granet/grove/SearchFeaturesTest.kt) | 7 |
 | [SearchFrameGateTest](app/src/test/java/tech/granet/grove/SearchFrameGateTest.kt) | 3 |
@@ -402,4 +425,4 @@ Paths below are relative to the repository. Entry lists are declaration indexes,
 
 ## Tracked acceptance
 
-#118 current ownership documentation; #119 responsibility splits; #120 portable Rust migration; #121 failure-contract evidence; #123 configuration/native authority; #124 cancellation confirmation; #125 executor lifetime; #126 release versioning; #127 security; #128 measured performance; #129 imports/deprecations/dead structures. #131 public Settings entry, #132 exact stream bounds, #133 secure file handoff and #134 report retention/handoff track individual security findings. #122 tracks overall completion. PR #130 links implementation and current evidence. Issues remain open until their acceptance is actually met; hardware/advisory/release limitations must be recorded explicitly.
+#118 current ownership documentation; #119 responsibility splits; #120 portable Rust migration; #121 failure-contract evidence; #123 configuration/native authority; #124 cancellation confirmation; #125 executor lifetime; #126 release versioning; #127 security; #128 measured performance; #129 imports/deprecations/dead structures. #131 public Settings entry, #132 exact stream bounds, #133 secure file handoff and #134 report retention/handoff track individual security findings. #122 tracks overall completion. PR #130 is merged after David accepted his tested phone workflows. #136–#139 track the subsequent performance candidate and its outstanding phone measurements. `scripts/profile-device.sh` owns local hardware measurement capture. Issues remain open until their acceptance is actually met; hardware/advisory/release limitations must be recorded explicitly.
