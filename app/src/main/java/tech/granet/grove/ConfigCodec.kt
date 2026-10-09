@@ -3,69 +3,9 @@ package tech.granet.grove
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Gesture behavior for the launcher home screen. */
-data class GestureSettings(
-    val swipeDownSearch: Boolean = true,
-    val swipeUpAppDrawer: Boolean = true,
-    val tapHomeContextMenu: Boolean = false,
-    val longPressHomeContextMenu: Boolean = true,
-)
-
-/** Visibility and placement of optional home-screen elements. */
-data class HomeScreenSettings(
-    val showAppsButton: Boolean = true,
-    val showSearchButton: Boolean = true,
-    val showClock: Boolean = true,
-    val tapClockOpensClock: Boolean = true,
-    val showPinnedApps: Boolean = true,
-    val useWallpaperButtonColors: Boolean = false,
-    // True preserves the original Grove layout: pins sit after widgets and above All apps.
-    // False moves pins directly below the clock/search controls.
-    val pinnedAppsAtBottom: Boolean = true,
-)
-
-data class AppFolder(val name: String, val apps: List<String>)
-
-/** Search sources can be disabled without revoking Android permissions. */
-data class SearchSettings(
-    val contacts: Boolean = false,
-    val files: Boolean = false,
-    val contactIndexing: Boolean = false,
-    val fileIndexing: Boolean = false,
-    val calculator: Boolean = true,
-    val androidSettings: Boolean = true,
-    val groveSettings: Boolean = true,
-)
-
-/** A saved indexing preference never authorizes a disabled search source. */
-internal object IndexAccessPolicy {
-    fun contacts(settings: SearchSettings, permitted: Boolean): Boolean =
-        settings.contacts && settings.contactIndexing && permitted
-    fun files(settings: SearchSettings, permitted: Boolean): Boolean =
-        settings.files && settings.fileIndexing && permitted
-}
-
-/** New-install defaults are separate from migration and corrupt-config recovery. */
-internal object SetupDefaults {
-    fun configuration(hasConfig: Boolean, initialized: Boolean, setupCompleted: Boolean): Config =
-        if (!hasConfig && !initialized && !setupCompleted)
-            Config(search = SearchSettings(contactIndexing = true, fileIndexing = true))
-        else Config()
-}
-
-/** Persistent user settings. Widget IDs are device-local and deliberately excluded from exports. */
-data class Config(
-    val favorites: List<String> = emptyList(),
-    val wallpaper: Int = 0,
-    val gestures: GestureSettings = GestureSettings(),
-    val homeScreen: HomeScreenSettings = HomeScreenSettings(),
-    val folders: List<AppFolder> = emptyList(),
-    val search: SearchSettings = SearchSettings(),
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val homeGrid: IconGrid? = null,
-    val drawerGrid: IconGrid? = null,
-) {
-    fun json(): String = JSONObject()
+/** Portable codec adapter. Native schema validation and recovery decoding have explicit boundaries. */
+internal object ConfigCodec {
+    fun encode(config: Config): String = with(config) { JSONObject()
         .put("version", 12)
         .put("themeMode", themeMode.id)
         .put("homeGrid", homeGrid?.let { JSONObject().put("columns", it.columns).put("rows", it.rows) } ?: JSONObject.NULL)
@@ -100,10 +40,27 @@ data class Config(
         )
         .toString(2)
 
-    companion object {
-        fun parse(text: String): Config {
-            val root = JSONObject(text)
-            val version = root.getInt("version")
+    }
+    fun parse(text: String): Config {
+            ConfigInput.validate(text)
+            val response = CoreBridge.portable("config", JSONObject().put("text", text))
+            return resolveNative(text, response)
+    }
+    internal fun resolveNative(text: String, response: JSONObject?): Config {
+        if (response?.has("error") == true) throw IllegalArgumentException(response.getString("error"))
+        if (response != null) try {
+            return decode(response.getJSONObject("value"))
+        } catch (error: Exception) {
+            // A protocol/DTO failure cannot declare the original document invalid.
+            CoreBridge.malformed("config", error)
+        }
+        return recovery(text)
+    }
+    internal fun recovery(text: String): Config { ConfigInput.validate(text); return decode(JSONObject(text)) }
+    private fun decode(root: JSONObject): Config {
+            val versionValue = root.get("version")
+            require(versionValue is Int || versionValue is Long) { "Configuration version must be an integer" }
+            val version = (versionValue as Number).toLong().also { require(it in 1..12) }.toInt()
             require(version in 1..12) { "Unsupported configuration version" }
 
             val wallpaper = if (version >= 9) {
@@ -111,14 +68,19 @@ data class Config(
                 require(value is String) { "Wallpaper selection is invalid" }
                 WallpaperArt.indexForId(value) ?: throw IllegalArgumentException("Wallpaper selection is invalid")
             } else {
-                root.getInt("wallpaper").also {
+                root.get("wallpaper").let { value ->
+                    require(value is Int || value is Long) { "Wallpaper selection must be an integer" }
+                    val number = (value as Number).toLong()
+                    require(number in 0..Int.MAX_VALUE)
+                    number.toInt()
+                }.also {
                     require(WallpaperArt.source(it) != null) { "Wallpaper selection is invalid" }
                 }
             }
 
             val entries = root.getJSONArray("favorites")
             require(entries.length() <= 100) { "Too many favorites" }
-            val favorites = (0 until entries.length()).map { entries.getString(it) }
+            val favorites = (0 until entries.length()).map { (entries.get(it) as? String ?: throw IllegalArgumentException("Invalid app identifier")) }
             require(favorites.all { it.length in 3..512 && it.contains('/') }) { "Invalid app identifier" }
 
             // Older versions had fewer gesture/home controls. Defaults deliberately preserve
@@ -171,15 +133,15 @@ data class Config(
                 require(array.length() <= 100) { "Too many folders" }
                 (0 until array.length()).map { index ->
                     val item = array.getJSONObject(index)
-                    val name = item.getString("name").trim()
+                    val name = (item.get("name") as? String ?: throw IllegalArgumentException("Invalid folder name")).trim()
                     require(name.length in 1..40) { "Invalid folder name" }
                     val members = item.getJSONArray("apps")
                     require(members.length() <= 500) { "Too many folder apps" }
-                    AppFolder(name, (0 until members.length()).map { members.getString(it) }.also { keys ->
+                    AppFolder(name, (0 until members.length()).map { (members.get(it) as? String ?: throw IllegalArgumentException("Invalid folder app")) }.also { keys ->
                         require(keys.all { it.length in 3..512 && it.contains('/') }) { "Invalid folder app" }
                     }.distinct())
                 }.also { list ->
-                    require(list.map { it.name.lowercase() }.distinct().size == list.size) { "Duplicate folder name" }
+                    require(list.map { it.name.lowercase(java.util.Locale.ROOT) }.distinct().size == list.size) { "Duplicate folder name" }
                     require(list.flatMap { it.apps }.distinct().size == list.sumOf { it.apps.size }) { "App in multiple folders" }
                 }
             } else emptyList()
@@ -204,5 +166,4 @@ data class Config(
             return Config(favorites.distinct(), wallpaper, gestures, homeScreen, folders, search, themeMode,
                 grid("homeGrid"), grid("drawerGrid"))
         }
-    }
 }

@@ -1,36 +1,23 @@
 package tech.granet.grove
 
-import android.Manifest
-import android.content.*
-import android.content.pm.PackageManager
-import android.graphics.*
+import android.graphics.Color
 import android.net.Uri
 import android.os.Environment
-import android.provider.Settings
-import android.os.*
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
-import android.view.*
-import android.widget.*
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.EditText
 import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
-import java.util.*
-import java.io.File
 import java.util.concurrent.Executors
-
-internal object SearchPublicationGate {
-    fun allowed(generation: Int, currentGeneration: Int, active: Boolean,
-                enabled: Boolean, access: Boolean, cacheSupersedesLive: Boolean = false): Boolean =
-        generation == currentGeneration && active && enabled && access && !cacheSupersedesLive
-}
 
 /** Query execution and optional source state. Permissions close the affected source; stale queries cannot publish. */
 internal class SearchController(private val activity: MainActivity) {
-    internal val searchWorker = Executors.newSingleThreadExecutor()
-    private val liveContactWorker = Executors.newSingleThreadExecutor()
-    private val liveFileWorker = Executors.newSingleThreadExecutor()
+    private val searchWorker = Executors.newSingleThreadExecutor()
     internal val searchHandler = Handler(Looper.getMainLooper())
     @Volatile internal var searchGeneration = 0
     internal var pendingSearch: Runnable? = null
@@ -41,8 +28,16 @@ internal class SearchController(private val activity: MainActivity) {
     private var liveContactState: SearchSourceState? = null
     private var liveFileState: SearchSourceState? = null
     private var liveContactCancellation: android.os.CancellationSignal? = null
+    private val live by lazy { SearchLiveQueries(activity, { searchGeneration }, { liveContactCancellation = it },
+        { result -> result.onSuccess {
+            liveContacts = it.second
+            liveContactState = if (it.first.truncated) SearchSourceState.Partial(liveContacts.size, 1) else SearchSourceState.Ready(liveContacts.size)
+        }.onFailure { if (it !is android.os.OperationCanceledException) liveContactState = SearchSourceState.Failed } },
+        { result -> result.onSuccess { liveFiles = it.second; liveFileState = SearchSourceState.fromFileScan(it.first, liveFiles.size) }
+            .onFailure { liveFileState = SearchSourceState.Failed } }, ::refreshLiveDisplay)
+    }
     internal val sources by lazy { with(activity) {
-        SearchSources(this, worker, contactWorker, { configController.config.search }, this@SearchController::hasContactAccess) {
+        SearchSources(this, { configController.config.search }, this@SearchController::hasContactAccess) {
             if (searchMode) refreshSources()
         }
     } }
@@ -115,7 +110,7 @@ internal class SearchController(private val activity: MainActivity) {
         liveContactState = null; liveFileState = null
     }
 
-    fun shutdown() { liveContactWorker.shutdownNow(); liveFileWorker.shutdownNow() }
+    fun shutdown() { cancelPending(); settingsRefreshGeneration++; searchHandler.removeCallbacksAndMessages(null); searchWorker.shutdownNow(); live.shutdown() }
 
     fun reconcileAccess() {
         refreshSettings()
@@ -136,47 +131,12 @@ internal class SearchController(private val activity: MainActivity) {
     fun refreshContacts(): Unit = with(activity) { sources.refreshContacts(IndexRefreshCause.MANUAL)
     }
 
-    fun hasContactAccess(): Boolean = with(activity) {
-        checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
-    }
-
-    fun requestContactAccess() {
-        with(activity) { requestContacts.launch(Manifest.permission.READ_CONTACTS) 
-        }
-    }
-
-    fun explainContactAccess() {
-        with(activity) {
-            if (hasContactAccess()) { sources.reconcile(); return }
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Contact search access")
-                .setMessage("Grove reads contact names from Android for on-device search. If Contact indexing is on, names and lookup IDs are saved in Grove's private on-device cache; phone numbers are read only when you choose an action. Grove does not upload them. Android keeps the permission until you revoke it in system settings.")
-                .setNegativeButton("Not now", null)
-                .setPositiveButton("Continue to Android") { _, _ -> requestContactAccess() }
-                .show()
-        }
-    }
-
-    fun requestFileAccess() {
-        with(activity) {
-            runCatching {
-                startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:$packageName")))
-            }.onFailure { message("Open Android settings to allow shared storage search") }
-        }
-    }
-
-    fun explainFileAccess() {
-        with(activity) {
-            if (Environment.isExternalStorageManager()) { sources.reconcile(); return }
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Shared-storage file search access")
-                .setMessage("Android's All files access grants Grove broad access to shared storage, but not app-private data or system partitions. Grove searches names and paths without reading contents or uploading them. If File indexing is on, names and paths are saved in Grove's private on-device cache. Android keeps the permission until you revoke it in system settings.")
-                .setNegativeButton("Not now", null)
-                .setPositiveButton("Open Android settings") { _, _ -> requestFileAccess() }
-                .show()
-        }
-    }
+    private val access by lazy { SearchAccessController(activity) }
+    fun hasContactAccess() = access.hasContactAccess()
+    fun requestContactAccess() = access.requestContactAccess()
+    fun explainContactAccess() = access.explainContactAccess()
+    fun requestFileAccess() = access.requestFileAccess()
+    fun explainFileAccess() = access.explainFileAccess()
 
     fun applySearchSettings(previous: SearchSettings) {
         with(activity) {
@@ -276,61 +236,13 @@ internal class SearchController(private val activity: MainActivity) {
                         settingsQuery = query; calculation = calculated; settingsMatches = SettingsMatches(groveMatches, androidMatches)
                         lastApps = matchingApps; lastContacts = matchingContacts; lastFiles = matchingFiles
                         displaySearch(target, query, matchingApps, matchingContacts, matchingFiles)
-                        if (contactLive) queryLiveContacts(generation, query, prepared)
-                        if (fileLive) queryLiveFiles(generation, query, prepared)
+                        if (contactLive) live.queryLiveContacts(generation, query, prepared)
+                        if (fileLive) live.queryLiveFiles(generation, query, prepared)
                     }
                 }
             }
             pendingSearch = task
             searchHandler.postDelayed(task, 80L)
-        }
-    }
-
-    private fun queryLiveContacts(generation: Int, query: String, prepared: Search.Query) {
-        if (liveContactWorker.isShutdown) return
-        val cancellation = android.os.CancellationSignal()
-        liveContactCancellation = cancellation
-        liveContactWorker.execute {
-            val result = runCatching { ContactIndex.load(activity.contentResolver, {
-                generation == searchGeneration && activity.configController.config.search.contacts && hasContactAccess()
-            }, cancellation, maxDurationMs = 2500L, maxRawRows = 50_000).let { scan -> scan to SearchResults.matching(scan.contacts, prepared, 12) { contact -> contact.searchName } } }
-            activity.runOnUiThread {
-                if (!SearchPublicationGate.allowed(
-                        generation, searchGeneration, !activity.isDestroyed && activity.searchMode,
-                        activity.configController.config.search.contacts, hasContactAccess(),
-                        activity.configController.config.search.contactIndexing && sources.contactCacheReady && !sources.contactLoadFailed
-                    )) return@runOnUiThread
-                result.onSuccess {
-                    liveContacts = it.second
-                    liveContactState = if (it.first.truncated) SearchSourceState.Partial(liveContacts.size, 1)
-                        else SearchSourceState.Ready(liveContacts.size)
-                }.onFailure { error ->
-                    if (error !is android.os.OperationCanceledException) liveContactState = SearchSourceState.Failed
-                }
-                refreshLiveDisplay(query)
-            }
-        }
-    }
-
-    private fun queryLiveFiles(generation: Int, query: String, prepared: Search.Query) {
-        if (liveFileWorker.isShutdown) return
-        liveFileWorker.execute {
-            val result = runCatching { FileIndex.scan(Environment.getExternalStorageDirectory(), shouldContinue = {
-                generation == searchGeneration && activity.configController.config.search.files &&
-                    Environment.isExternalStorageManager()
-            }, maxDurationMs = 2500L).let { scan -> scan to SearchResults.matching(scan.files, prepared, 12) { file -> file.searchName } } }
-            activity.runOnUiThread {
-                if (!SearchPublicationGate.allowed(
-                        generation, searchGeneration, !activity.isDestroyed && activity.searchMode,
-                        activity.configController.config.search.files, Environment.isExternalStorageManager(),
-                        activity.configController.config.search.fileIndexing && sources.fileCacheReady && !sources.fileLoadFailed
-                    )) return@runOnUiThread
-                result.onSuccess {
-                    liveFiles = it.second
-                    liveFileState = SearchSourceState.fromFileScan(it.first, liveFiles.size)
-                }.onFailure { liveFileState = SearchSourceState.Failed }
-                refreshLiveDisplay(query)
-            }
         }
     }
 

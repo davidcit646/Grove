@@ -10,7 +10,7 @@ import java.io.File
 internal object IndexCache {
     private const val MAX_BYTES = 12 * 1024 * 1024
     private const val VERSION = 1
-    private val lock = Any()
+    internal val commitLock = Any()
     private val stateLock = Any()
     val metadataChanges = androidx.lifecycle.MutableLiveData<Map<String, IndexMetadata>>(emptyMap())
     private val metadata = mutableMapOf<String, IndexMetadata>()
@@ -47,10 +47,19 @@ internal object IndexCache {
     data class Snapshot<T>(val items: List<T>, val skipped: Int, val writtenAt: Long)
     private fun target(context: Context, kind: String) = File(context.filesDir, "grove-$kind-index.json")
 
-    fun clear(context: Context, kind: String) = synchronized(lock) {
-        AtomicFile(target(context, kind)).delete()
+    fun exists(context: Context, kind: String): Boolean =
+        listOf(target(context, kind), File(target(context, kind).path + ".bak"), File(target(context, kind).path + ".new")).any { it.exists() }
+
+    fun clear(context: Context, kind: String): Boolean = synchronized(commitLock) {
+        val target = target(context, kind)
+        AtomicFile(target).delete()
+        if (listOf(target, File(target.path + ".bak"), File(target.path + ".new")).any { it.exists() }) {
+            record(kind, IndexMetadata(IndexValidity.CORRUPT, invalidated = true))
+            return@synchronized false
+        }
         record(kind, IndexMetadata(IndexValidity.ABSENT))
         published(kind)
+        true
     }
 
     fun writeFiles(context: Context, result: FileIndex.ScanResult, allowed: () -> Boolean): Boolean {
@@ -72,7 +81,7 @@ internal object IndexCache {
             .put("skipped", skipped).put("items", rows)
         val bytes = value.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_BYTES) { "Index exceeds local size limit" }
-        synchronized(lock) {
+        synchronized(commitLock) {
             if (!allowed()) return false
             val file = AtomicFile(target(context, kind))
             val stream = file.startWrite()
@@ -91,31 +100,51 @@ internal object IndexCache {
         }
     }
 
-    private fun read(context: Context, kind: String): JSONObject? = synchronized(lock) {
-        val file = AtomicFile(target(context, kind))
-        if (!file.baseFile.exists()) { record(kind, IndexMetadata(IndexValidity.ABSENT)); return null }
-        require(file.baseFile.length() in 1..MAX_BYTES.toLong()) { "Invalid index size" }
-        val value = JSONObject(file.openRead().use { it.readBytes().toString(Charsets.UTF_8) })
+    private fun read(context: Context, kind: String): JSONObject? {
+        // Only bounded I/O holds the publication lock. JSON decoding and native
+        // preparation can be expensive and must not delay a UI cancellation.
+        val bytes = synchronized(commitLock) {
+            val file = AtomicFile(target(context, kind))
+            if (!exists(context, kind)) { record(kind, IndexMetadata(IndexValidity.ABSENT)); return null }
+            file.openRead().use { input -> BoundedInput.read(input, MAX_BYTES) }
+        }
+        require(bytes.isNotEmpty()) { "Invalid index size" }
+        val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+        val value = JSONObject(decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString())
         require(value.getInt("version") == VERSION) { "Unknown index version" }
-        value
+        return value
+    }
+    private fun verifyRead(kind: String, expected: Long, value: JSONObject) = synchronized(commitLock) {
+        require(generation(kind) == expected) { "Index changed while reading" }
+        verified(kind, value)
     }
 
-    fun files(context: Context): Snapshot<IndexedFile>? = synchronized(lock) { read(context, "files")?.let { value ->
+    fun files(context: Context): Snapshot<IndexedFile>? {
+        val expected = generation("files")
+        return read(context, "files")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 15_000) { "Invalid file count" }
+        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) })
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
-            IndexedFile(row.getString("name"), row.getString("mime"), File(row.getString("path")), row.getString("category"))
-        } }, maxOf(value.getInt("skipped"), if (rows.length() >= 15_000) 1 else 0), value.getLong("writtenAt")).also { verified("files", value) }
+            require(row.getString("name").length in 1..512 && row.getString("path").length in 1..4096
+                && File(row.getString("path")).isAbsolute && row.getString("mime").length in 1..256
+                && row.getString("category") in listOf("Images", "Videos", "Audio", "Documents")) { "Invalid file row" }
+            IndexedFile(row.getString("name"), row.getString("mime"), File(row.getString("path")), row.getString("category"), normalized[i])
+        } }, maxOf(value.getInt("skipped"), if (rows.length() >= 15_000) 1 else 0), value.getLong("writtenAt")).also { verifyRead("files", expected, value) }
     }
 
     }
-    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? = synchronized(lock) { read(context, "contacts")?.let { value ->
+    fun contacts(context: Context): Snapshot<ContactIndex.Contact>? {
+        val expected = generation("contacts")
+        return read(context, "contacts")?.let { value ->
         val rows = value.getJSONArray("items")
         require(rows.length() <= 50_000) { "Invalid contact count" }
+        val normalized = Search.normalizeAll((0 until rows.length()).map { rows.getJSONObject(it).getString("name").take(512) })
         Snapshot((0 until rows.length()).map { i -> rows.getJSONObject(i).let { row ->
-            require(row.getLong("id") > 0 && row.getString("key").isNotBlank() && row.getString("name").isNotBlank()) { "Invalid contact row" }
-            ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"))
-        } }, maxOf(value.getInt("skipped"), if (rows.length() >= 50_000) 1 else 0), value.getLong("writtenAt")).also { verified("contacts", value) }
+            require(row.getLong("id") > 0 && row.getString("key").isNotBlank() && row.getString("key").length <= 512
+                && row.getString("name").isNotBlank() && row.getString("name").length <= 512) { "Invalid contact row" }
+            ContactIndex.Contact(row.getLong("id"), row.getString("key"), row.getString("name"), normalized[i])
+        } }, maxOf(value.getInt("skipped"), if (rows.length() >= 50_000) 1 else 0), value.getLong("writtenAt")).also { verifyRead("contacts", expected, value) }
     }
     }
 }

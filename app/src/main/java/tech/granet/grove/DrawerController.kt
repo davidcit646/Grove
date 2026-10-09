@@ -1,18 +1,24 @@
 package tech.granet.grove
 
-import android.content.*
 import android.content.res.ColorStateList
-import android.graphics.*
-import android.os.*
+import android.graphics.Color
+import android.os.Process
 import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
-import android.view.*
-import android.widget.*
+import android.view.View
+import android.view.Gravity
+import android.view.DragEvent
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.HorizontalScrollView
+import android.widget.GridView
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.EditText
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.wallpaperLabel
 import tech.granet.grove.ui.message
-import java.util.*
 
 /** Drawer presentation, selection and folder interactions. Persistent mutations must succeed before selection is cleared. */
 internal class DrawerController(private val activity: MainActivity) {
@@ -149,7 +155,7 @@ internal class DrawerController(private val activity: MainActivity) {
     }
 
     fun refreshDrawer() {
-        with(activity) { if (drawer && !searchMode) renderApps(searchController.searchField?.text?.toString().orEmpty()) 
+        with(activity) { if (drawer && !searchMode) renderApps(searchController.searchField?.text?.toString().orEmpty())
         }
     }
 

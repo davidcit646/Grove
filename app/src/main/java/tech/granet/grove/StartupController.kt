@@ -1,44 +1,11 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
-import android.provider.Settings
+import android.content.Intent
+import android.graphics.Color
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
-import tech.granet.grove.ui.dp
-import tech.granet.grove.ui.message
-
-internal enum class CoreRecoveryReason {
-    CONFIG,
-    LAUNCHER_SERVICE,
-    APP_CATALOG,
-}
-
-internal data class CoreRecoveryState(
-    val reason: CoreRecoveryReason,
-    val detail: String,
-    val retryable: Boolean = true,
-    val settingsEscape: Boolean = true,
-)
-
-internal object CoreRecoveryPolicy {
-    fun forReason(reason: CoreRecoveryReason): CoreRecoveryState = CoreRecoveryState(
-        reason = reason,
-        detail = when (reason) {
-            CoreRecoveryReason.CONFIG -> GroveErrorRegistry.CONFIG_LOAD.let {
-                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings. Your saved settings have not been erased."
-            }
-            CoreRecoveryReason.LAUNCHER_SERVICE -> GroveErrorRegistry.LAUNCHER_SERVICE.let {
-                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings."
-            }
-            CoreRecoveryReason.APP_CATALOG -> GroveErrorRegistry.APP_CATALOG.let {
-                "${it.feature} · ${it.severity.label}\n${it.codeLine()}\n\n${it.summary} Retry, or change your Home app in Android Settings."
-            }
-        },
-    )
-}
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 
 /** Essential startup checks and recovery. Failed config or launcher service prevents downstream normal Home startup. */
 internal class StartupController(private val activity: MainActivity) {
@@ -108,45 +75,7 @@ internal class StartupController(private val activity: MainActivity) {
             searchController.cancelPending()
             drawer = false
             searchMode = false
-            root.animate().cancel()
-            root.removeAllViews()
-            root.setBackgroundColor(0xff182421.toInt())
-            val panel = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(24), dp(24), dp(24), dp(24))
-            }
-            panel.addView(TextView(this).apply {
-                text = "Grove cannot load Home"
-                textSize = 24f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
-            })
-            panel.addView(TextView(this).apply {
-                text = recovery.detail
-                textSize = 16f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
-            })
-            if (recovery.retryable) panel.addView(Button(this).apply {
-                text = "Retry"
-                setOnClickListener { beginHome() }
-            })
-            if (recovery.settingsEscape) panel.addView(Button(this).apply {
-                text = "Android Home settings"
-                setOnClickListener {
-                    try {
-                        startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                    } catch (_: Exception) {
-                        try {
-                            startActivity(Intent(Settings.ACTION_SETTINGS))
-                        } catch (_: Exception) {
-                            message("Android Settings is unavailable")
-                        }
-                    }
-                }
-            })
-            root.addView(panel, LinearLayout.LayoutParams(-1, -1))
+            CoreRecoveryView.render(activity, recovery, ::beginHome)
         }
     }
 

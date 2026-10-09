@@ -5,4 +5,5 @@
         <!-- Fit the uploaded artwork inside the central adaptive-icon safe zone. -->
         <inset android:drawable="@drawable/ic_grove_foreground" android:inset="16%" />
     </foreground>
+    <monochrome android:drawable="@drawable/ic_grove_foreground" />
 </adaptive-icon>

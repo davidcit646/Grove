@@ -11,18 +11,45 @@ import java.util.PriorityQueue
  */
 internal object CoreBridge {
     private val failures = NativeFailureReporter { operation, error ->
-        runCatching { Log.w("Grove", "Native $operation unavailable; using Kotlin fallback", error) }
+        runCatching { Log.w("Grove", "Native $operation unavailable (${error.javaClass.simpleName}); using Kotlin fallback") }
     }
-    private val loaded = runCatching { System.loadLibrary("grove_core"); true }
-        .onFailure { failures.failed("load", it) }.getOrDefault(false)
+    private val loaded = native("load") { System.loadLibrary("grove_core"); true } ?: false
 
-    private fun <T> native(operation: String, call: () -> T): T? =
-        runCatching(call).onFailure { failures.failed(operation, it) }.getOrNull()
+    internal fun malformed(operation: String, error: Exception) = failures.failed(operation, error)
 
+    private fun <T> native(operation: String, call: () -> T): T? = try { call() }
+        catch (error: Exception) { failures.failed(operation, error); null }
+        catch (error: LinkageError) { failures.failed(operation, error); null }
+
+    private external fun normalizeNative(labels: Array<String>): Array<String>
     private external fun searchNative(labels: Array<String>, query: String, limit: Int): IntArray
     private external fun classifyNative(extensions: Array<String>): Array<String>
     private external fun renderWallpaperNative(style: Int, width: Int, height: Int): IntArray
-    private external fun configErrorNative(json: String): String
+    private external fun openSharedNative(root: String, relative: String): Int
+    private external fun closeSharedNative(fd: Int)
+    private external fun policyNative(json: String): String
+
+    internal val nativeAvailable: Boolean get() = loaded
+
+    /** One bounded array call per source batch, with a recovery path for the entire batch. */
+    fun normalizeAll(labels: List<String>): List<String>? {
+        if (!loaded || labels.any { it.length > 4096 }) return null
+        val result = ArrayList<String>(labels.size)
+        for (batch in labels.chunked(1024)) {
+            val normalized = native("normalize") {
+                normalizeNative(batch.toTypedArray()).also { output ->
+                    require(output.size == batch.size && output.all { it.length <= 8192 })
+                }
+            } ?: return null
+            result.addAll(normalized)
+        }
+        return result
+    }
+
+    /** Descriptor ownership transfers to the provider; absence fails this optional handoff closed. */
+    internal fun openShared(root: String, relative: String): Int? = if (!loaded) null
+        else native("shared-file") { openSharedNative(root, relative) }?.takeIf { it >= 0 }
+    internal fun closeShared(fd: Int) { native("shared-file-close") { closeSharedNative(fd) } }
 
     /** Winning label indices in final order: score descending, index ascending. */
     fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray =
@@ -85,7 +112,14 @@ internal object CoreBridge {
         }
     }
 
-    /** Kotlin's parser stays authoritative while native config validation is migrated. */
-    fun configProblem(json: String): String? =
-        if (loaded) native("config") { configErrorNative(json).ifEmpty { null } } else null
+    /** Versioned portable policy envelope. Null means native unavailable, never invalid input. */
+    internal fun portable(operation: String, args: org.json.JSONObject): org.json.JSONObject? {
+        if (!loaded) return null
+        val input = org.json.JSONObject().put("op", operation).put("args", args).toString()
+        if (input.toByteArray(Charsets.UTF_8).size > 196_608) return null
+        return native(operation) {
+            val text = policyNative(input)
+            NativeEnvelope.decode(operation, text)
+        }
+    }
 }

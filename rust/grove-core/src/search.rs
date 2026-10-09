@@ -24,31 +24,64 @@ pub(crate) fn top_indices(scores: &[i32], limit: usize) -> Vec<i32> {
     idx.into_iter().map(|i| i as i32).collect()
 }
 
+pub(crate) struct PreparedQuery<'a> {
+    text: &'a str,
+    terms: Vec<(&'a str, Vec<u16>)>,
+}
+pub(crate) fn prepare_query(text: &str) -> PreparedQuery<'_> {
+    PreparedQuery {
+        text,
+        terms: text
+            .split(is_java_space)
+            .filter(|t| !t.is_empty())
+            .map(|term| (term, term.encode_utf16().collect()))
+            .collect(),
+    }
+}
+#[cfg(test)]
 pub(crate) fn score_label(label: &str, query_text: &str, terms: &[&str]) -> i32 {
-    if terms.is_empty() {
+    let query = PreparedQuery {
+        text: query_text,
+        terms: terms
+            .iter()
+            .map(|&term| (term, term.encode_utf16().collect()))
+            .collect(),
+    };
+    score_prepared(label, &query)
+}
+pub(crate) fn score_prepared(label: &str, query: &PreparedQuery<'_>) -> i32 {
+    if query.terms.is_empty() {
         return 0;
     }
-    let ok = terms.iter().all(|term| {
-        // Length gates count UTF-16 code units, exactly like Kotlin's String.length.
-        let term_units: Vec<u16> = term.encode_utf16().collect();
-        label.contains(term)
-            || (term_units.len() >= 3
-                && label.split(is_java_space).any(|word| {
-                    let word_units: Vec<u16> = word.encode_utf16().collect();
-                    word_units.len() >= 3
-                        && edit_distance_at_most(
-                            &word_units,
-                            &term_units,
-                            if term_units.len() >= 6 { 2 } else { 1 },
-                        )
-                }))
+    let ok = query.terms.iter().all(|(term, units)| {
+        if label.contains(term) {
+            return true;
+        }
+        units.len() >= 3
+            && units.len() <= 64
+            && label.split(is_java_space).any(|word| {
+                let mut word_units = [0u16; 64];
+                let mut count = 0;
+                for unit in word.encode_utf16() {
+                    if count == 64 {
+                        return false;
+                    }
+                    word_units[count] = unit;
+                    count += 1;
+                }
+                count >= 3
+                    && edit_distance_at_most(
+                        &word_units[..count],
+                        units,
+                        if units.len() >= 6 { 2 } else { 1 },
+                    )
+            })
     });
     if !ok {
-        return -1;
-    }
-    if label == query_text {
+        -1
+    } else if label == query.text {
         3
-    } else if label.starts_with(query_text) {
+    } else if label.starts_with(query.text) {
         2
     } else {
         1
@@ -67,17 +100,83 @@ pub(crate) fn edit_distance_at_most(left: &[u16], right: &[u16], max: usize) -> 
     if left.len().abs_diff(right.len()) > max {
         return false;
     }
-    let mut previous: Vec<usize> = (0..=right.len()).collect();
-    let mut current = vec![0usize; right.len() + 1];
+    // Hamming distance is a valid upper bound for equal-length strings. Most
+    // accepted app-name typos need no dynamic-programming row at all.
+    if left.len() == right.len() {
+        let mut differences = 0;
+        for (a, b) in left.iter().zip(right) {
+            differences += usize::from(a != b);
+            if differences > max {
+                break;
+            }
+        }
+        if differences <= max {
+            return true;
+        }
+    }
+    // Only the diagonal band can reach the edit budget. Stack arrays avoid two
+    // heap allocations per candidate word, and a dead row stops immediately.
+    let max = max.min(64);
+    let ceiling = (max + 1) as u8;
+    let mut previous = [ceiling; 65];
+    let mut current = [ceiling; 65];
+    for (j, cell) in previous.iter_mut().enumerate().take(right.len() + 1) {
+        *cell = j as u8;
+    }
     for (i, &unit) in left.iter().enumerate() {
-        current[0] = i + 1;
-        for (j, &other) in right.iter().enumerate() {
-            current[j + 1] = (current[j] + 1)
-                .min(previous[j + 1] + 1)
-                .min(previous[j] + usize::from(unit != other));
+        current[..=right.len()].fill(ceiling);
+        current[0] = (i + 1) as u8;
+        let start = (i + 1).saturating_sub(max).max(1);
+        let end = (i + 1 + max).min(right.len());
+        let mut best = current[0];
+        for j in start..=end {
+            current[j] = (current[j - 1] + 1)
+                .min(previous[j] + 1)
+                .min(previous[j - 1] + u8::from(unit != right[j - 1]));
+            best = best.min(current[j]);
+        }
+        if best as usize > max {
+            return false;
         }
         std::mem::swap(&mut previous, &mut current);
     }
-    previous[right.len()] <= max
+    previous[right.len()] as usize <= max
 }
 
+#[cfg(test)]
+mod band_tests {
+    use super::*;
+    fn full(a: &[u16], b: &[u16]) -> usize {
+        let mut row: Vec<usize> = (0..=b.len()).collect();
+        for (i, x) in a.iter().enumerate() {
+            let mut next = vec![i + 1; b.len() + 1];
+            for (j, y) in b.iter().enumerate() {
+                next[j + 1] = (next[j] + 1)
+                    .min(row[j + 1] + 1)
+                    .min(row[j] + usize::from(x != y));
+            }
+            row = next;
+        }
+        row[b.len()]
+    }
+    #[test]
+    fn band_matches_full_matrix_exhaustively() {
+        let mut words = vec![Vec::new()];
+        for len in 1..=6 {
+            for bits in 0..(1 << len) {
+                words.push((0..len).map(|i| ((bits >> i) & 1) as u16).collect());
+            }
+        }
+        for a in &words {
+            for b in &words {
+                for max in 0..=2 {
+                    assert_eq!(
+                        edit_distance_at_most(a, b, max),
+                        full(a, b) <= max,
+                        "{a:?}/{b:?}/{max}"
+                    );
+                }
+            }
+        }
+    }
+}

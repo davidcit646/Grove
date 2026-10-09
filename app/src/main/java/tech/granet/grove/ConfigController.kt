@@ -1,16 +1,9 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.os.*
-import android.text.InputFilter
-import android.view.*
-import android.widget.*
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import tech.granet.grove.ui.message
-import java.util.*
 
 /** Active configuration and document/editor flows. Persistence must succeed before publication or completion. */
 internal class ConfigController(private val activity: MainActivity) {
@@ -18,7 +11,6 @@ internal class ConfigController(private val activity: MainActivity) {
     internal val repository get() = app.settingsRepository
     internal val config get() = repository.snapshot().config
     internal val configStore get() = app.settingsStore
-    internal val workflow by lazy { ConfigWorkflow({ config }, ::activateConfig) }
     private var reconciled: Config? = null
 
     fun load(): Config = repository.snapshot().config
@@ -76,9 +68,4 @@ internal class ConfigController(private val activity: MainActivity) {
         activity.startActivity(Intent(activity, SettingsActivity::class.java).putExtra("importUri", uri.toString()))
     }
 
-    fun shutdown() = Unit
-}
-
-internal object ConfigDocumentGate {
-    fun canActivate(startedWith: Config, current: Config): Boolean = startedWith == current
 }

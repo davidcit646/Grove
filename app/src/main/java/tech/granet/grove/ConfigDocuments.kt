@@ -1,6 +1,5 @@
 package tech.granet.grove
 
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -12,25 +11,11 @@ internal object ConfigDocuments {
     private const val LIMIT = 65_536
 
     fun read(input: InputStream): Config {
-        val bytes = ByteArrayOutputStream()
-        val chunk = ByteArray(4096)
-        while (true) {
-            val count = input.read(chunk, 0, minOf(chunk.size, LIMIT + 1 - bytes.size()))
-            if (count < 0) break
-            if (count == 0) {
-                val byte = input.read()
-                if (byte < 0) break
-                bytes.write(byte)
-                require(bytes.size() <= LIMIT) { "Configuration exceeds 64 KB" }
-                continue
-            }
-            bytes.write(chunk, 0, count)
-            require(bytes.size() <= LIMIT) { "Configuration exceeds 64 KB" }
-        }
+        val bytes = BoundedInput.read(input, LIMIT)
         val decoder = StandardCharsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
-        val text = decoder.decode(ByteBuffer.wrap(bytes.toByteArray())).toString()
+        val text = decoder.decode(ByteBuffer.wrap(bytes)).toString()
         return ConfigStore.parse(text)
     }
 

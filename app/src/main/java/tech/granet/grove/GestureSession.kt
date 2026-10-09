@@ -30,8 +30,31 @@ internal class GestureSession {
         val contextMenu: Boolean = false,
     )
 
+    private fun native(action: String, vararg fields: Pair<String, Any?>): org.json.JSONObject? {
+        val state = org.json.JSONObject().put("startX", startX.toDouble()).put("startY", startY.toDouble()).put("startedAt", startedAt)
+            .put("home", home).put("drawer", drawer).put("drawerAtTop", drawerAtTop).put("blocked", blocked)
+            .put("interactive", interactive).put("moved", moved).put("captured", captured).put("drawerCaptured", drawerCaptured).put("longPressed", longPressed)
+        val args = org.json.JSONObject().put("action", action).put("state", state)
+        fields.forEach { (key, value) -> args.put(key, value ?: org.json.JSONObject.NULL) }
+        val output = PortablePolicy.value("gestureSession", args) as? org.json.JSONObject ?: return null
+        return try {
+            val next = output.getJSONObject("state")
+            val x = next.getDouble("startX").toFloat(); val y = next.getDouble("startY").toFloat()
+            require(x.isFinite() && y.isFinite())
+            val time = next.getLong("startedAt")
+            val flags = listOf("home", "drawer", "drawerAtTop", "blocked", "interactive", "moved", "captured", "drawerCaptured", "longPressed").map(next::getBoolean)
+            startX = x; startY = y; startedAt = time
+            home = flags[0]; drawer = flags[1]; drawerAtTop = flags[2]; blocked = flags[3]; interactive = flags[4]
+            moved = flags[5]; captured = flags[6]; drawerCaptured = flags[7]; longPressed = flags[8]
+            output.getJSONObject("result")
+        } catch (_: Exception) { null }
+    }
+
     fun begin(x: Float, y: Float, time: Long, inDrawer: Boolean, atTop: Boolean,
               hasHome: Boolean, widget: Boolean, interactiveTarget: Boolean): Boolean {
+        if (x.isFinite() && y.isFinite()) native("begin", "x" to x.toDouble(), "y" to y.toDouble(), "time" to time,
+            "inDrawer" to inDrawer, "atTop" to atTop, "hasHome" to hasHome, "widget" to widget,
+            "interactiveTarget" to interactiveTarget)?.let { return it.getBoolean("value") }
         startX = x; startY = y; startedAt = time
         home = !inDrawer && hasHome
         drawerAtTop = inDrawer && atTop
@@ -46,6 +69,7 @@ internal class GestureSession {
     fun verticalDelta(y: Float): Float = y - startY
 
     fun longPress(): Boolean {
+        native("longPress")?.let { return it.getBoolean("value") }
         if (!home || interactive || blocked) return false
         longPressed = true
         home = false
@@ -53,6 +77,7 @@ internal class GestureSession {
     }
 
     fun cancel(): Boolean {
+        native("cancel")?.let { return it.getBoolean("value") }
         val consume = captured || drawerCaptured || longPressed
         home = false; drawer = false; captured = false; drawerCaptured = false; longPressed = false
         return consume
@@ -60,6 +85,13 @@ internal class GestureSession {
 
     fun move(x: Float, y: Float, time: Long, slop: Float, minimum: Float,
              settings: GestureSettings, scrollCanMove: Boolean, previewLimit: Float): Move {
+        if (listOf(x,y,slop,minimum,previewLimit).all(Float::isFinite)) native("move",
+            "x" to x.toDouble(), "y" to y.toDouble(), "time" to time, "slop" to slop.toDouble(),
+            "minimum" to minimum.toDouble(), "down" to settings.swipeDownSearch, "up" to settings.swipeUpAppDrawer,
+            "scroll" to scrollCanMove, "preview" to previewLimit.toDouble())?.let {
+                return Move(it.getBoolean("moved"), it.getBoolean("cancelChildren"),
+                    if (it.isNull("offset")) null else it.getDouble("offset").toFloat(), it.getBoolean("consume"))
+            }
         val dx = x - startX
         val dy = y - startY
         if (drawer) {
@@ -87,6 +119,14 @@ internal class GestureSession {
     fun release(x: Float, y: Float, time: Long, slop: Float,
                 homeMinimum: Float, drawerMinimum: Float, settings: GestureSettings,
                 tapContext: Boolean): Release {
+        if (listOf(x,y,slop,homeMinimum,drawerMinimum).all(Float::isFinite)) native("release",
+            "x" to x.toDouble(), "y" to y.toDouble(), "time" to time, "slop" to slop.toDouble(),
+            "minimum" to homeMinimum.toDouble(), "drawerMinimum" to drawerMinimum.toDouble(),
+            "down" to settings.swipeDownSearch, "up" to settings.swipeUpAppDrawer, "tap" to tapContext)?.let {
+                val gesture = it.getInt("gesture")
+                if (gesture in HomeGesture.entries.indices) return Release(it.getBoolean("consume"), it.getBoolean("cancelChildren"),
+                    it.getBoolean("settle"), it.getBoolean("closeDrawer"), HomeGesture.entries[gesture], it.getBoolean("contextMenu"))
+            }
         val dx = x - startX
         val dy = y - startY
         if (drawer || drawerCaptured) {

@@ -2,20 +2,27 @@ package tech.granet.grove
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
-import android.content.*
+import android.content.Intent
 import android.content.pm.LauncherApps
-import android.graphics.*
+import android.graphics.Color
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
+import android.os.Bundle
+import android.os.UserHandle
+import android.view.View
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.DragEvent
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
-import java.util.*
-import java.util.concurrent.Executors
 
 /** Root HOME activity. Owns navigation; Android owns external apps and widget providers. */
 class MainActivity : AppCompatActivity() {
@@ -36,13 +43,11 @@ class MainActivity : AppCompatActivity() {
     // Framework context avoids AppCompat substitutions in widget RemoteViews.
     internal val manager by lazy { AppWidgetManager.getInstance(applicationContext) }
     internal val host by lazy { AppWidgetHost(applicationContext, 1024) }
-    internal val worker = Executors.newSingleThreadExecutor()
-    internal val contactWorker = Executors.newSingleThreadExecutor()
     internal val requestContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         searchController.reconcileAccess()
         setupController.firstRunSetup?.refreshPermissions()
     }
-    internal val wallpaperController by lazy { WallpaperController(this, worker, this::message) }
+    internal val wallpaperController by lazy { WallpaperController(this, this::message) }
     internal val chooseWallpaperImage: ActivityResultLauncher<Array<String>> = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) wallpaperPresentationController.importCustom(uri)
     }
@@ -97,7 +102,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setDecorFitsSystemWindows(false)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         root = LinearLayout(this).apply {
@@ -208,13 +213,13 @@ class MainActivity : AppCompatActivity() {
         }
         touchRouter.cancel()
         searchController.cancelPending()
-        searchController.searchWorker.shutdownNow()
         searchController.shutdown()
         searchController.sources.shutdown()
-        worker.shutdownNow()
+        actionController.shutdown()
+        catalogController.shutdown()
+        wallpaperController.shutdown()
         if (::surface.isInitialized) surface.background = null
         presentationController.shutdown()
-        configController.shutdown()
         super.onDestroy()
     }
     override fun onSaveInstanceState(outState: Bundle) {

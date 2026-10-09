@@ -12,6 +12,25 @@ internal object SearchCalculator {
     }
     enum class Reason { SYNTAX, DIVISION_BY_ZERO, LIMIT }
     fun calculate(query: String): Result {
+        if (query.length <= 256) {
+            val value = PortablePolicy.value("calculator", org.json.JSONObject().put("text", query)) as? org.json.JSONObject
+            if (value != null) try {
+                return when (value.getString("kind")) {
+                    "none" -> Result.NotCalculation
+                    "invalid" -> Result.Invalid(Reason.valueOf(value.getString("reason")))
+                    "answer" -> {
+                        val answer = value.getString("value"); val expression = value.getString("expression")
+                        require(answer.length <= 128 && expression == query.trim().dropLast(1).trim())
+                        java.math.BigDecimal(answer)
+                        Result.Answer(expression, answer, value.getBoolean("approximate"))
+                    }
+                    else -> throw IllegalArgumentException("Malformed native calculator result")
+                }
+            } catch (_: Exception) { /* Explicit bounded Kotlin recovery implementation below. */ }
+        }
+        return fallback(query)
+    }
+    internal fun fallback(query: String): Result {
         if (query.length > 256) return Result.Invalid(Reason.LIMIT)
         val text = query.trim()
         if (!text.endsWith("=") || text.any { it.isLetter() }) return Result.NotCalculation

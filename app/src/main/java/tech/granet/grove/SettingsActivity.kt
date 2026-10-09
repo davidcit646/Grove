@@ -20,7 +20,6 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.work.WorkManager
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.DynamicColors
-import tech.granet.grove.ui.dp
 import tech.granet.grove.ui.message
 
 /** UI host only: navigation, lifecycle and Android result adapters. SettingsSession owns documents. */
@@ -42,7 +41,7 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreate(state: Bundle?) {
         DynamicColors.applyToActivityIfAvailable(this)
         super.onCreate(state)
-        window.setDecorFitsSystemWindows(false)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         val context = DynamicColors.wrapContextIfAvailable(this)
         val shell = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(ThemeColors.surface(context)) }
         toolbar = MaterialToolbar(context).apply {
@@ -106,7 +105,7 @@ class SettingsActivity : AppCompatActivity() {
         IndexWork.failures.observe(this) { pages.refreshStatus() }
         for (kind in listOf("contacts", "files")) try {
             WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData(IndexWork.name(kind)).observe(this) {
-                session.commands.observeIndex(kind, it)
+                session.indexes.observeIndex(kind, it)
                 pages.refreshStatus()
             }
         } catch (_: Exception) { message("Background index status unavailable") }
@@ -136,16 +135,16 @@ class SettingsActivity : AppCompatActivity() {
     }
     override fun onStop() { motion.finish(); super.onStop() }
     override fun onDestroy() { motion.finish(); super.onDestroy() }
-    override fun onSaveInstanceState(state: Bundle) {
+    override fun onSaveInstanceState(outState: Bundle) {
         motion.finish()
         rememberScroll()
-        state.putBundle("scrollPositions", Bundle().apply { scroll.snapshot().forEach { (route, y) -> putInt(route, y) } })
-        pendingDestination?.let { state.putString("destinationRoute", it.route); state.putString("destinationAnchor", it.anchor) }
-        state.putBoolean("destinationConsumed", pendingDestination == null)
-        state.putStringArrayList("routes", ArrayList(routes)); state.putString("draft", session.draft)
-        state.putString("emailDraft", session.emailDraft)
-        session.gridColumns?.let { state.putInt("gridColumns", it) }; session.gridRows?.let { state.putInt("gridRows", it) }
-        super.onSaveInstanceState(state)
+        outState.putBundle("scrollPositions", Bundle().apply { scroll.snapshot().forEach { (route, y) -> putInt(route, y) } })
+        pendingDestination?.let { outState.putString("destinationRoute", it.route); outState.putString("destinationAnchor", it.anchor) }
+        outState.putBoolean("destinationConsumed", pendingDestination == null)
+        outState.putStringArrayList("routes", ArrayList(routes)); outState.putString("draft", session.draft)
+        outState.putString("emailDraft", session.emailDraft)
+        session.gridColumns?.let { outState.putInt("gridColumns", it) }; session.gridRows?.let { outState.putInt("gridRows", it) }
+        super.onSaveInstanceState(outState)
     }
     private fun applyTheme() {
         val mode = when (session.repository.snapshot().config.themeMode) {

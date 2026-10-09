@@ -6,24 +6,6 @@ import android.content.SharedPreferences
 class ConfigStore(private val prefs: SharedPreferences) {
     companion object {
         fun parse(text: String): Config = try {
-            require(text.length <= 65_536 && text.toByteArray(Charsets.UTF_8).size <= 65_536) {
-                "Configuration exceeds 64 KB"
-            }
-            var depth = 0
-            var quoted = false
-            var escaped = false
-            for (character in text) {
-                if (quoted) {
-                    if (escaped) escaped = false
-                    else if (character == '\\') escaped = true
-                    else if (character == '"') quoted = false
-                } else when (character) {
-                    '"' -> quoted = true
-                    '{', '[' -> { depth++; require(depth <= 64) { "Configuration is nested too deeply" } }
-                    '}', ']' -> depth--
-                }
-            }
-            CoreBridge.configProblem(text)?.let { throw IllegalArgumentException(it) }
             Config.parse(text)
         } catch (error: Exception) {
             throw IllegalArgumentException(error.message ?: "Invalid configuration", error)

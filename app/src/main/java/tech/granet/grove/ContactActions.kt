@@ -7,18 +7,27 @@ import android.provider.ContactsContract
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
-import java.util.concurrent.ExecutorService
 import tech.granet.grove.ui.message
 
 /** Contact-specific actions; the Activity supplies current permission and package state. */
 internal class ContactActions(
     private val activity: AppCompatActivity,
-    private val worker: ExecutorService,
     private val current: () -> Config,
     private val hasAccess: () -> Boolean,
     private val installed: (String) -> Boolean,
     private val showActionMenu: (String, List<Triple<String, Int, () -> Unit>>) -> Unit,
 ) {
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val cancellations = java.util.concurrent.ConcurrentHashMap.newKeySet<android.os.CancellationSignal>()
+    fun shutdown() { cancellations.forEach { it.cancel() }; worker.shutdownNow() }
+    private fun details(contact: ContactIndex.Contact): ContactIndex.Details {
+        val signal = android.os.CancellationSignal()
+        cancellations.add(signal)
+        try {
+            if (worker.isShutdown || !current().search.contacts || !hasAccess()) signal.cancel()
+            return ContactIndex.details(activity.contentResolver, activity.resources, contact, signal)
+        } finally { cancellations.remove(signal) }
+    }
     private fun menu(title: String, actions: List<Triple<String, Int, () -> Unit>>) {
         if (!current().search.contacts || !hasAccess()) return
         showActionMenu(title, actions.map { (label, icon, action) -> Triple(label, icon) {
@@ -36,16 +45,17 @@ internal class ContactActions(
     }
 
     fun show(contact: ContactIndex.Contact) {
-        if (!current().search.contacts || !hasAccess()) return
+        if (worker.isShutdown || activity.isDestroyed || !current().search.contacts || !hasAccess()) return
         worker.execute {
-            val details = runCatching { ContactIndex.details(activity.contentResolver, activity.resources, contact) }
+            val details = runCatching { details(contact) }
                 .onFailure { Log.w("Grove", "Cannot read contact details", it) }.getOrNull()
             activity.runOnUiThread {
                 if (activity.isDestroyed || !current().search.contacts || !hasAccess()) return@runOnUiThread
                 if (details == null) { activity.message("Contact details unavailable; try again"); return@runOnUiThread }
                 fun launchCurrent(intent: Intent) {
+                    if (worker.isShutdown || activity.isDestroyed) return
                     worker.execute {
-                        val fresh = runCatching { ContactIndex.details(activity.contentResolver, activity.resources, contact) }.getOrNull()
+                        val fresh = runCatching { details(contact) }.getOrNull()
                         activity.runOnUiThread {
                             if (activity.isDestroyed) return@runOnUiThread
                             if (fresh == null || fresh != details) activity.message("Contact changed. Open its menu again.")

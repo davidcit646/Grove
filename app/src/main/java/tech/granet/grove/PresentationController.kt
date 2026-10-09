@@ -1,6 +1,5 @@
 package tech.granet.grove
 
-import android.app.WallpaperColors
 import android.app.WallpaperManager
 import android.graphics.Color
 import android.os.Handler

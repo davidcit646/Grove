@@ -21,6 +21,16 @@ internal class FileActions(
         val canonical = file.canonicalFile
         require(canonical.path.startsWith("${root.path}${File.separator}") && file.exists() &&
             !Files.isSymbolicLink(file.toPath())) { "File is outside shared storage" }
+        require(canonical.isFile && canonical.canRead()) { "File is unavailable" }
+        val relative = canonical.relativeTo(root).invariantSeparatorsPath
+        require(!relative.startsWith("Android/data/", ignoreCase = true) && !relative.startsWith("Android/obb/", ignoreCase = true)) {
+            "Protected storage is unavailable"
+        }
+        var ancestor: File? = file.absoluteFile
+        while (ancestor != null && ancestor != root) {
+            require(!Files.isSymbolicLink(ancestor.toPath())) { "Symbolic links are unavailable" }
+            ancestor = ancestor.parentFile
+        }
         return FileProvider.getUriForFile(activity, "${activity.packageName}.files", canonical)
     }
 

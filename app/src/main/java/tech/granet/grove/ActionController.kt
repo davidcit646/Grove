@@ -1,26 +1,22 @@
 package tech.granet.grove
 
-import android.content.*
-import android.graphics.*
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.os.*
-import android.view.*
-import android.widget.*
 import tech.granet.grove.ui.MenuRow
 import tech.granet.grove.ui.confirmDialog
 import tech.granet.grove.ui.infoDialog
 import tech.granet.grove.ui.menuDialog
 import tech.granet.grove.ui.message
-import java.util.*
 import java.io.File
 
 /** External actions and uninstall queue. Adapters check prerequisites; cancel or launch failure stops the batch. */
 internal class ActionController(private val activity: MainActivity) {
+    fun shutdown() { contactActions.shutdown(); uninstallBatch.cancel() }
     internal val uninstallBatch = UninstallBatch()
     internal val fileActions by lazy { with(activity) { FileActions(this) { configController.config.search.files } } }
     internal val contactActions by lazy { with(activity) {
-        ContactActions(this, contactWorker, { configController.config }, searchController::hasContactAccess,
+        ContactActions(this, { configController.config }, searchController::hasContactAccess,
             { packageName -> catalogController.apps.any { it.component.packageName == packageName } }, this@ActionController::showActionMenu)
     } }
     internal val searchActions by lazy { with(activity) { SearchActions(this, this@ActionController::showActionMenu) } }
@@ -115,7 +111,7 @@ internal class ActionController(private val activity: MainActivity) {
         with(activity) {
             if (packageName == null) return
             try {
-                uninstallNext.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$packageName"))
+                uninstallNext.launch(Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
                     .putExtra(Intent.EXTRA_RETURN_RESULT, true))
             } catch (error: Exception) {
                 uninstallBatch.cancel()

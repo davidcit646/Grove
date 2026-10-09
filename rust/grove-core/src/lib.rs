@@ -1,12 +1,15 @@
 mod bridge;
+mod calculator;
 mod config;
 mod mime;
+mod policy;
 mod search;
 mod wallpaper;
 
+#[cfg(test)]
 use config::validate_config;
 use mime::classify;
-use search::{edit_distance_at_most, is_java_space, score_label, top_indices};
+use search::{prepare_query, score_prepared, top_indices};
 use wallpaper::render_wallpaper;
 
 #[cfg(test)]
@@ -24,31 +27,52 @@ mod tests {
     #[test]
     fn search_provider_schema_matches_kotlin_validation() {
         for mask in 0..8 {
-            let json = format!(r#"{{"version":12,"wallpaper":"solid-black","favorites":[],"themeMode":"system","search":{{"calculator":{},"androidSettings":{},"groveSettings":{}}}}}"#,
-                mask & 1 != 0, mask & 2 != 0, mask & 4 != 0);
+            let json = format!(
+                r#"{{"version":12,"wallpaper":"solid-black","favorites":[],"themeMode":"system","search":{{"calculator":{},"androidSettings":{},"groveSettings":{}}}}}"#,
+                mask & 1 != 0,
+                mask & 2 != 0,
+                mask & 4 != 0
+            );
             assert!(validate_config(&json).is_ok());
         }
         for field in ["calculator", "androidSettings", "groveSettings"] {
             for value in ["1", "null", "\"true\"", "{}"] {
-                let json = format!(r#"{{"version":12,"wallpaper":"solid-black","favorites":[],"themeMode":"system","search":{{"{}":{}}}}}"#, field, value);
+                let json = format!(
+                    r#"{{"version":12,"wallpaper":"solid-black","favorites":[],"themeMode":"system","search":{{"{}":{}}}}}"#,
+                    field, value
+                );
                 assert!(validate_config(&json).is_err());
             }
         }
-        assert!(validate_config(r#"{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system"}"#).is_ok());
-        assert!(validate_config(r#"{"version":13,"wallpaper":"solid-black","favorites":[],"themeMode":"system"}"#).is_err());
+        assert!(validate_config(
+            r#"{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system"}"#
+        )
+        .is_ok());
+        assert!(validate_config(
+            r#"{"version":13,"wallpaper":"solid-black","favorites":[],"themeMode":"system"}"#
+        )
+        .is_err());
     }
 
     #[test]
     fn theme_schema_accepts_all_modes_and_rejects_invalid_values() {
         for mode in ["system", "light", "dark", "wallpaper"] {
-            let json = format!(r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":"{}"}}"#, mode);
+            let json = format!(
+                r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":"{}"}}"#,
+                mode
+            );
             assert!(validate_config(&json).is_ok());
         }
         for value in ["null", "42", "\"unknown\""] {
-            let json = format!(r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":{}}}"#, value);
+            let json = format!(
+                r#"{{"version":10,"wallpaper":"solid-black","favorites":[],"themeMode":{}}}"#,
+                value
+            );
             assert!(validate_config(&json).is_err());
         }
-        assert!(validate_config(r#"{"version":10,"wallpaper":"solid-black","favorites":[]}"#).is_err());
+        assert!(
+            validate_config(r#"{"version":10,"wallpaper":"solid-black","favorites":[]}"#).is_err()
+        );
     }
 
     #[test]
@@ -110,12 +134,18 @@ mod tests {
     fn grids_validate_types_bounds_and_legacy() {
         for columns in 1..=10 {
             for rows in 1..=10 {
-                let json = format!(r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","homeGrid":{{"columns":{},"rows":{}}}}}"#, columns, rows);
+                let json = format!(
+                    r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","homeGrid":{{"columns":{},"rows":{}}}}}"#,
+                    columns, rows
+                );
                 assert!(validate_config(&json).is_ok());
             }
         }
         for value in ["0", "11", "1.5", "\"4\"", "true", "null"] {
-            let json = format!(r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","drawerGrid":{{"columns":{},"rows":2}}}}"#, value);
+            let json = format!(
+                r#"{{"version":11,"wallpaper":"solid-black","favorites":[],"themeMode":"system","drawerGrid":{{"columns":{},"rows":2}}}}"#,
+                value
+            );
             assert!(validate_config(&json).is_err());
         }
     }
@@ -126,7 +156,10 @@ mod tests {
         for version in 1..=12 {
             for value in ["true", "false", "\"false\"", "null"] {
                 let wallpaper = if version >= 9 { "\"grove-fern\"" } else { "0" };
-                let json = format!(r#"{{"version":{},"wallpaper":{},"themeMode":"dark","favorites":["example.app/.Main"],"homeScreen":{{"showPinnedAppsHint":{},"showPinnedApps":false,"showClock":false}}}}"#, version, wallpaper, value);
+                let json = format!(
+                    r#"{{"version":{},"wallpaper":{},"themeMode":"dark","favorites":["example.app/.Main"],"homeScreen":{{"showPinnedAppsHint":{},"showPinnedApps":false,"showClock":false}}}}"#,
+                    version, wallpaper, value
+                );
                 assert!(validate_config(&json).is_ok());
             }
         }
@@ -138,24 +171,50 @@ mod tests {
         assert_eq!(classify("mkv"), Some(("video/x-matroska", "Videos")));
         assert_eq!(classify("csv"), Some(("text/csv", "Documents")));
         assert_eq!(classify("jpg"), None);
-        assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedApps":false}}"#).is_ok());
-        assert!(validate_config(r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedApps":"false"}}"#).is_err());
+        assert!(validate_config(
+            r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedApps":false}}"#
+        )
+        .is_ok());
+        assert!(validate_config(
+            r#"{"version":4,"wallpaper":0,"favorites":[],"homeScreen":{"showPinnedApps":"false"}}"#
+        )
+        .is_err());
         assert!(validate_config(r#"{"version":6,"wallpaper":12,"favorites":[],"homeScreen":{"useWallpaperButtonColors":true},"folders":[{"name":"Work","apps":["example/.Main"]}]}"#).is_ok());
         assert!(validate_config(r#"{"version":6,"wallpaper":0,"favorites":[],"folders":[{"name":"Bad","apps":["invalid"]}]}"#).is_err());
-        assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"contacts":false,"files":true}}"#).is_ok());
-        assert!(validate_config(r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"files":"true"}}"#).is_err());
+        assert!(validate_config(
+            r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"contacts":false,"files":true}}"#
+        )
+        .is_ok());
+        assert!(validate_config(
+            r#"{"version":7,"wallpaper":0,"favorites":[],"search":{"files":"true"}}"#
+        )
+        .is_err());
         assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contacts":true,"files":true,"contactIndexing":true,"fileIndexing":false}}"#).is_ok());
-        assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contactIndexing":"true"}}"#).is_err());
-        assert!(validate_config(r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"fileIndexing":1}}"#).is_err());
+        assert!(validate_config(
+            r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"contactIndexing":"true"}}"#
+        )
+        .is_err());
+        assert!(validate_config(
+            r#"{"version":8,"wallpaper":0,"favorites":[],"search":{"fileIndexing":1}}"#
+        )
+        .is_err());
         assert!(validate_config(r#"{"version":8,"wallpaper":13,"favorites":[]}"#).is_ok());
         assert!(validate_config(r#"{"version":8,"wallpaper":14,"favorites":[]}"#).is_ok());
         assert!(validate_config(r#"{"version":8,"wallpaper":15,"favorites":[]}"#).is_err());
-        assert!(validate_config(r#"{"version":9,"wallpaper":"grove-fern","favorites":[]}"#).is_ok());
-        assert!(validate_config(r#"{"version":9,"wallpaper":"solid-black","favorites":[]}"#).is_ok());
-        assert!(validate_config(r#"{"version":9,"wallpaper":"custom-image","favorites":[]}"#).is_ok());
+        assert!(
+            validate_config(r#"{"version":9,"wallpaper":"grove-fern","favorites":[]}"#).is_ok()
+        );
+        assert!(
+            validate_config(r#"{"version":9,"wallpaper":"solid-black","favorites":[]}"#).is_ok()
+        );
+        assert!(
+            validate_config(r#"{"version":9,"wallpaper":"custom-image","favorites":[]}"#).is_ok()
+        );
         assert!(validate_config(r#"{"version":9,"wallpaper":"missing","favorites":[]}"#).is_err());
         assert!(validate_config(r#"{"version":9,"wallpaper":0,"favorites":[]}"#).is_err());
-        assert!(validate_config(r#"{"version":11,"wallpaper":"grove-fern","favorites":[]}"#).is_err());
+        assert!(
+            validate_config(r#"{"version":11,"wallpaper":"grove-fern","favorites":[]}"#).is_err()
+        );
     }
 
     #[test]
@@ -173,3 +232,21 @@ mod tests {
         assert_ne!(a, b);
     }
 }
+
+mod config_edits;
+mod decisions;
+mod image_policy;
+
+mod gesture_session;
+
+mod contacts;
+
+#[cfg(test)]
+use search::{edit_distance_at_most, is_java_space, score_label};
+
+mod actions_policy;
+
+mod reports;
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod shared_file;

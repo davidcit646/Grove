@@ -11,7 +11,6 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
 import tech.granet.grove.ui.dp
 
 /** Renders one provisional setup page. Only FirstRunState changes; Finish commits it. */

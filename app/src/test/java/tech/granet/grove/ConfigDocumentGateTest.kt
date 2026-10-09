@@ -7,10 +7,10 @@ import org.junit.Test
 
 class ConfigDocumentGateTest {
     @Test fun slowImportCannotReplaceNewerUserChoices() {
-        val started = Config(themeMode = ThemeMode.SYSTEM)
-        val changed = started.copy(themeMode = ThemeMode.DARK)
+        val started = SettingsSnapshot(Config(themeMode = ThemeMode.SYSTEM), 0)
+        val changed = SettingsSnapshot(started.config.copy(themeMode = ThemeMode.DARK), 1)
         assertFalse(ConfigDocumentGate.canActivate(started, changed))
-        assertFalse(ConfigDocumentGate.canActivate(started, started.copy(search = SearchSettings(files = true))))
+        assertFalse(ConfigDocumentGate.canActivate(started, SettingsSnapshot(started.config.copy(search = SearchSettings(files = true)), 1)))
         assertTrue(ConfigDocumentGate.canActivate(started, started.copy()))
     }
     @Test fun zeroLengthChunkReadDoesNotSpinOrLoseInput() {
