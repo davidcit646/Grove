@@ -4,6 +4,7 @@ mod config;
 mod mime;
 mod policy;
 mod search;
+mod search_buffer;
 mod wallpaper;
 
 #[cfg(test)]

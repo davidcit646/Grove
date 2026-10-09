@@ -102,4 +102,13 @@ class AppCatalogTest {
         cache.useSize(64)
         assertNull(cache["a"])
     }
+    @Test fun obsoleteQueuedLoadNeverEnumeratesAndroidCatalogue() {
+        var enumerations = 0
+        pipeline({ enumerations++; emptyList() }) { "icon" }.run(
+            null, emptyMap(), { false }, { _, _ -> fail("catalog") },
+            { fail("icons") }, { fail("complete") }, { fail("failure") },
+        )
+        assertEquals(0, enumerations)
+    }
+
 }

@@ -5,11 +5,12 @@ import java.io.InputStream
 
 /** Exact byte bound, including streams that return zero or change size during reading. */
 internal object BoundedInput {
-    fun read(input: InputStream, limit: Int): ByteArray {
+    fun read(input: InputStream, limit: Int, shouldContinue: () -> Boolean = { true }): ByteArray {
         require(limit in 0 until Int.MAX_VALUE)
         val output = ByteArrayOutputStream(minOf(limit, 4096))
         val buffer = ByteArray(4096)
         while (true) {
+            if (!shouldContinue()) throw java.util.concurrent.CancellationException("Superseded read")
             val count = input.read(buffer, 0, minOf(buffer.size, limit + 1 - output.size()))
             if (count < 0) break
             if (count == 0) {

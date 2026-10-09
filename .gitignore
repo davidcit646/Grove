@@ -8,3 +8,5 @@ rust/**/target/
 *.p12
 !signing/grove-release.p12
 *signing-password*.txt
+
+verification/performance/device-*/

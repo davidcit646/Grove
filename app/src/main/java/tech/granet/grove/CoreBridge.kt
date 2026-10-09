@@ -22,6 +22,7 @@ internal object CoreBridge {
         catch (error: LinkageError) { failures.failed(operation, error); null }
 
     private external fun normalizeNative(labels: Array<String>): Array<String>
+    private external fun searchBufferNative(buffer: java.nio.ByteBuffer, query: String, limit: Int): IntArray
     private external fun searchNative(labels: Array<String>, query: String, limit: Int): IntArray
     private external fun classifyNative(extensions: Array<String>): Array<String>
     private external fun renderWallpaperNative(style: Int, width: Int, height: Int): IntArray
@@ -32,10 +33,13 @@ internal object CoreBridge {
     internal val nativeAvailable: Boolean get() = loaded
 
     /** One bounded array call per source batch, with a recovery path for the entire batch. */
-    fun normalizeAll(labels: List<String>): List<String>? {
+    fun normalizeAll(labels: List<String>, shouldContinue: () -> Boolean = { true }): List<String>? {
+        Search.checkCurrent(shouldContinue)
         if (!loaded || labels.any { it.length > 4096 }) return null
         val result = ArrayList<String>(labels.size)
-        for (batch in labels.chunked(1024)) {
+        for (start in labels.indices step 1024) {
+            Search.checkCurrent(shouldContinue)
+            val batch = labels.subList(start, minOf(start + 1024, labels.size))
             val normalized = native("normalize") {
                 normalizeNative(batch.toTypedArray()).also { output ->
                     require(output.size == batch.size && output.all { it.length <= 8192 })
@@ -43,6 +47,7 @@ internal object CoreBridge {
             } ?: return null
             result.addAll(normalized)
         }
+        Search.checkCurrent(shouldContinue)
         return result
     }
 
@@ -50,6 +55,18 @@ internal object CoreBridge {
     internal fun openShared(root: String, relative: String): Int? = if (!loaded) null
         else native("shared-file") { openSharedNative(root, relative) }?.takeIf { it >= 0 }
     internal fun closeShared(fd: Int) { native("shared-file-close") { closeSharedNative(fd) } }
+
+    /** Borrow a prepared direct buffer synchronously; native never retains its address. */
+    fun searchOrder(labels: Array<String>, buffer: java.nio.ByteBuffer?, query: Search.Query, limit: Int): IntArray {
+        if (labels.isEmpty() || limit <= 0) return IntArray(0)
+        if (buffer != null) preparedOrder(labels.size, buffer, query, limit)?.let { return it }
+        return searchOrder(labels, query, limit)
+    }
+
+    internal fun preparedOrder(count: Int, buffer: java.nio.ByteBuffer, query: Search.Query, limit: Int): IntArray? =
+        if (!loaded) null else native("search-buffer") {
+            NativeResults.search(searchBufferNative(buffer, query.text, limit), count, limit)
+        }
 
     /** Winning label indices in final order: score descending, index ascending. */
     fun searchOrder(labels: List<String>, query: Search.Query, limit: Int): IntArray =

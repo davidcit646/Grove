@@ -14,8 +14,8 @@ internal class PresentationController(private val activity: MainActivity) {
     private val handler = Handler(Looper.getMainLooper())
     private val manager by lazy { WallpaperManager.getInstance(activity) }
     private var observing = false
-    private var generation = 0
-    private var destroyed = false
+    @Volatile private var generation = 0
+    @Volatile private var destroyed = false
     private var lastSnapshot: Pair<Int?, Int?>? = null
     var buttonColors: Pair<Int, Int>? = null; private set
     private val listener = WallpaperManager.OnColorsChangedListener { _, which ->
@@ -45,6 +45,7 @@ internal class PresentationController(private val activity: MainActivity) {
         if (destroyed || worker.isShutdown) return
         val token = ++generation
         worker.execute {
+            if (destroyed || token != generation) return@execute
             val snapshot = runCatching<Pair<Int?, Int?>> {
                 manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) to
                     manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb()

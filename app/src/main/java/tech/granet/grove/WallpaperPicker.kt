@@ -28,7 +28,7 @@ internal class WallpaperPicker(
 ) {
     private val count = WallpaperArt.sources.size
     private var index = initialIndex.takeIf { WallpaperArt.source(it) != null } ?: 0
-    private var generation = 0
+    @Volatile private var generation = 0
     private var bitmap: Bitmap? = null
     private var ready = false
     private lateinit var dialog: AlertDialog
@@ -191,7 +191,7 @@ internal class WallpaperPicker(
         retry.visibility = View.GONE
         previous.isEnabled = index > 0
         next.isEnabled = index < count - 1
-        controller.preview(index) { image ->
+        controller.preview(index, current = { request == generation && !activity.isDestroyed }) { image ->
             if (request != generation || !dialog.isShowing) { image?.recycle(); return@preview }
             if (image == null) {
                 val e = GroveErrorRegistry.WALLPAPER_PREVIEW

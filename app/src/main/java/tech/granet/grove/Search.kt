@@ -8,8 +8,20 @@ object Search {
     private val marks = Regex("\\p{M}+")
     private val whitespace = Regex("\\s+")
     data class Query(val text: String, val terms: List<String>)
-    fun normalizeAll(values: List<String>): List<String> = CoreBridge.normalizeAll(values)
-        ?: values.map(::normalizeFallback)
+    internal fun checkCurrent(shouldContinue: () -> Boolean) {
+        if (!shouldContinue()) throw java.util.concurrent.CancellationException("Superseded source work")
+    }
+    fun normalizeAll(values: List<String>, shouldContinue: () -> Boolean = { true }): List<String> {
+        checkCurrent(shouldContinue)
+        CoreBridge.normalizeAll(values, shouldContinue)?.let { return it }
+        val result = ArrayList<String>(values.size)
+        for (index in values.indices) {
+            if (index % 1024 == 0) checkCurrent(shouldContinue)
+            result.add(normalizeFallback(values[index]))
+        }
+        checkCurrent(shouldContinue)
+        return result
+    }
     internal fun normalizeFallback(value: String): String =
         Normalizer.normalize(value, Normalizer.Form.NFD).replace(marks, "").lowercase(Locale.ROOT).trim()
     fun normalize(value: String): String {

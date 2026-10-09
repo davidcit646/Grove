@@ -1,5 +1,5 @@
 use crate::{classify, prepare_query, render_wallpaper, score_prepared, top_indices};
-use jni::objects::{JObject, JObjectArray, JString};
+use jni::objects::{JByteBuffer, JObject, JObjectArray, JString};
 use jni::sys::{jint, jintArray, jobjectArray, jstring};
 use jni::JNIEnv;
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -228,4 +228,37 @@ pub extern "system" fn Java_tech_granet_grove_CoreBridge_closeSharedNative(
             drop(unsafe { std::fs::File::from_raw_fd(fd) });
         }
     });
+}
+
+/// Java owns immutable direct storage throughout this call; Rust retains no pointer.
+#[no_mangle]
+pub extern "system" fn Java_tech_granet_grove_CoreBridge_searchBufferNative(
+    mut env: JNIEnv,
+    _this: JObject,
+    buffer: JByteBuffer,
+    query: JString,
+    limit: jint,
+) -> jintArray {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+        || -> jni::errors::Result<_> {
+            let length = env.get_direct_buffer_capacity(&buffer)?;
+            if !(8..=16 * 1024 * 1024).contains(&length) {
+                return Err(jni::errors::Error::NullPtr("Invalid search buffer size"));
+            }
+            let address = env.get_direct_buffer_address(&buffer)?;
+            // SAFETY: JNI guarantees direct-buffer storage is valid while this Java
+            // argument is live. The snapshot never mutates it; this slice cannot escape.
+            let bytes = unsafe { std::slice::from_raw_parts(address, length) };
+            let query: String = env.get_string(&query)?.into();
+            let order = crate::search_buffer::search(bytes, &query, limit.max(0) as usize)
+                .ok_or(jni::errors::Error::NullPtr("Malformed search buffer"))?;
+            let out = env.new_int_array(order.len() as i32)?;
+            env.set_int_array_region(&out, 0, &order)?;
+            Ok(out.into_raw())
+        },
+    ));
+    match result {
+        Ok(Ok(value)) => value,
+        _ => std::ptr::null_mut(),
+    }
 }
